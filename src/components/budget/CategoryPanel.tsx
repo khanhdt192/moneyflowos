@@ -3,6 +3,7 @@ import { Plus, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { BudgetItem, CategoryKey } from "./types";
 import { CATEGORY_META } from "./types";
+import { formatCompact } from "@/lib/format";
 
 interface Props {
   category: CategoryKey;
@@ -16,6 +17,7 @@ export function CategoryPanel({ category, items, onAdd, onRemove, onUpdate }: Pr
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const meta = CATEGORY_META[category];
+  const total = items.reduce((s, i) => s + i.amount, 0);
 
   const handleAdd = () => {
     const amt = parseFloat(amount);
@@ -28,72 +30,72 @@ export function CategoryPanel({ category, items, onAdd, onRemove, onUpdate }: Pr
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-base font-bold text-foreground">{meta.label}</h3>
-        <span className="text-xs text-muted-foreground">{items.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} />
+          <h3 className="text-[13px] font-semibold tracking-tight text-foreground">{meta.label}</h3>
+        </div>
+        <span className="num text-[11px] font-semibold text-muted-foreground">{formatCompact(total)}</span>
       </div>
-      <div className="space-y-2">
+
+      <div className="space-y-1.5">
         <AnimatePresence initial={false}>
           {items.map((item) => (
             <motion.div
               key={item.id}
-              initial={{ opacity: 0, y: -4, height: 0 }}
+              initial={{ opacity: 0, y: -2, height: 0 }}
               animate={{ opacity: 1, y: 0, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.18 }}
-              className="flex items-center gap-2 rounded-xl border border-border bg-card pl-3 pr-2 py-1.5 shadow-card"
+              className="group flex items-center gap-1.5 rounded-xl border border-border bg-background/60 px-2.5 py-1.5 transition-colors hover:bg-card"
               style={{ borderLeft: `3px solid ${meta.color}` }}
             >
               <input
                 value={item.name}
                 onChange={(e) => onUpdate(item.id, { name: e.target.value })}
-                className="flex-1 bg-transparent text-sm font-medium outline-none"
+                className="min-w-0 flex-1 bg-transparent text-[13px] font-medium outline-none"
               />
-              <div className="flex items-center text-sm font-semibold">
-                <span className="text-muted-foreground">$</span>
-                <input
-                  type="number"
-                  value={item.amount}
-                  onChange={(e) =>
-                    onUpdate(item.id, { amount: parseFloat(e.target.value) || 0 })
-                  }
-                  className="w-20 bg-transparent text-right outline-none"
-                />
-              </div>
+              <input
+                type="number"
+                value={item.amount}
+                onChange={(e) => onUpdate(item.id, { amount: parseFloat(e.target.value) || 0 })}
+                className="num w-20 bg-transparent text-right text-[13px] font-semibold outline-none"
+              />
+              <span className="text-[11px] text-muted-foreground">₫</span>
               <button
                 onClick={() => onRemove(item.id)}
                 aria-label="Remove"
-                className="grid h-7 w-7 place-items-center rounded-md bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+                className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3 w-3" />
               </button>
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          placeholder={category === "income" ? "Income source" : "Item name"}
-          className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          placeholder="Tên khoản"
+          className="min-w-0 flex-1 rounded-xl border border-border bg-card px-2.5 py-2 text-[12px] outline-none transition-all focus:ring-2 focus:ring-ring/40"
         />
         <input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
           type="number"
-          placeholder="$$$"
-          className="w-24 rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          placeholder="0"
+          className="num w-20 rounded-xl border border-border bg-card px-2 py-2 text-right text-[12px] outline-none focus:ring-2 focus:ring-ring/40"
         />
         <button
           onClick={handleAdd}
           aria-label="Add"
-          className="grid h-9 w-9 place-items-center rounded-xl bg-savings/15 text-savings transition-transform hover:scale-105"
-          style={{ backgroundColor: "color-mix(in oklab, var(--savings) 15%, transparent)", color: "var(--savings)" }}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-background transition-transform hover:scale-105 active:scale-95"
+          style={{ background: meta.color }}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" strokeWidth={2.6} />
         </button>
       </div>
     </div>
