@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BudgetBuilder } from "@/components/budget/BudgetBuilder";
-import { AppSidebar } from "@/components/layout/AppSidebar";
-import { TopHeader } from "@/components/layout/TopHeader";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,22 +17,5 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  component: Index,
+  component: BudgetBuilder,
 });
-
-function Index() {
-  return (
-    <div className="flex min-h-screen w-full bg-background bg-hero">
-      <AppSidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopHeader />
-        <main className="flex-1 px-8 py-6">
-          <BudgetBuilder />
-          <footer className="mt-12 border-t border-border pt-6 text-center text-xs text-muted-foreground">
-            Money Flow OS · Built with care · Premium personal finance
-          </footer>
-        </main>
-      </div>
-    </div>
-  );
-}

@@ -28,3 +28,11 @@ Defined in `.env` (already committed by upstream):
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — client-side Supabase config
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` — server-side
 - `VITE_SUPABASE_PROJECT_ID`
+
+## App Architecture
+- **Routing:** TanStack file-based routing under `src/routes/`. `__root.tsx` mounts `<FinanceProvider><AppShell><Outlet /></AppShell></FinanceProvider>`. Routes: `/`, `/cash-flow`, `/goals`, `/rental`, `/reports`, `/settings`.
+- **State:** Vanilla pub/sub store at `src/lib/finance-store.ts` exposed via `useFinance()` / `useActiveMonth()` / `useFinanceActions()` (uses `useSyncExternalStore`). Persisted to `localStorage` under `moneyflow:state:v2`. Includes a per-mutation undo stack (capped at 25). Hydrated client-side by `<FinanceProvider>` to avoid SSR mismatch.
+- **Types:** `src/lib/finance-types.ts` (`FinanceState`, `MonthData`, `Transaction`, `Goal`, `RentalRoom`, `Settings`). `src/components/budget/types.ts` re-exports the same names for legacy imports.
+- **Layout:** `AppShell` wraps the page with sidebar + sticky header + mobile FAB + `<Toaster />`. UI state (quick-add open, mobile drawer open) lives in `shell-context.ts` (separate file to avoid circular imports between AppShell↔AppSidebar↔TopHeader).
+- **Key UI:** MonthSelector (prev/next/dropdown + duplicate-from-prev), QuickAddDialog (modal w/ type pills, amount, suggestions), TransactionList (search/filter/range), GoalsBoard + GoalCard + WhatIfPanel (sliders that re-project goal ETAs), RentalBoard with occupancy stats, ReportsPanel (CSV export + print), SettingsPage (name + reset).
+- **Currency:** `formatVND` → "27.000.000 ₫" via `toLocaleString("vi-VN")`. UI is fully Vietnamese.

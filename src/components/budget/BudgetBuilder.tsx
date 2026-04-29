@@ -1,48 +1,22 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
 import { CategoryPanel } from "./CategoryPanel";
 import { SankeyChart } from "./SankeyChart";
 import { AnnualSummary } from "./AnnualSummary";
 import { KpiCard } from "../dashboard/KpiCard";
 import { InsightsGrid } from "../dashboard/InsightsGrid";
-import type { BudgetItem, BudgetState, CategoryKey } from "./types";
-
-const uid = () => Math.random().toString(36).slice(2, 9);
-
-// realistic VND values
-const initial: BudgetState = {
-  income: [
-    { id: uid(), name: "Lương chính", amount: 45_000_000 },
-    { id: uid(), name: "Freelance", amount: 12_000_000 },
-    { id: uid(), name: "Cho thuê căn hộ", amount: 8_000_000 },
-  ],
-  needs: [
-    { id: uid(), name: "Tiền nhà", amount: 12_000_000 },
-    { id: uid(), name: "Ăn uống", amount: 6_000_000 },
-    { id: uid(), name: "Đi lại", amount: 2_500_000 },
-    { id: uid(), name: "Điện nước, internet", amount: 1_500_000 },
-  ],
-  wants: [
-    { id: uid(), name: "Cà phê & nhà hàng", amount: 3_000_000 },
-    { id: uid(), name: "Giải trí, mua sắm", amount: 4_000_000 },
-    { id: uid(), name: "Du lịch", amount: 2_500_000 },
-  ],
-  savings: [
-    { id: uid(), name: "Quỹ khẩn cấp", amount: 6_000_000 },
-    { id: uid(), name: "Đầu tư cổ phiếu", amount: 10_000_000 },
-    { id: uid(), name: "Quỹ mua nhà", amount: 15_500_000 },
-  ],
-};
+import type { CategoryKey } from "@/lib/finance-types";
+import { formatMonthLabel, shiftMonth } from "@/lib/finance-types";
+import {
+  useActiveMonth,
+  useFinance,
+  useFinanceActions,
+} from "@/lib/finance-store";
 
 export function BudgetBuilder() {
-  const [data, setData] = useState<BudgetState>(initial);
-
-  const add = (cat: CategoryKey, name: string, amount: number) =>
-    setData((d) => ({ ...d, [cat]: [...d[cat], { id: uid(), name, amount }] }));
-  const remove = (cat: CategoryKey, id: string) =>
-    setData((d) => ({ ...d, [cat]: d[cat].filter((i) => i.id !== id) }));
-  const update = (cat: CategoryKey, id: string, patch: Partial<BudgetItem>) =>
-    setData((d) => ({ ...d, [cat]: d[cat].map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
+  const data = useActiveMonth();
+  const state = useFinance();
+  const actions = useFinanceActions();
 
   const totalIncome = data.income.reduce((s, i) => s + i.amount, 0);
   const totalExpense =
@@ -52,59 +26,109 @@ export function BudgetBuilder() {
   const netCashflow = totalIncome - totalExpense - totalSavings;
   const savingsRate = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0;
 
+  // Compare vs previous month for KPI deltas
+  const prev = state.months[shiftMonth(state.activeMonth, -1)];
+  const prevIncome = prev?.income.reduce((s, i) => s + i.amount, 0) ?? 0;
+  const prevExpense =
+    (prev?.needs.reduce((s, i) => s + i.amount, 0) ?? 0) +
+    (prev?.wants.reduce((s, i) => s + i.amount, 0) ?? 0);
+  const prevSavings = prev?.savings.reduce((s, i) => s + i.amount, 0) ?? 0;
+
+  const pctDelta = (current: number, previous: number) =>
+    previous === 0 ? 0 : ((current - previous) / previous) * 100;
+
   const cats: CategoryKey[] = ["income", "needs", "wants", "savings"];
+
+  // Build a 10-point spark trend from the last 10 months for each metric
+  const sparks = useMemo(() => {
+    const months: string[] = [];
+    for (let i = 9; i >= 0; i--) months.push(shiftMonth(state.activeMonth, -i));
+    const series = (k: CategoryKey | "expense" | "savingsRate") =>
+      months.map((m) => {
+        const md = state.months[m];
+        if (!md) return 0;
+        if (k === "expense")
+          return (
+            md.needs.reduce((s, i) => s + i.amount, 0) +
+            md.wants.reduce((s, i) => s + i.amount, 0)
+          );
+        if (k === "savingsRate") {
+          const inc = md.income.reduce((s, i) => s + i.amount, 0);
+          const sav = md.savings.reduce((s, i) => s + i.amount, 0);
+          return inc > 0 ? (sav / inc) * 100 : 0;
+        }
+        return md[k].reduce((s, i) => s + i.amount, 0);
+      });
+
+    const incomeSpark = series("income");
+    const expenseSpark = series("expense");
+    const savingsSpark = series("savings");
+    const rateSpark = series("savingsRate");
+    const netSpark = incomeSpark.map((v, i) => v - expenseSpark[i] - savingsSpark[i]);
+
+    // Replace zero-only series with a gentle default so the cards don't look broken
+    const polish = (xs: number[]) =>
+      xs.every((v) => v === 0) ? [40, 42, 39, 44, 48, 52, 55, 58, 62, 65] : xs;
+
+    return {
+      income: polish(incomeSpark),
+      expense: polish(expenseSpark),
+      net: polish(netSpark),
+      rate: polish(rateSpark),
+    };
+  }, [state.activeMonth, state.months]);
 
   return (
     <div className="space-y-6">
       {/* KPI Row */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         <KpiCard
           index={0}
           label="Tổng Thu Nhập"
           value={totalIncome}
-          delta={8.4}
+          delta={pctDelta(totalIncome, prevIncome)}
           icon={TrendingUp}
           accent="income"
-          spark={[40, 42, 39, 44, 48, 52, 55, 58, 62, 65]}
+          spark={sparks.income}
         />
         <KpiCard
           index={1}
           label="Tổng Chi Tiêu"
           value={totalExpense}
-          delta={-2.1}
+          delta={pctDelta(totalExpense, prevExpense)}
           icon={TrendingDown}
           accent="needs"
-          spark={[30, 34, 33, 31, 32, 30, 29, 31, 30, 29]}
+          spark={sparks.expense}
         />
         <KpiCard
           index={2}
           label="Dòng Tiền Ròng"
           value={netCashflow}
-          delta={12.6}
+          delta={pctDelta(netCashflow, prevIncome - prevExpense - prevSavings)}
           icon={Wallet}
           accent="investments"
-          spark={[5, 8, 10, 9, 12, 14, 13, 16, 18, 22]}
+          spark={sparks.net}
         />
         <KpiCard
           index={3}
           label="Tỷ Lệ Tiết Kiệm"
           value={savingsRate}
           isPercent
-          delta={3.2}
+          delta={pctDelta(savingsRate, prevIncome > 0 ? (prevSavings / prevIncome) * 100 : 0)}
           icon={PiggyBank}
           accent="savings"
-          spark={[18, 20, 19, 22, 24, 23, 26, 28, 30, 31]}
+          spark={sparks.rate}
         />
       </section>
 
       {/* Hero Sankey + sidebar */}
       <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
-        <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-6 shadow-card bg-hero">
-          <div className="mb-5 flex items-end justify-between gap-4">
+        <div className="relative overflow-hidden rounded-3xl border border-border bg-card p-4 shadow-card bg-hero sm:p-6">
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
                 <span className="h-1.5 w-1.5 rounded-full bg-income" />
-                Cash Flow · Tháng 4
+                Cash Flow · {formatMonthLabel(state.activeMonth)}
               </span>
               <h2 className="mt-2.5 text-2xl font-bold tracking-tight text-foreground">
                 Dòng Tiền Của Bạn
@@ -141,9 +165,9 @@ export function BudgetBuilder() {
                 key={c}
                 category={c}
                 items={data[c]}
-                onAdd={(n, a) => add(c, n, a)}
-                onRemove={(id) => remove(c, id)}
-                onUpdate={(id, p) => update(c, id, p)}
+                onAdd={(n, a) => actions.addBudgetItem(c, n, a)}
+                onRemove={(id) => actions.removeBudgetItem(c, id)}
+                onUpdate={(id, p) => actions.updateBudgetItem(c, id, p)}
               />
             ))}
           </div>
