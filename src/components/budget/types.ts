@@ -15,30 +15,34 @@ export interface BudgetState {
 
 export const CATEGORY_META: Record<
   CategoryKey,
-  { label: string; color: string; soft: string; description: string }
+  { label: string; short: string; color: string; soft: string; description: string }
 > = {
   income: {
-    label: "Income Sources",
+    label: "Nguồn Thu Nhập",
+    short: "Thu Nhập",
     color: "var(--income)",
     soft: "var(--income-soft)",
-    description: "Where your money comes from",
+    description: "Tiền vào từ lương, đầu tư, kinh doanh",
   },
   needs: {
-    label: "Needs",
+    label: "Chi Tiêu Thiết Yếu",
+    short: "Thiết Yếu",
     color: "var(--needs)",
     soft: "var(--needs-soft)",
-    description: "Essentials: rent, utilities, groceries",
+    description: "Nhà ở, điện nước, ăn uống, đi lại",
   },
   wants: {
-    label: "Wants",
+    label: "Chi Tiêu Cá Nhân",
+    short: "Cá Nhân",
     color: "var(--wants)",
     soft: "var(--wants-soft)",
-    description: "Lifestyle: dining, entertainment, hobbies",
+    description: "Giải trí, mua sắm, du lịch",
   },
   savings: {
-    label: "Savings",
+    label: "Tiết Kiệm & Đầu Tư",
+    short: "Tiết Kiệm",
     color: "var(--savings)",
     soft: "var(--savings-soft)",
-    description: "Emergency fund, investments, debt payoff",
+    description: "Quỹ khẩn cấp, đầu tư, mục tiêu dài hạn",
   },
 };
