@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { Save, RotateCcw, Trash2 } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Save, RotateCcw, Trash2, LogOut, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
+import { useAuth, signOut } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -14,6 +15,8 @@ export const Route = createFileRoute("/settings")({
 function SettingsPage() {
   const state = useFinance();
   const actions = useFinanceActions();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [name, setName] = useState(state.settings.name);
 
   const save = () => {
@@ -24,28 +27,27 @@ function SettingsPage() {
   const reset = () => {
     if (
       confirm(
-        "Khôi phục dữ liệu mẫu sẽ xoá toàn bộ dữ liệu hiện tại của bạn. Bạn chắc chứ?",
+        "Khôi phục dữ liệu mẫu sẽ thay thế dữ liệu hiện tại bằng ngân sách & mục tiêu mẫu. Bạn chắc chứ?",
       )
     ) {
-      actions.resetAll();
-      toast.success("Đã khôi phục dữ liệu mẫu");
+      void actions.resetAll();
     }
   };
 
   const wipe = () => {
     if (
       confirm(
-        "XOÁ HẾT? Toàn bộ tháng, mục tiêu, phòng cho thuê và giao dịch sẽ bị xoá.",
+        "XOÁ HẾT? Toàn bộ tháng, mục tiêu, phòng cho thuê và giao dịch sẽ bị xoá vĩnh viễn.",
       )
     ) {
-      try {
-        localStorage.removeItem("moneyflow:state:v2");
-        actions.resetAll();
-        toast.success("Đã xoá dữ liệu");
-      } catch {
-        toast.error("Không thể xoá dữ liệu");
-      }
+      void actions.wipeAll();
     }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success("Đã đăng xuất");
+    navigate({ to: "/auth" });
   };
 
   return (
@@ -53,15 +55,28 @@ function SettingsPage() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Cài đặt</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tuỳ chỉnh tên, đơn vị tiền tệ và quản lý dữ liệu.
+          Tuỳ chỉnh tên, đơn vị tiền tệ và quản lý dữ liệu trên đám mây.
         </p>
       </header>
 
       <section className="rounded-3xl border border-border bg-card p-5 shadow-card">
-        <h2 className="text-base font-bold tracking-tight text-foreground">Tài khoản</h2>
-        <p className="mt-1 text-[12px] text-muted-foreground">
-          Tên hiển thị trong câu chào ở trang chủ.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold tracking-tight text-foreground">Tài khoản</h2>
+            <p className="mt-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <Mail className="h-3 w-3" />
+              {user?.email ?? "Chưa đăng nhập"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="flex h-9 items-center gap-1.5 rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-foreground/[0.04]"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Đăng xuất
+          </button>
+        </div>
         <div className="mt-4 space-y-3">
           <label className="block">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -100,7 +115,7 @@ function SettingsPage() {
       <section className="rounded-3xl border border-border bg-card p-5 shadow-card">
         <h2 className="text-base font-bold tracking-tight text-foreground">Quản lý dữ liệu</h2>
         <p className="mt-1 text-[12px] text-muted-foreground">
-          Mọi dữ liệu được lưu trong trình duyệt của bạn (localStorage). Không gửi đi đâu cả.
+          Dữ liệu của bạn được lưu an toàn trên Supabase và đồng bộ giữa các thiết bị.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <button

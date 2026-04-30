@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import {
   type BudgetItem,
   type CategoryKey,
@@ -11,147 +12,27 @@ import {
   monthKey,
   shiftMonth,
 } from "./finance-types";
+import { supabase } from "@/integrations/supabase/client";
+import { cloud, fetchAllForUser } from "./supabase-data";
 
-const STORAGE_KEY = "moneyflow:state:v2";
 const UNDO_LIMIT = 25;
 
 const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID().slice(0, 9)
-    : Math.random().toString(36).slice(2, 11);
+    ? crypto.randomUUID()
+    : `tmp-${Math.random().toString(36).slice(2, 11)}`;
 
-/* ---------------------------------- Seed ---------------------------------- */
+/* ------------------------- Empty initial state ------------------------- */
 
-function seedState(): FinanceState {
-  const current = monthKey();
-  const prev = shiftMonth(current, -1);
-
-  const seedMonth = (variance = 0): MonthData => ({
-    income: [
-      { id: uid(), name: "Lương chính", amount: 45_000_000 + variance },
-      { id: uid(), name: "Freelance", amount: 12_000_000 + variance / 2 },
-      { id: uid(), name: "Cho thuê căn hộ", amount: 8_000_000 },
-    ],
-    needs: [
-      { id: uid(), name: "Tiền nhà", amount: 12_000_000 },
-      { id: uid(), name: "Ăn uống", amount: 6_000_000 },
-      { id: uid(), name: "Đi lại", amount: 2_500_000 },
-      { id: uid(), name: "Điện nước, internet", amount: 1_500_000 },
-    ],
-    wants: [
-      { id: uid(), name: "Cà phê & nhà hàng", amount: 3_000_000 },
-      { id: uid(), name: "Giải trí, mua sắm", amount: 4_000_000 },
-      { id: uid(), name: "Du lịch", amount: 2_500_000 },
-    ],
-    savings: [
-      { id: uid(), name: "Quỹ khẩn cấp", amount: 6_000_000 },
-      { id: uid(), name: "Đầu tư cổ phiếu", amount: 10_000_000 },
-      { id: uid(), name: "Quỹ mua nhà", amount: 15_500_000 },
-    ],
-    transactions: [],
-  });
-
-  const today = new Date();
-  const isoDate = (d: number) => {
-    const dt = new Date(today.getFullYear(), today.getMonth(), d);
-    return dt.toISOString().slice(0, 10);
-  };
-
-  const initialTx: Transaction[] = [
-    { id: uid(), type: "expense", category: "Ăn uống", amount: 185_000, date: isoDate(Math.min(today.getDate(), 1)), note: "Bữa trưa" },
-    { id: uid(), type: "expense", category: "Cà phê & nhà hàng", amount: 95_000, date: isoDate(Math.min(today.getDate(), 2)), note: "Cà phê" },
-    { id: uid(), type: "income", category: "Freelance", amount: 4_500_000, date: isoDate(Math.min(today.getDate(), 3)), note: "Dự án website" },
-  ];
-
-  const currentMonth = seedMonth(0);
-  currentMonth.transactions = initialTx;
-
+function emptyState(): FinanceState {
+  const m = monthKey();
   return {
-    activeMonth: current,
-    months: {
-      [prev]: seedMonth(-2_000_000),
-      [current]: currentMonth,
-    },
-    goals: [
-      {
-        id: uid(),
-        name: "Quỹ mua nhà",
-        emoji: "🏠",
-        target: 2_500_000_000,
-        saved: 280_000_000,
-        monthlyContribution: 15_500_000,
-        color: "var(--income)",
-      },
-      {
-        id: uid(),
-        name: "Quỹ khẩn cấp",
-        emoji: "🛡️",
-        target: 180_000_000,
-        saved: 96_000_000,
-        monthlyContribution: 6_000_000,
-        color: "var(--savings)",
-      },
-      {
-        id: uid(),
-        name: "Tự do tài chính",
-        emoji: "🎯",
-        target: 1_000_000_000,
-        saved: 145_000_000,
-        monthlyContribution: 10_000_000,
-        color: "var(--wants)",
-      },
-    ],
-    rental: {
-      autoSyncToIncome: true,
-      rooms: [
-        { id: uid(), name: "Phòng 101", rent: 4_500_000, occupied: true, tenant: "Anh Minh" },
-        { id: uid(), name: "Phòng 102", rent: 3_500_000, occupied: true, tenant: "Chị Lan" },
-        { id: uid(), name: "Phòng 201", rent: 4_000_000, occupied: false },
-      ],
-    },
-    settings: { name: "Khánh", currency: "VND" },
+    activeMonth: m,
+    months: { [m]: emptyMonth() },
+    goals: [],
+    rental: { rooms: [], autoSyncToIncome: true },
+    settings: { name: "Bạn", currency: "VND" },
   };
-}
-
-/* ------------------------------ Persistence ------------------------------ */
-
-function loadState(): FinanceState {
-  if (typeof window === "undefined") return seedState();
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedState();
-    const parsed = JSON.parse(raw) as FinanceState;
-    // Minimal validation
-    if (!parsed?.months || !parsed?.activeMonth) return seedState();
-    // Ensure active month exists
-    if (!parsed.months[parsed.activeMonth]) {
-      parsed.months[parsed.activeMonth] = emptyMonth();
-    }
-    // Backfill optional fields
-    parsed.goals ??= [];
-    parsed.rental ??= { rooms: [], autoSyncToIncome: true };
-    parsed.settings ??= { name: "Khánh", currency: "VND" };
-    for (const k of Object.keys(parsed.months)) {
-      const m = parsed.months[k];
-      m.transactions ??= [];
-      m.income ??= [];
-      m.needs ??= [];
-      m.wants ??= [];
-      m.savings ??= [];
-    }
-    return parsed;
-  } catch {
-    return seedState();
-  }
-}
-
-function saveState(state: FinanceState) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore quota/permission errors
-  }
 }
 
 /* --------------------------------- Store --------------------------------- */
@@ -159,24 +40,15 @@ function saveState(state: FinanceState) {
 type Listener = () => void;
 
 class FinanceStore {
-  private state: FinanceState;
+  private state: FinanceState = emptyState();
   private listeners = new Set<Listener>();
   private undoStack: FinanceState[] = [];
-  private hydrated = false;
-  private serverSnapshot: FinanceState;
+  private serverSnapshot: FinanceState = emptyState();
+  private userId: string | null = null;
+  private hydrating = false;
+  private realtimeCh: ReturnType<typeof supabase.channel> | null = null;
 
-  constructor() {
-    // SSR-safe initial state — same shape every render until hydration
-    this.serverSnapshot = seedState();
-    this.state = this.serverSnapshot;
-  }
-
-  hydrate() {
-    if (this.hydrated) return;
-    this.hydrated = true;
-    this.state = loadState();
-    this.emit();
-  }
+  /* ---------------------------- subscription --------------------------- */
 
   getSnapshot = () => this.state;
   getServerSnapshot = () => this.serverSnapshot;
@@ -196,7 +68,6 @@ class FinanceStore {
       if (this.undoStack.length > UNDO_LIMIT) this.undoStack.shift();
     }
     this.state = next;
-    saveState(next);
     this.emit();
   }
 
@@ -213,6 +84,77 @@ class FinanceStore {
     );
   }
 
+  /* ------------------------------ Lifecycle ----------------------------- */
+
+  async hydrateForUser(userId: string) {
+    if (this.hydrating) return;
+    this.hydrating = true;
+    this.userId = userId;
+    try {
+      const next = await fetchAllForUser(userId);
+      this.undoStack = [];
+      this.commit(next, false);
+      this.subscribeRealtime(userId);
+    } catch (err) {
+      console.error("[finance-store] hydrate failed", err);
+      toast.error("Không tải được dữ liệu — kiểm tra kết nối");
+    } finally {
+      this.hydrating = false;
+    }
+  }
+
+  signOut() {
+    this.userId = null;
+    if (this.realtimeCh) {
+      supabase.removeChannel(this.realtimeCh);
+      this.realtimeCh = null;
+    }
+    this.undoStack = [];
+    this.commit(emptyState(), false);
+  }
+
+  private subscribeRealtime(userId: string) {
+    if (this.realtimeCh) supabase.removeChannel(this.realtimeCh);
+    this.realtimeCh = supabase
+      .channel(`mfos-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "transactions", filter: `user_id=eq.${userId}` },
+        () => this.refetchSilent(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "budget_items", filter: `user_id=eq.${userId}` },
+        () => this.refetchSilent(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "goals", filter: `user_id=eq.${userId}` },
+        () => this.refetchSilent(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rental_rooms", filter: `user_id=eq.${userId}` },
+        () => this.refetchSilent(),
+      )
+      .subscribe();
+  }
+
+  private refetchTimer: ReturnType<typeof setTimeout> | null = null;
+  private refetchSilent() {
+    if (!this.userId) return;
+    if (this.refetchTimer) clearTimeout(this.refetchTimer);
+    this.refetchTimer = setTimeout(async () => {
+      if (!this.userId) return;
+      try {
+        const next = await fetchAllForUser(this.userId);
+        this.commit({ ...next, activeMonth: this.state.activeMonth }, false);
+      } catch {
+        /* noop */
+      }
+    }, 300);
+  }
+
   /* ------------------------------- Months ------------------------------- */
 
   setActiveMonth(key: string) {
@@ -220,34 +162,51 @@ class FinanceStore {
     const months = { ...this.state.months };
     if (!months[key]) months[key] = emptyMonth();
     this.commit({ ...this.state, activeMonth: key, months }, false);
+    if (this.userId) {
+      void cloud.updateProfile(this.userId, { active_month: key });
+    }
   }
 
   duplicateMonthFromPrev() {
+    if (!this.userId) return;
     const key = this.state.activeMonth;
     const prev = shiftMonth(key, -1);
     const source = this.state.months[prev];
     if (!source) return;
-    const cloneItems = (xs: BudgetItem[]) => xs.map((x) => ({ ...x, id: uid() }));
-    const next: MonthData = {
-      income: cloneItems(source.income),
-      needs: cloneItems(source.needs),
-      wants: cloneItems(source.wants),
-      savings: cloneItems(source.savings),
-      transactions: [],
-    };
-    this.commit({
-      ...this.state,
-      months: { ...this.state.months, [key]: next },
+    const userId = this.userId;
+    const tasks: Promise<unknown>[] = [];
+    (["income", "needs", "wants", "savings"] as CategoryKey[]).forEach((cat) => {
+      source[cat].forEach((item, idx) => {
+        tasks.push(
+          cloud.insertBudgetItem(userId, key, cat, item.name, item.amount, idx),
+        );
+      });
     });
+    void Promise.all(tasks).then(() => this.refetchSilent());
   }
 
   /* ------------------------------- Budget ------------------------------- */
 
   addBudgetItem(cat: CategoryKey, name: string, amount: number) {
-    this.mutateMonth((m) => ({
-      ...m,
-      [cat]: [...m[cat], { id: uid(), name, amount }],
-    }));
+    if (!this.userId) return;
+    const tempId = uid();
+    this.mutateMonth((m) => ({ ...m, [cat]: [...m[cat], { id: tempId, name, amount }] }));
+    void cloud
+      .insertBudgetItem(this.userId, this.state.activeMonth, cat, name, amount)
+      .then((row) => {
+        this.mutateMonth(
+          (m) => ({
+            ...m,
+            [cat]: m[cat].map((i) => (i.id === tempId ? { ...i, id: row.id } : i)),
+          }),
+          false,
+        );
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error("Không lưu được hạng mục");
+        this.refetchSilent();
+      });
   }
 
   updateBudgetItem(cat: CategoryKey, id: string, patch: Partial<BudgetItem>) {
@@ -256,18 +215,30 @@ class FinanceStore {
         ...m,
         [cat]: m[cat].map((i) => (i.id === id ? { ...i, ...patch } : i)),
       }),
-      false, // skip undo for keystroke noise
+      false,
     );
+    if (id.startsWith("tmp-") || !this.userId) return;
+    const dbPatch: { name?: string; amount?: number } = {};
+    if (patch.name !== undefined) dbPatch.name = patch.name;
+    if (patch.amount !== undefined) dbPatch.amount = patch.amount;
+    void cloud.updateBudgetItem(id, dbPatch).catch((err) => {
+      console.error(err);
+      toast.error("Không lưu được thay đổi");
+      this.refetchSilent();
+    });
   }
 
   removeBudgetItem(cat: CategoryKey, id: string) {
     this.mutateMonth((m) => ({ ...m, [cat]: m[cat].filter((i) => i.id !== id) }));
+    if (!this.userId) return;
+    void cloud.deleteBudgetItem(id).catch(() => this.refetchSilent());
   }
 
   /* ----------------------------- Transactions ---------------------------- */
 
   addTransaction(tx: Omit<Transaction, "id">) {
-    const id = uid();
+    if (!this.userId) return;
+    const tempId = uid();
     const targetMonth = monthKey(tx.date);
     const next = { ...this.state };
     next.months = { ...next.months };
@@ -275,9 +246,32 @@ class FinanceStore {
     const month = next.months[targetMonth];
     next.months[targetMonth] = {
       ...month,
-      transactions: [{ ...tx, id }, ...month.transactions],
+      transactions: [{ ...tx, id: tempId }, ...month.transactions],
     };
     this.commit(next);
+    void cloud
+      .insertTransaction(this.userId, tx)
+      .then((row) => {
+        this.mutateMonth(
+          (m) =>
+            m === next.months[targetMonth]
+              ? {
+                  ...m,
+                  transactions: m.transactions.map((t) =>
+                    t.id === tempId ? { ...t, id: row.id } : t,
+                  ),
+                }
+              : m,
+          false,
+        );
+        // Refetch ensures the row lands in the right month even if active differs
+        this.refetchSilent();
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error("Không lưu được giao dịch");
+        this.refetchSilent();
+      });
   }
 
   removeTransaction(id: string) {
@@ -290,12 +284,31 @@ class FinanceStore {
       }
     }
     this.commit(next);
+    if (!this.userId || id.startsWith("tmp-")) return;
+    void cloud.deleteTransaction(id).catch(() => this.refetchSilent());
   }
 
   /* -------------------------------- Goals -------------------------------- */
 
   addGoal(g: Omit<Goal, "id">) {
-    this.commit({ ...this.state, goals: [...this.state.goals, { ...g, id: uid() }] });
+    if (!this.userId) return;
+    const tempId = uid();
+    this.commit({ ...this.state, goals: [...this.state.goals, { ...g, id: tempId }] });
+    void cloud
+      .insertGoal(this.userId, g)
+      .then((row) => {
+        this.commit(
+          {
+            ...this.state,
+            goals: this.state.goals.map((x) => (x.id === tempId ? { ...x, id: row.id } : x)),
+          },
+          false,
+        );
+      })
+      .catch(() => {
+        toast.error("Không lưu được mục tiêu");
+        this.refetchSilent();
+      });
   }
 
   updateGoal(id: string, patch: Partial<Goal>) {
@@ -303,20 +316,46 @@ class FinanceStore {
       ...this.state,
       goals: this.state.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
     });
+    if (!this.userId || id.startsWith("tmp-")) return;
+    void cloud.updateGoal(id, patch).catch(() => this.refetchSilent());
   }
 
   removeGoal(id: string) {
     this.commit({ ...this.state, goals: this.state.goals.filter((g) => g.id !== id) });
+    if (!this.userId || id.startsWith("tmp-")) return;
+    void cloud.deleteGoal(id).catch(() => this.refetchSilent());
   }
 
   /* -------------------------------- Rental ------------------------------- */
 
   addRoom(name: string, rent: number) {
-    const room: RentalRoom = { id: uid(), name, rent, occupied: false };
+    if (!this.userId) return;
+    const tempId = uid();
+    const room: RentalRoom = { id: tempId, name, rent, occupied: false };
     this.commit({
       ...this.state,
       rental: { ...this.state.rental, rooms: [...this.state.rental.rooms, room] },
     });
+    void cloud
+      .insertRoom(this.userId, name, rent)
+      .then((row) => {
+        this.commit(
+          {
+            ...this.state,
+            rental: {
+              ...this.state.rental,
+              rooms: this.state.rental.rooms.map((r) =>
+                r.id === tempId ? { ...r, id: row.id } : r,
+              ),
+            },
+          },
+          false,
+        );
+      })
+      .catch(() => {
+        toast.error("Không lưu được phòng");
+        this.refetchSilent();
+      });
   }
 
   updateRoom(id: string, patch: Partial<RentalRoom>) {
@@ -327,6 +366,8 @@ class FinanceStore {
         rooms: this.state.rental.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)),
       },
     });
+    if (!this.userId || id.startsWith("tmp-")) return;
+    void cloud.updateRoom(id, patch).catch(() => this.refetchSilent());
   }
 
   removeRoom(id: string) {
@@ -337,6 +378,8 @@ class FinanceStore {
         rooms: this.state.rental.rooms.filter((r) => r.id !== id),
       },
     });
+    if (!this.userId || id.startsWith("tmp-")) return;
+    void cloud.deleteRoom(id).catch(() => this.refetchSilent());
   }
 
   setRoomOccupied(id: string, occupied: boolean) {
@@ -347,6 +390,13 @@ class FinanceStore {
 
   updateSettings(patch: Partial<FinanceState["settings"]>) {
     this.commit({ ...this.state, settings: { ...this.state.settings, ...patch } });
+    if (!this.userId) return;
+    void cloud
+      .updateProfile(this.userId, {
+        full_name: patch.name,
+        currency: patch.currency,
+      })
+      .catch(() => toast.error("Không lưu được cài đặt"));
   }
 
   /* -------------------------------- Misc -------------------------------- */
@@ -355,14 +405,34 @@ class FinanceStore {
     const prev = this.undoStack.pop();
     if (!prev) return false;
     this.state = prev;
-    saveState(prev);
     this.emit();
+    // Refetch to keep cloud consistent — undo is a local convenience.
+    this.refetchSilent();
     return true;
   }
 
-  resetAll() {
-    this.undoStack = [];
-    this.commit(seedState(), false);
+  async resetAll() {
+    if (!this.userId) return;
+    try {
+      await cloud.wipe(this.userId);
+      await cloud.seedDemo(this.userId);
+      await this.hydrateForUser(this.userId);
+      toast.success("Đã khôi phục dữ liệu mẫu");
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể khôi phục dữ liệu");
+    }
+  }
+
+  async wipeAll() {
+    if (!this.userId) return;
+    try {
+      await cloud.wipe(this.userId);
+      await this.hydrateForUser(this.userId);
+      toast.success("Đã xoá toàn bộ dữ liệu");
+    } catch {
+      toast.error("Không thể xoá dữ liệu");
+    }
   }
 
   canUndo() {

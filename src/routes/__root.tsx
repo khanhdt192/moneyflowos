@@ -1,8 +1,16 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import {
+  Outlet,
+  Link,
+  createRootRoute,
+  HeadContent,
+  Scripts,
+  useLocation,
+} from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
 import { FinanceProvider } from "@/components/FinanceProvider";
 import { AppShell } from "@/components/layout/AppShell";
+import { AuthProvider } from "@/lib/auth-context";
 
 function NotFoundComponent() {
   return (
@@ -71,10 +79,22 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <FinanceProvider>
-      <AppShell>
-        <Outlet />
-      </AppShell>
-    </FinanceProvider>
+    <AuthProvider>
+      <FinanceProvider>
+        <RouteSwitch />
+      </FinanceProvider>
+    </AuthProvider>
+  );
+}
+
+function RouteSwitch() {
+  const location = useLocation();
+  if (location.pathname.startsWith("/auth")) {
+    return <Outlet />;
+  }
+  return (
+    <AppShell>
+      <Outlet />
+    </AppShell>
   );
 }
