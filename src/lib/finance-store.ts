@@ -35,10 +35,15 @@ function emptyState(): FinanceState {
       settings: {
         defaultElectricityRate: 3500,
         waterRatePerM3: 24000,
-        wifiTotal: 0,
-        cleaningTotal: 0,
-        otherTotal: 0,
+        wifiPerRoom: 0,
+        cleaningPerRoom: 0,
+        otherPerRoom: 0,
+        otherName: "Phụ phí",
         allocationRule: "equal_occupied",
+        t1ElectricityBill: 0,
+        t1HasWifi: false,
+        t1WifiPerRoom: 0,
+        t1Cleaning: 0,
       },
       billingCycles: [],
       roomBills: [],
@@ -440,9 +445,10 @@ class FinanceStore {
     const cycleId = `${year}-${String(month).padStart(2, "0")}`;
     const settings = this.state.rental.settings;
     const occupied = this.state.rental.rooms.filter((r) => r.occupied);
-    const sharedTotal =
-      settings.wifiTotal + settings.cleaningTotal + settings.otherTotal;
-    const sharedPerRoom = occupied.length > 0 ? sharedTotal / occupied.length : 0;
+
+    // Identify ground-floor rooms: floor === 1 or name contains "tầng 1"
+    const isT1 = (r: (typeof occupied)[0]) =>
+      r.floor === 1 || /t[aâ]ng\s*1/i.test(r.name);
 
     const cycle = {
       id: cycleId,
@@ -456,10 +462,33 @@ class FinanceStore {
       const reading = this.state.rental.electricityReadings.find(
         (x) => x.roomId === room.id && x.cycleId === cycleId,
       );
-      const electricityAmount =
-        (reading?.consumptionKwh ?? 0) *
-        (room.electricityRateOverride ?? settings.defaultElectricityRate);
+      const groundFloor = isT1(room);
+
+      // Electricity
+      const electricityAmount = groundFloor
+        ? settings.t1ElectricityBill
+        : (reading?.consumptionKwh ?? 0) *
+          (room.electricityRateOverride ?? settings.defaultElectricityRate);
+
+      // Water — same per-m³ rate for all rooms
       const waterAmount = (reading?.waterM3 ?? 0) * settings.waterRatePerM3;
+
+      // Wifi
+      const wifiAmount = groundFloor
+        ? settings.t1HasWifi ? settings.t1WifiPerRoom : 0
+        : settings.wifiPerRoom;
+
+      // Cleaning
+      const cleaningAmount = groundFloor
+        ? settings.t1Cleaning
+        : settings.cleaningPerRoom;
+
+      // Other (only for non-tầng-1 rooms)
+      const otherAmount = groundFloor ? 0 : settings.otherPerRoom;
+
+      const totalAmount =
+        room.rent + electricityAmount + waterAmount + wifiAmount + cleaningAmount + otherAmount;
+
       return {
         id: `${cycleId}:${room.id}`,
         roomId: room.id,
@@ -467,10 +496,10 @@ class FinanceStore {
         rentAmount: room.rent,
         electricityAmount,
         waterAmount,
-        wifiAmount: occupied.length > 0 ? settings.wifiTotal / occupied.length : 0,
-        cleaningAmount: occupied.length > 0 ? settings.cleaningTotal / occupied.length : 0,
-        otherAmount: occupied.length > 0 ? settings.otherTotal / occupied.length : 0,
-        totalAmount: room.rent + electricityAmount + waterAmount + sharedPerRoom,
+        wifiAmount,
+        cleaningAmount,
+        otherAmount,
+        totalAmount,
         paidAmount: 0,
       };
     });

@@ -54,12 +54,20 @@ export interface RentalRoom {
 export type RentalAllocationRule = "equal_occupied" | "by_occupants" | "by_weight";
 
 export interface RentalSettings {
-  defaultElectricityRate: number;
-  waterRatePerM3: number;
-  wifiTotal: number;
-  cleaningTotal: number;
-  otherTotal: number;
+  // ── Shared config (rooms 201–305) ──────────────────────────────────────
+  defaultElectricityRate: number;   // đ/kWh
+  waterRatePerM3: number;           // đ/m³ (shared by all rooms)
+  wifiPerRoom: number;              // đ/phòng/tháng (was wifiTotal)
+  cleaningPerRoom: number;          // đ/phòng/tháng (was cleaningTotal)
+  otherPerRoom: number;             // đ/phòng/tháng (was otherTotal)
+  otherName: string;                // display name for the "other" fee
   allocationRule: RentalAllocationRule;
+
+  // ── Tầng 1 separate config ─────────────────────────────────────────────
+  t1ElectricityBill: number;        // monthly bill amount entered manually
+  t1HasWifi: boolean;               // false = no wifi charge
+  t1WifiPerRoom: number;            // đ/tháng when t1HasWifi = true
+  t1Cleaning: number;               // đ/tháng (tầng 1 cleaning fee)
 }
 
 export type RentalBillingCycleStatus = "draft" | "finalized";
