@@ -61,9 +61,46 @@ export interface RentalSettings {
   allocationRule: RentalAllocationRule;
 }
 
+export type RentalBillingCycleStatus = "draft" | "finalized";
+
+export interface RentalBillingCycle {
+  id: string;
+  month: number;
+  year: number;
+  status: RentalBillingCycleStatus;
+  closedAt?: string;
+}
+
+export interface RentalRoomBill {
+  id: string;
+  roomId: string;
+  cycleId: string;
+  rentAmount: number;
+  electricityAmount: number;
+  waterAmount: number;
+  wifiAmount: number;
+  cleaningAmount: number;
+  otherAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  note?: string;
+}
+
+export interface RentalElectricityReading {
+  id: string;
+  roomId: string;
+  cycleId: string;
+  startIndex: number;
+  endIndex: number;
+  consumptionKwh: number;
+}
+
 export interface RentalState {
   rooms: RentalRoom[];
   settings: RentalSettings;
+  billingCycles: RentalBillingCycle[];
+  roomBills: RentalRoomBill[];
+  electricityReadings: RentalElectricityReading[];
   /** Auto-sync occupied rent into the active month income (true by default) */
   autoSyncToIncome: boolean;
 }
