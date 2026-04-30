@@ -128,6 +128,56 @@ export type Database = {
         };
         Relationships: [];
       };
+      rental_settings: {
+        Row: {
+          user_id: string;
+          default_electricity_rate: number;
+          water_total: number;
+          wifi_total: number;
+          cleaning_total: number;
+          other_total: number;
+          allocation_rule: "equal_occupied" | "by_occupants" | "by_weight";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          default_electricity_rate?: number;
+          water_total?: number;
+          wifi_total?: number;
+          cleaning_total?: number;
+          other_total?: number;
+          allocation_rule?: "equal_occupied" | "by_occupants" | "by_weight";
+        };
+        Update: {
+          default_electricity_rate?: number;
+          water_total?: number;
+          wifi_total?: number;
+          cleaning_total?: number;
+          other_total?: number;
+          allocation_rule?: "equal_occupied" | "by_occupants" | "by_weight";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      rental_billing_cycles: {
+        Row: { id: string; user_id: string; month: number; year: number; status: "draft" | "finalized"; closed_at: string | null; created_at: string; };
+        Insert: { id?: string; user_id: string; month: number; year: number; status?: "draft" | "finalized"; closed_at?: string | null; };
+        Update: { month?: number; year?: number; status?: "draft" | "finalized"; closed_at?: string | null; };
+        Relationships: [];
+      };
+      rental_room_bills: {
+        Row: { id: string; user_id: string; room_id: string; cycle_id: string; rent_amount: number; electricity_amount: number; water_amount: number; wifi_amount: number; cleaning_amount: number; other_amount: number; total_amount: number; paid_amount: number; note: string | null; created_at: string; };
+        Insert: { id?: string; user_id: string; room_id: string; cycle_id: string; rent_amount?: number; electricity_amount?: number; water_amount?: number; wifi_amount?: number; cleaning_amount?: number; other_amount?: number; total_amount?: number; paid_amount?: number; note?: string | null; };
+        Update: { rent_amount?: number; electricity_amount?: number; water_amount?: number; wifi_amount?: number; cleaning_amount?: number; other_amount?: number; total_amount?: number; paid_amount?: number; note?: string | null; };
+        Relationships: [];
+      };
+      rental_electricity_readings: {
+        Row: { id: string; user_id: string; room_id: string; cycle_id: string; start_index: number; end_index: number; consumption_kwh: number; created_at: string; };
+        Insert: { id?: string; user_id: string; room_id: string; cycle_id: string; start_index?: number; end_index?: number; };
+        Update: { start_index?: number; end_index?: number; };
+        Relationships: [];
+      };
       rental_rooms: {
         Row: {
           id: string;
