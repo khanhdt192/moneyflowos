@@ -29,6 +29,23 @@ export function RentalBoard() {
     };
   }, [state.rental.rooms]);
 
+  const billingPreview = useMemo(() => {
+    const occupied = state.rental.rooms.filter((room) => room.occupied);
+    const settings = state.rental.settings;
+    const totalShared = settings.waterTotal + settings.wifiTotal + settings.cleaningTotal + settings.otherTotal;
+    const sharedPerRoom = occupied.length > 0 ? totalShared / occupied.length : 0;
+    const roomBills = occupied.map((room) => ({
+      roomId: room.id,
+      roomName: room.name,
+      rent: room.rent,
+      electricity: (room.electricityRateOverride ?? settings.defaultElectricityRate) * 100,
+      shared: sharedPerRoom,
+      total: room.rent + (room.electricityRateOverride ?? settings.defaultElectricityRate) * 100 + sharedPerRoom,
+    }));
+    const totalMustCollect = roomBills.reduce((sum, r) => sum + r.total, 0);
+    return { roomBills, totalMustCollect, sharedPerRoom, totalShared };
+  }, [state.rental.rooms, state.rental.settings]);
+
   return (
     <div className="space-y-5">
       {/* Stats */}
@@ -40,6 +57,30 @@ export function RentalBoard() {
       </div>
 
       {/* Rooms grid */}
+      <RentalSettingsPanel />
+
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-foreground">Bảng tính tiền tháng (MVP)</h3>
+          <span className="text-xs text-muted-foreground">Chia đều phí chung cho phòng đang thuê</span>
+        </div>
+        <div className="space-y-2">
+          {billingPreview.roomBills.map((bill) => (
+            <div key={bill.roomId} className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-2">
+              <div>
+                <div className="text-sm font-semibold">{bill.roomName}</div>
+                <div className="text-xs text-muted-foreground">Thuê: {formatVND(bill.rent)} · Điện (ước tính): {formatVND(bill.electricity)} · Phí chung: {formatVND(bill.shared)}</div>
+              </div>
+              <div className="num text-sm font-bold">{formatVND(bill.total)}</div>
+            </div>
+          ))}
+          <div className="flex items-center justify-between border-t border-border pt-2 text-sm font-semibold">
+            <span>Tổng phải thu</span>
+            <span className="num">{formatVND(billingPreview.totalMustCollect)}</span>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <AnimatePresence initial={false}>
           {state.rental.rooms.map((room) => (
@@ -91,6 +132,39 @@ export function RentalBoard() {
             <span className="text-sm font-semibold">Thêm phòng</span>
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function RentalSettingsPanel() {
+  const state = useFinance();
+  const actions = useFinanceActions();
+  const settings = state.rental.settings;
+
+  const fields: Array<{ key: "defaultElectricityRate" | "waterTotal" | "wifiTotal" | "cleaningTotal" | "otherTotal"; label: string }> = [
+    { key: "defaultElectricityRate", label: "Giá điện mặc định (đ/kWh)" },
+    { key: "waterTotal", label: "Nước chung/tháng" },
+    { key: "wifiTotal", label: "Wifi chung/tháng" },
+    { key: "cleaningTotal", label: "Dọn vệ sinh/tháng" },
+    { key: "otherTotal", label: "Phụ phí khác/tháng" },
+  ];
+
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">Cấu hình chi phí cho thuê</h3>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {fields.map((f) => (
+          <label key={f.key} className="text-xs text-muted-foreground">
+            {f.label}
+            <input
+              type="number"
+              value={settings[f.key]}
+              onChange={(e) => actions.updateRentalSettings({ [f.key]: Number(e.target.value) || 0 })}
+              className="num mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </label>
+        ))}
       </div>
     </div>
   );
