@@ -46,7 +46,6 @@ export interface RentalRoom {
   rent: number;
   occupied: boolean;
   tenant?: string;
-  tenantPhone?: string;
   occupants?: number;
   allocationWeight?: number;
   electricityRateOverride?: number;
@@ -95,8 +94,6 @@ export interface RentalElectricityReading {
   startIndex: number;
   endIndex: number;
   consumptionKwh: number;
-  waterUsageM3?: number;
-  manualElectricityAmount?: number;
 }
 
 export interface RentalState {
