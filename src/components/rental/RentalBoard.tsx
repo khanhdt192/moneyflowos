@@ -11,6 +11,10 @@ export function RentalBoard() {
   const actions = useFinanceActions();
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const now = new Date();
+  const [cycleMonth, setCycleMonth] = useState(now.getMonth() + 1);
+  const [cycleYear, setCycleYear] = useState(now.getFullYear());
+  const cycleId = `${cycleYear}-${String(cycleMonth).padStart(2, "0")}`;
 
   const stats = useMemo(() => {
     const rooms = state.rental.rooms;
@@ -58,6 +62,17 @@ export function RentalBoard() {
 
       {/* Rooms grid */}
       <RentalSettingsPanel />
+      <BillingCyclePanel
+        cycleMonth={cycleMonth}
+        cycleYear={cycleYear}
+        onMonthChange={setCycleMonth}
+        onYearChange={setCycleYear}
+        onGenerate={() => {
+          actions.generateBillingCycle(cycleMonth, cycleYear);
+          toast.success(`Đã chốt kỳ ${cycleMonth}/${cycleYear}`);
+        }}
+      />
+      <ElectricityInputPanel cycleId={cycleId} />
 
       <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
         <div className="mb-3 flex items-center justify-between">
@@ -80,6 +95,7 @@ export function RentalBoard() {
           </div>
         </div>
       </div>
+      <RoomBillsList cycleId={cycleId} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <AnimatePresence initial={false}>
@@ -135,6 +151,49 @@ export function RentalBoard() {
       </div>
     </div>
   );
+}
+
+function BillingCyclePanel({ cycleMonth, cycleYear, onMonthChange, onYearChange, onGenerate }: { cycleMonth: number; cycleYear: number; onMonthChange: (m: number) => void; onYearChange: (y: number) => void; onGenerate: () => void; }) {
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+      <h3 className="mb-3 text-sm font-semibold">Chốt kỳ hóa đơn</h3>
+      <div className="flex items-end gap-2">
+        <label className="text-xs">Tháng<input type="number" min={1} max={12} value={cycleMonth} onChange={(e) => onMonthChange(Math.min(12, Math.max(1, Number(e.target.value) || 1)))} className="num mt-1 h-10 w-20 rounded-xl border border-border bg-background px-2" /></label>
+        <label className="text-xs">Năm<input type="number" value={cycleYear} onChange={(e) => onYearChange(Number(e.target.value) || new Date().getFullYear())} className="num mt-1 h-10 w-24 rounded-xl border border-border bg-background px-2" /></label>
+        <button type="button" onClick={onGenerate} className="h-10 rounded-xl bg-foreground px-4 text-sm font-semibold text-background">Chốt tiền tháng</button>
+      </div>
+    </div>
+  );
+}
+
+function ElectricityInputPanel({ cycleId }: { cycleId: string }) {
+  const state = useFinance();
+  const actions = useFinanceActions();
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+      <h3 className="mb-3 text-sm font-semibold">Nhập điện theo phòng ({cycleId})</h3>
+      <div className="space-y-2">
+        {state.rental.rooms.filter((r) => r.occupied).map((room) => {
+          const existing = state.rental.electricityReadings.find((x) => x.roomId === room.id && x.cycleId === cycleId);
+          return <ElectricityRow key={room.id} roomId={room.id} roomName={room.name} initialStart={existing?.startIndex ?? 0} initialEnd={existing?.endIndex ?? 0} onSave={(start, end) => actions.upsertElectricityReading(room.id, cycleId, start, end)} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ElectricityRow({ roomId, roomName, initialStart, initialEnd, onSave }: { roomId: string; roomName: string; initialStart: number; initialEnd: number; onSave: (start: number, end: number) => void; }) {
+  const [start, setStart] = useState(String(initialStart));
+  const [end, setEnd] = useState(String(initialEnd));
+  return <div key={roomId} className="flex items-end gap-2 rounded-xl border border-border/60 p-2"><div className="min-w-32 text-sm font-semibold">{roomName}</div><input type="number" value={start} onChange={(e) => setStart(e.target.value)} className="num h-9 w-24 rounded-lg border border-border px-2" placeholder="Đầu" /><input type="number" value={end} onChange={(e) => setEnd(e.target.value)} className="num h-9 w-24 rounded-lg border border-border px-2" placeholder="Cuối" /><button type="button" className="h-9 rounded-lg border border-border px-3 text-xs" onClick={() => onSave(Number(start) || 0, Number(end) || 0)}>Lưu điện</button></div>;
+}
+
+function RoomBillsList({ cycleId }: { cycleId: string }) {
+  const state = useFinance();
+  const actions = useFinanceActions();
+  const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
+  const bills = state.rental.roomBills.filter((b) => b.cycleId === cycleId);
+  return <div className="rounded-3xl border border-border bg-card p-4 shadow-card"><h3 className="mb-3 text-sm font-semibold">Danh sách hóa đơn ({cycleId})</h3><div className="space-y-2">{bills.map((b) => { const remaining = Math.max(b.totalAmount - b.paidAmount, 0); return <div key={b.id} className="rounded-xl border border-border/60 p-3"><div className="flex items-center justify-between"><div className="text-sm font-semibold">{roomMap[b.roomId]?.name ?? b.roomId}</div><div className="num text-sm font-bold">{formatVND(b.totalAmount)}</div></div><div className="mt-1 text-xs text-muted-foreground">Đã thu: {formatVND(b.paidAmount)} · Còn thiếu: {formatVND(remaining)}</div><button type="button" className="mt-2 h-8 rounded-lg border border-border px-2 text-xs" onClick={() => actions.markRoomBillPaid(b.id, b.totalAmount)}>Đánh dấu đã thu đủ</button></div>; })}</div></div>;
 }
 
 function RentalSettingsPanel() {
