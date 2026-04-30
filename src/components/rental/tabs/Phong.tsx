@@ -36,12 +36,6 @@ export function Phong() {
       .map((b) => [b.roomId, b.totalAmount - b.paidAmount]),
   );
 
-  const electricityMap = Object.fromEntries(
-    state.rental.electricityReadings
-      .filter((r) => r.cycleId === cycleId)
-      .map((r) => [r.roomId, r]),
-  );
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -76,16 +70,17 @@ export function Phong() {
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Giá thuê</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trạng thái</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Điện T.này</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng bill</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thanh toán</th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nợ</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trạng thái</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {state.rental.rooms.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   Chưa có phòng nào — thêm phòng đầu tiên
                 </td>
               </tr>
@@ -94,7 +89,6 @@ export function Phong() {
               const debt = debtMap[room.id] ?? 0;
               const status = getRoomStatus(room, debt > 0);
               const cfg = STATUS_CONFIG[status];
-              const elec = electricityMap[room.id];
               return (
                 <tr
                   key={room.id}
@@ -115,13 +109,17 @@ export function Phong() {
                   <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
                     {formatVND(room.rent)}
                   </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}>
-                      {cfg.label}
-                    </span>
+                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                    {(() => {
+                      const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
+                      return bill ? <span className="font-medium text-foreground">{formatVND(bill.totalAmount)}</span> : <span className="opacity-40">—</span>;
+                    })()}
                   </td>
-                  <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                    {elec ? `${elec.consumptionKwh} kWh` : <span className="italic text-muted-foreground/40">—</span>}
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {(() => {
+                      const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
+                      return bill ? <span className="text-emerald-600">{formatVND(bill.paidAmount)}</span> : <span className="opacity-40">—</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {debt > 0 ? (
@@ -129,6 +127,11 @@ export function Phong() {
                     ) : (
                       <span className="text-muted-foreground/40">—</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}>
+                      {cfg.label}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <ChevronRight className="h-4 w-4 text-muted-foreground mx-auto" />

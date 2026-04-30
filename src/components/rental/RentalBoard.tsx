@@ -1,24 +1,22 @@
 import { useState } from "react";
 import { TongQuan } from "./tabs/TongQuan";
 import { Phong } from "./tabs/Phong";
-import { GhiSo } from "./tabs/GhiSo";
-import { HoaDon } from "./tabs/HoaDon";
+import { ChotThang } from "./tabs/ChotThang";
 import { BaoCao } from "./tabs/BaoCao";
-import { CauHinh } from "./tabs/CauHinh";
+import { CaiDat } from "./tabs/CaiDat";
 
-type Tab = "tongquan" | "phong" | "ghiso" | "hoadon" | "baocao" | "cauhinh";
+type Tab = "tongquan" | "phong" | "chotthang" | "baocao" | "caidat";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "tongquan", label: "Tổng quan" },
-  { id: "phong", label: "Phòng" },
-  { id: "ghiso", label: "Ghi số" },
-  { id: "hoadon", label: "Hóa đơn" },
-  { id: "baocao", label: "Báo cáo" },
-  { id: "cauhinh", label: "Cấu hình" },
+  { id: "tongquan",  label: "Tổng quan" },
+  { id: "phong",     label: "Phòng" },
+  { id: "chotthang", label: "Chốt tháng" },
+  { id: "baocao",    label: "Báo cáo" },
+  { id: "caidat",    label: "Cài đặt" },
 ];
 
-export function RentalBoard() {
-  const [activeTab, setActiveTab] = useState<Tab>("tongquan");
+export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? "tongquan");
 
   return (
     <div className="space-y-6">
@@ -47,12 +45,11 @@ export function RentalBoard() {
       </div>
 
       <div>
-        {activeTab === "tongquan" && <TongQuan />}
-        {activeTab === "phong" && <Phong />}
-        {activeTab === "ghiso" && <GhiSo />}
-        {activeTab === "hoadon" && <HoaDon />}
-        {activeTab === "baocao" && <BaoCao />}
-        {activeTab === "cauhinh" && <CauHinh />}
+        {activeTab === "tongquan"  && <TongQuan onNavigate={setActiveTab} />}
+        {activeTab === "phong"     && <Phong />}
+        {activeTab === "chotthang" && <ChotThang />}
+        {activeTab === "baocao"    && <BaoCao />}
+        {activeTab === "caidat"    && <CaiDat />}
       </div>
     </div>
   );

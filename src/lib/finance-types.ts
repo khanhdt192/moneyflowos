@@ -68,6 +68,15 @@ export interface RentalSettings {
   t1HasWifi: boolean;               // false = no wifi charge
   t1WifiPerRoom: number;            // đ/tháng when t1HasWifi = true
   t1Cleaning: number;               // đ/tháng (tầng 1 cleaning fee)
+  t1OtherName: string;              // label for tầng 1 extra fee
+  t1OtherPerRoom: number;           // đ/tháng
+
+  // ── Bank / payment settings ────────────────────────────────────────────
+  bankName: string;
+  bankAccount: string;
+  bankHolder: string;
+  bankQrUrl: string;
+  bankNoteTemplate: string;         // e.g. "Phong {room} T{month}/{year}"
 }
 
 export type RentalBillingCycleStatus = "draft" | "finalized";

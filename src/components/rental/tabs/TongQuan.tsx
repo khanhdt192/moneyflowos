@@ -1,10 +1,12 @@
 import { useMemo } from "react";
-import { Home, TrendingUp, CheckCircle2, AlertCircle, DoorOpen, Zap, FileText } from "lucide-react";
+import { Home, TrendingUp, CheckCircle2, AlertCircle, DoorOpen, Zap, FileText, ArrowRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useFinance } from "@/lib/finance-store";
 import { formatCompact, formatVND } from "@/lib/format";
 
-export function TongQuan() {
+type Tab = "tongquan" | "phong" | "chotthang" | "baocao" | "caidat";
+
+export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
   const state = useFinance();
   const now = new Date();
   const currentCycleId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -81,6 +83,14 @@ export function TongQuan() {
         />
       </div>
 
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-2">
+        <QuickAction label="Nhập số tháng này" icon={<Zap className="h-3.5 w-3.5" />} onClick={() => onNavigate?.("chotthang")} accent />
+        <QuickAction label="Thu tiền nhanh" icon={<CheckCircle2 className="h-3.5 w-3.5" />} onClick={() => onNavigate?.("chotthang")} />
+        <QuickAction label="Chốt hóa đơn" icon={<FileText className="h-3.5 w-3.5" />} onClick={() => onNavigate?.("chotthang")} />
+        <QuickAction label="Xem báo cáo" icon={<TrendingUp className="h-3.5 w-3.5" />} onClick={() => onNavigate?.("baocao")} />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-1">
           <ActionWidget
@@ -108,7 +118,7 @@ export function TongQuan() {
           </div>
           {trendData.every((d) => d.revenue === 0) ? (
             <div className="flex h-44 items-center justify-center text-sm text-muted-foreground">
-              Chưa có dữ liệu hóa đơn — hãy chốt kỳ trong tab Hóa đơn
+              Chưa có dữ liệu hóa đơn — hãy nhập số và chốt kỳ trong tab Chốt tháng
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={180}>
@@ -191,6 +201,34 @@ function KpiCard({
       <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 text-xs text-muted-foreground">{sub}</div>
     </div>
+  );
+}
+
+function QuickAction({
+  label,
+  icon,
+  onClick,
+  accent,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+  accent?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+        accent
+          ? "bg-foreground text-background hover:opacity-90"
+          : "border border-border bg-card text-foreground hover:bg-muted/40"
+      }`}
+    >
+      {icon}
+      {label}
+      <ArrowRight className="h-3.5 w-3.5 opacity-60" />
+    </button>
   );
 }
 

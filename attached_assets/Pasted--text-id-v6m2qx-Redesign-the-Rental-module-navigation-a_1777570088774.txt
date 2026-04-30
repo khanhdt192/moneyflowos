@@ -1,0 +1,304 @@
+```text id="v6m2qx"
+Redesign the Rental module navigation and workflow into a cleaner landlord operating system.
+
+IMPORTANT:
+Current tabs are too fragmented:
+
+- Tổng quan
+- Phòng
+- Ghi số
+- Hóa đơn
+- Báo cáo
+- Cấu hình
+
+Need to reduce switching and keep monthly operations faster.
+
+====================================================
+🎯 NEW TAB STRUCTURE
+
+Replace current tabs with:
+
+1. Tổng quan
+2. Phòng
+3. Chốt tháng
+4. Báo cáo
+5. Cài đặt
+
+====================================================
+🎯 TAB DETAILS
+
+----------------------------------------------------
+1. TỔNG QUAN
+----------------------------------------------------
+
+Dashboard cards:
+
+- Tổng thu tháng
+- Tỷ lệ lấp đầy
+- Phòng đang nợ
+- Hóa đơn chưa thu
+- Thu nhập dự kiến
+
+Quick actions:
+
+- Nhập số tháng này
+- Thu tiền nhanh
+- Tạo hóa đơn
+
+----------------------------------------------------
+2. PHÒNG
+----------------------------------------------------
+
+Main room management table.
+
+Columns:
+
+| Phòng | Khách thuê | Giá thuê | Tổng bill | Thanh toán | Nợ | Action |
+
+Click row opens side drawer with:
+
+- Tenant info
+- Deposit
+- Contract dates
+- Payment history
+- Current month bill
+
+----------------------------------------------------
+3. CHỐT THÁNG
+----------------------------------------------------
+
+Merge old tabs:
+
+- Ghi số
+- Hóa đơn
+
+Single monthly workflow:
+
+STEP A:
+Nhập điện / nước
+
+STEP B:
+Preview charges
+
+STEP C:
+Chốt hóa đơn
+
+STEP D:
+Theo dõi thanh toán
+
+Use modern SaaS layout with:
+
+Header:
+- Month selector
+- Chạy tính toán
+- Chốt hóa đơn
+- Export PDF
+
+Table:
+
+| Phòng | Khách | Điện | Nước | Tổng bill | Trạng thái | Action |
+
+Statuses:
+
+- Chưa nhập số
+- Sẵn sàng chốt
+- Chưa thu
+- Thu một phần
+- Đã thu
+- Trống
+
+Right detail panel on click:
+
+Breakdown:
+
+- Tiền thuê
+- Điện
+- Nước
+- Wifi
+- Rác
+- Khác
+- Tổng cộng
+- Đã thu
+- Còn thiếu
+
+Buttons:
+
+- Thu tiền
+- Thu một phần
+- In hóa đơn
+- Chỉnh bill
+
+----------------------------------------------------
+4. BÁO CÁO
+----------------------------------------------------
+
+Analytics:
+
+- Revenue
+- Debt
+- Occupancy
+- Cashflow trends
+
+----------------------------------------------------
+5. CÀI ĐẶT
+----------------------------------------------------
+
+Must contain 4 sections:
+
+A. Cấu hình chi phí thuê
+B. Quản lý phòng & giá thuê
+C. Thông tin nhận chuyển khoản
+D. Mẫu hóa đơn / export file
+
+====================================================
+🎯 VERY IMPORTANT
+A. CẤU HÌNH CHI PHÍ THUÊ
+(KEEP DUAL CONFIG MODEL)
+
+Create 2 separate cards.
+
+----------------------------------------------------
+CARD 1:
+CẤU HÌNH CHUNG CHO PHÒNG 201 - 305
+----------------------------------------------------
+
+Apply to rooms:
+
+201,202,203,204,205,
+301,302,303,304,305
+
+Fields:
+
+1. Điện
+- Keep current per kWh logic
+
+2. Nước
+- Keep current pricing logic
+
+3. Wifi
+- Per room pricing
+Example:
+70000 = each occupied room pays 70k
+
+4. Vệ sinh / Rác
+- Per room pricing
+Example:
+30000 = each occupied room pays 30k
+
+5. Phụ phí khác
+- Per room pricing
+Allow:
+Fee name + amount
+
+----------------------------------------------------
+CARD 2:
+CẤU HÌNH RIÊNG CHO TẦNG 1
+----------------------------------------------------
+
+Fields:
+
+1. Điện
+- Manual electricity bill code / invoice amount
+
+2. Nước
+- Auto inherit from shared config
+
+Show note:
+"Dùng chung giá nước với phòng 201-305"
+
+3. Wifi
+- Optional custom amount
+- Empty = tenant uses own wifi
+
+4. Vệ sinh / Rác
+- Custom separate amount
+
+5. Phụ phí khác
+- Custom separate amount
+
+====================================================
+🎯 BANK PAYMENT SETTINGS
+(Inside Cài đặt)
+
+Section title:
+
+Thông tin nhận chuyển khoản
+
+Fields:
+
+- Tên ngân hàng
+- Số tài khoản
+- Chủ tài khoản
+- Upload QR code ngân hàng
+- Nội dung chuyển khoản mặc định
+
+Buttons:
+
+- Save
+- Test QR Preview
+
+====================================================
+🎯 INVOICE PAYMENT BOX
+
+When viewing invoice, show:
+
+Ngân hàng: ...
+STK: ...
+Chủ TK: ...
+
+[QR IMAGE]
+
+Nội dung CK:
+Phong 201 T05/2026
+
+Buttons:
+
+- Copy STK
+- Copy Nội dung
+- Download Invoice
+
+====================================================
+🎯 DATABASE / STORAGE
+
+Use current React + Tailwind + Supabase.
+
+Store bank info in settings table.
+Store QR image in Supabase Storage.
+
+Keep current billing data.
+
+====================================================
+🎯 DESIGN STYLE
+
+Premium SaaS style:
+
+- White clean cards
+- Rounded-xl
+- Soft shadows
+- Sharp typography
+- Compact efficient spacing
+- Stripe / Ramp / Linear inspired
+
+====================================================
+🎯 RESPONSIVE
+
+Desktop:
+Tabs horizontal
+
+Mobile:
+Tabs scrollable
+
+Settings cards stack vertically.
+
+====================================================
+🎯 IMPORTANT
+
+Do not break existing rental data.
+Do not remove current working logic.
+Only reorganize UX + improve workflow.
+
+====================================================
+🎯 OUTPUT NOW
+
+Implement this full redesign with production-ready code.
+```

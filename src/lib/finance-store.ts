@@ -44,6 +44,13 @@ function emptyState(): FinanceState {
         t1HasWifi: false,
         t1WifiPerRoom: 0,
         t1Cleaning: 0,
+        t1OtherName: "Phụ phí",
+        t1OtherPerRoom: 0,
+        bankName: "",
+        bankAccount: "",
+        bankHolder: "",
+        bankQrUrl: "",
+        bankNoteTemplate: "Phong {room} T{month}/{year}",
       },
       billingCycles: [],
       roomBills: [],
@@ -483,8 +490,8 @@ class FinanceStore {
         ? settings.t1Cleaning
         : settings.cleaningPerRoom;
 
-      // Other (only for non-tầng-1 rooms)
-      const otherAmount = groundFloor ? 0 : settings.otherPerRoom;
+      // Other fee
+      const otherAmount = groundFloor ? settings.t1OtherPerRoom : settings.otherPerRoom;
 
       const totalAmount =
         room.rent + electricityAmount + waterAmount + wifiAmount + cleaningAmount + otherAmount;
