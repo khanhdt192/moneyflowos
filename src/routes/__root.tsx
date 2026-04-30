@@ -6,6 +6,7 @@ import {
   Scripts,
   useLocation,
 } from "@tanstack/react-router";
+import { Analytics } from "@vercel/analytics/react";
 
 import appCss from "../styles.css?url";
 import { FinanceProvider } from "@/components/FinanceProvider";
@@ -72,6 +73,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
       <body suppressHydrationWarning>
         {children}
         <Scripts />
+        <Analytics />
       </body>
     </html>
   );
