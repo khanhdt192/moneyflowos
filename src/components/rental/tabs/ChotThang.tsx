@@ -72,6 +72,7 @@ export function ChotThang() {
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drawerMode, setDrawerMode] = useState<"detail" | "pay">("detail");
   const [payInput, setPayInput] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [payNote, setPayNote] = useState("");
@@ -258,7 +259,7 @@ export function ChotThang() {
             className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Lưu số đo
+            Lưu chỉ số
           </button>
           <button
             type="button"
@@ -276,7 +277,7 @@ export function ChotThang() {
             className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90 transition-colors disabled:opacity-50"
           >
             {confirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-            Chốt tất cả nháp {draftCount > 0 && `(${draftCount})`}
+            Chốt tất cả {draftCount > 0 && `(${draftCount})`}
           </button>
           <button
             type="button"
@@ -284,7 +285,7 @@ export function ChotThang() {
             className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors"
           >
             <Download className="h-3.5 w-3.5" />
-            Export tất cả PDF
+            Xuất tất cả PDF
           </button>
         </div>
       </div>
@@ -396,40 +397,36 @@ export function ChotThang() {
 
                   {/* Row actions */}
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-1">
-                      {room.occupied && bill?.status === "draft" && (
+                    {room.occupied && bill ? (
+                      <div className="flex items-center justify-center gap-1">
                         <ActionBtn
                           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
                           label="Chốt"
                           onClick={() => handleConfirmSingle(room.id)}
-                          cls="text-indigo-600 hover:bg-indigo-50"
+                          cls="text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 disabled:pointer-events-none"
+                          disabled={bill.status !== "draft"}
                         />
-                      )}
-                      {room.occupied && bill && ["confirmed", "partial_paid"].includes(bill.status) && (
                         <ActionBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
                           label="Thu tiền"
-                          onClick={() => { setSelectedId(room.id); setPayInput(""); setPayNote(""); }}
-                          cls="text-emerald-600 hover:bg-emerald-50"
+                          onClick={() => { setDrawerMode("pay"); setSelectedId(room.id); setPayInput(""); setPayNote(""); }}
+                          cls="text-emerald-600 hover:bg-emerald-50 disabled:opacity-40 disabled:pointer-events-none"
+                          disabled={bill.status === "paid"}
                         />
-                      )}
-                      {room.occupied && bill && (
-                        <>
-                          <ActionBtn
-                            icon={<FileText className="h-3.5 w-3.5" />}
-                            label="Chi tiết"
-                            onClick={() => { setSelectedId(room.id); setPayInput(""); setPayNote(""); }}
-                            cls="text-slate-600 hover:bg-slate-100"
-                          />
-                          <ActionBtn
-                            icon={<Download className="h-3.5 w-3.5" />}
-                            label="PDF"
-                            onClick={() => handleExportSingle(room.id)}
-                            cls="text-slate-600 hover:bg-slate-100"
-                          />
-                        </>
-                      )}
-                    </div>
+                        <ActionBtn
+                          icon={<FileText className="h-3.5 w-3.5" />}
+                          label="Chi tiết"
+                          onClick={() => { setDrawerMode("detail"); setSelectedId(room.id); }}
+                          cls="text-slate-600 hover:bg-slate-100"
+                        />
+                        <ActionBtn
+                          icon={<Download className="h-3.5 w-3.5" />}
+                          label="PDF"
+                          onClick={() => handleExportSingle(room.id)}
+                          cls="text-slate-600 hover:bg-slate-100"
+                        />
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               );
@@ -440,9 +437,9 @@ export function ChotThang() {
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
-        <WorkflowStep n={1} title="Nhập số điện nước" desc="Điền số đầu/cuối vào bảng, bấm Lưu số đo" />
+        <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu/cuối vào bảng, bấm Lưu chỉ số" />
         <WorkflowStep n={2} title="Tạo hóa đơn nháp" desc="Bấm Tạo hóa đơn nháp để tính toán chi phí" />
-        <WorkflowStep n={3} title="Chốt hóa đơn" desc='Kiểm tra xong bấm "Chốt tất cả nháp"' />
+        <WorkflowStep n={3} title="Chốt hóa đơn" desc='Kiểm tra xong bấm "Chốt tất cả"' />
         <WorkflowStep n={4} title="Thu tiền" desc='Bấm "Thu tiền" ở từng hàng khi khách thanh toán' />
       </div>
 
@@ -451,15 +448,24 @@ export function ChotThang() {
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           {selectedRoom && (
             <>
-              <SheetHeader className="mb-6">
-                <SheetTitle className="flex items-center gap-2">
-                  <span>{selectedRoom.name}</span>
-                  {selectedBill && (
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_CFG[selectedBill.status as BillStatus]?.cls ?? ""}`}>
-                      {STATUS_CFG[selectedBill.status as BillStatus]?.label ?? selectedBill.status}
+              <SheetHeader className="mb-5">
+                <SheetTitle>{selectedRoom.name}</SheetTitle>
+                <div className="mt-1 space-y-0.5 text-sm">
+                  <p className="text-muted-foreground">
+                    Khách thuê:{" "}
+                    <span className="font-medium text-foreground">
+                      {selectedRoom.tenant || <em className="opacity-50">Chưa có</em>}
                     </span>
+                  </p>
+                  {selectedBill && (
+                    <p className="text-muted-foreground flex items-center gap-2">
+                      Trạng thái:{" "}
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_CFG[selectedBill.status as BillStatus]?.cls ?? ""}`}>
+                        {STATUS_CFG[selectedBill.status as BillStatus]?.label ?? selectedBill.status}
+                      </span>
+                    </p>
                   )}
-                </SheetTitle>
+                </div>
               </SheetHeader>
 
               {/* Bill breakdown */}
@@ -490,7 +496,10 @@ export function ChotThang() {
 
                   {/* Pay form */}
                   {["confirmed", "partial_paid"].includes(selectedBill.status) && (
-                    <div className="rounded-xl border border-border p-4 space-y-3">
+                    <div
+                      id="pay-form-section"
+                      className={`rounded-xl border p-4 space-y-3 ${drawerMode === "pay" ? "border-emerald-300 bg-emerald-50/40" : "border-border"}`}
+                    >
                       <p className="text-sm font-semibold">Thu tiền</p>
                       <div className="text-sm text-muted-foreground flex justify-between">
                         <span>Còn thiếu</span>
@@ -504,31 +513,39 @@ export function ChotThang() {
                         onChange={(e) => setPayInput(e.target.value)}
                         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         placeholder="Số tiền thu"
+                        autoFocus={drawerMode === "pay"}
+                      />
+                      <select
+                        value={payMethod}
+                        onChange={(e) => setPayMethod(e.target.value)}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+                      >
+                        <option value="cash">Tiền mặt</option>
+                        <option value="transfer">Chuyển khoản</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={payNote}
+                        onChange={(e) => setPayNote(e.target.value)}
+                        placeholder="Ghi chú (tùy chọn)"
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
                       />
                       <div className="flex gap-2">
-                        <select
-                          value={payMethod}
-                          onChange={(e) => setPayMethod(e.target.value)}
-                          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+                        <button
+                          type="button"
+                          onClick={handlePay}
+                          className="flex-1 rounded-lg bg-foreground py-2 text-sm font-medium text-background hover:opacity-90"
                         >
-                          <option value="cash">Tiền mặt</option>
-                          <option value="transfer">Chuyển khoản</option>
-                        </select>
-                        <input
-                          type="text"
-                          value={payNote}
-                          onChange={(e) => setPayNote(e.target.value)}
-                          placeholder="Ghi chú (tùy chọn)"
-                          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
-                        />
+                          Thu tiền
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(null)}
+                          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/40"
+                        >
+                          Đóng
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handlePay}
-                        className="w-full rounded-lg bg-foreground py-2 text-sm font-medium text-background hover:opacity-90"
-                      >
-                        Xác nhận thu tiền
-                      </button>
                     </div>
                   )}
 
@@ -581,12 +598,15 @@ export function ChotThang() {
 
 /* ─── sub-components ──────────────────────────────────────── */
 
-function ActionBtn({ icon, label, onClick, cls }: { icon: React.ReactNode; label: string; onClick: () => void; cls: string }) {
+function ActionBtn({ icon, label, onClick, cls, disabled }: {
+  icon: React.ReactNode; label: string; onClick: () => void; cls: string; disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={label}
+      disabled={disabled}
       className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${cls}`}
     >
       {icon}
