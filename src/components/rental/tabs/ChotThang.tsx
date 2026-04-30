@@ -1,8 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Save,
   Zap,
   CheckCircle,
   CheckCircle2,
@@ -12,44 +11,62 @@ import {
   Download,
   Loader2,
   Clock,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
-import type { RentalRoom, RentalRoomBill } from "@/lib/finance-types";
+import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
 import { formatVND } from "@/lib/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { exportSingleInvoice, exportAllInvoices } from "@/lib/rental-pdf";
 
 /* ─── types ───────────────────────────────────────────────── */
 
-type BillStatus = "empty" | "no_reading" | "has_reading" | "draft" | "confirmed" | "partial_paid" | "paid" | "overdue" | "cancelled";
+type BillStatus =
+  | "empty"
+  | "no_reading"
+  | "has_reading"
+  | "draft"
+  | "confirmed"
+  | "partial_paid"
+  | "paid"
+  | "overdue"
+  | "cancelled";
 
-function getDisplayStatus(room: RentalRoom, bill: RentalRoomBill | undefined, hasReading: boolean, cycleId: string): BillStatus {
+type SaveState = "idle" | "saving" | "saved" | "error";
+
+function getDisplayStatus(
+  room: RentalRoom,
+  bill: RentalRoomBill | undefined,
+  hasReading: boolean,
+  cycleId: string,
+): BillStatus {
   if (!room.occupied) return "empty";
   if (!bill) return hasReading ? "has_reading" : "no_reading";
-  if (bill.status === "paid")          return "paid";
-  if (bill.status === "partial_paid")  return "partial_paid";
+  if (bill.status === "paid") return "paid";
+  if (bill.status === "partial_paid") return "partial_paid";
   if (bill.status === "confirmed") {
     const [y, m] = cycleId.split("-").map(Number);
     const now = new Date();
-    if (y < now.getFullYear() || (y === now.getFullYear() && m < now.getMonth() + 1)) return "overdue";
+    if (y < now.getFullYear() || (y === now.getFullYear() && m < now.getMonth() + 1))
+      return "overdue";
     return "confirmed";
   }
   if (bill.status === "cancelled") return "cancelled";
-  // draft bill exists
   return "draft";
 }
 
 const STATUS_CFG: Record<BillStatus, { label: string; cls: string }> = {
-  empty:       { label: "Trống",          cls: "bg-slate-100 text-slate-500 border-slate-200" },
-  no_reading:  { label: "Chưa nhập số",   cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  has_reading: { label: "Đã nhập số",     cls: "bg-sky-50 text-sky-700 border-sky-200" },
-  draft:       { label: "Nháp",           cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  confirmed:   { label: "Đã chốt",        cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  partial_paid:{ label: "Thu một phần",   cls: "bg-violet-50 text-violet-700 border-violet-200" },
-  paid:        { label: "Đã thu",         cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  overdue:     { label: "Quá hạn",        cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  cancelled:   { label: "Đã huỷ",        cls: "bg-slate-100 text-slate-400 border-slate-200" },
+  empty:        { label: "Trống",        cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  no_reading:   { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  has_reading:  { label: "Đã nhập số",   cls: "bg-sky-50 text-sky-700 border-sky-200" },
+  draft:        { label: "Nháp",         cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  confirmed:    { label: "Đã chốt",      cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  partial_paid: { label: "Thu một phần", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  paid:         { label: "Đã thu",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  overdue:      { label: "Quá hạn",      cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  cancelled:    { label: "Đã huỷ",       cls: "bg-slate-100 text-slate-400 border-slate-200" },
 };
 
 function isT1(room: RentalRoom) {
@@ -58,93 +75,124 @@ function isT1(room: RentalRoom) {
 
 type RowData = { start: string; end: string; water: string };
 
+/** Pure live-total calculator — mirrors calcBillAmounts in finance-store */
+function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
+  const ground = isT1(room);
+  const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
+  const water = parseFloat(row.water) || 0;
+  const elec = ground ? settings.t1ElectricityBill : kwh * settings.defaultElectricityRate;
+  const waterAmt = water * settings.waterRatePerM3;
+  const wifi = ground ? (settings.t1HasWifi ? settings.t1WifiPerRoom : 0) : settings.wifiPerRoom;
+  const cleaning = ground ? settings.t1Cleaning : settings.cleaningPerRoom;
+  const other = ground ? settings.t1OtherPerRoom : settings.otherPerRoom;
+  return room.rent + elec + waterAmt + wifi + cleaning + other;
+}
+
 /* ─── component ───────────────────────────────────────────── */
 
 export function ChotThang() {
-  const state  = useFinance();
+  const state   = useFinance();
   const actions = useFinanceActions();
-  const now    = new Date();
+  const now     = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year,  setYear]  = useState(now.getFullYear());
-  const cycleId = `${year}-${String(month).padStart(2, "0")}`;
-  const settings = state.rental.settings;
+  const [year, setYear]   = useState(now.getFullYear());
+  const cycleId   = `${year}-${String(month).padStart(2, "0")}`;
+  const settings  = state.rental.settings;
 
-  const [rows, setRows] = useState<Record<string, RowData>>({});
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  /* local editing rows (controlled inputs) */
+  const [rows, setRows]           = useState<Record<string, RowData>>({});
+  /* per-room save status */
+  const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
+  /* debounce timers per room */
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  /* detail drawer */
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<"detail" | "pay">("detail");
-  const [payInput, setPayInput] = useState("");
+  const [payInput, setPayInput]   = useState("");
   const [payMethod, setPayMethod] = useState("cash");
-  const [payNote, setPayNote] = useState("");
+  const [payNote, setPayNote]     = useState("");
 
-  const [saving, setSaving]       = useState(false);
-  const [drafting, setDrafting]   = useState(false);
+  /* toolbar async state */
+  const [drafting,   setDrafting]   = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  /* ─── derived ───────────────────────────────────────────── */
+  /* clear local rows when month changes */
+  useEffect(() => {
+    setRows({});
+    setSaveStates({});
+  }, [month, year]);
+
+  /* ─── derived maps ──────────────────────────────────────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
   const billMap = Object.fromEntries(
     state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
   );
   const readingMap = Object.fromEntries(
-    state.rental.electricityReadings.filter((r) => r.cycleId === cycleId).map((r) => [r.roomId, r]),
+    state.rental.electricityReadings
+      .filter((r) => r.cycleId === cycleId)
+      .map((r) => [r.roomId, r]),
   );
 
-  const allRooms = state.rental.rooms;
+  const allRooms      = state.rental.rooms;
   const occupiedRooms = allRooms.filter((r) => r.occupied);
-  const selectedRoom = selectedId ? roomMap[selectedId] : null;
-  const selectedBill = selectedId ? billMap[selectedId] : undefined;
+  const selectedRoom  = selectedId ? roomMap[selectedId] : null;
+  const selectedBill  = selectedId ? billMap[selectedId] : undefined;
 
-  // Summary counts
   const draftCount     = Object.values(billMap).filter((b) => b.status === "draft").length;
-  const confirmedCount = Object.values(billMap).filter((b) => ["confirmed", "partial_paid", "paid"].includes(b.status)).length;
+  const confirmedCount = Object.values(billMap).filter((b) =>
+    ["confirmed", "partial_paid", "paid"].includes(b.status)).length;
   const paidCount      = Object.values(billMap).filter((b) => b.status === "paid").length;
   const totalBilled    = Object.values(billMap).reduce((s, b) => s + b.totalAmount, 0);
   const totalPaid      = Object.values(billMap).reduce((s, b) => s + b.paidAmount, 0);
 
-  /* ─── handlers ──────────────────────────────────────────── */
+  /* ─── row helpers ───────────────────────────────────────── */
 
   function getRow(roomId: string): RowData {
     if (rows[roomId]) return rows[roomId];
     const r = readingMap[roomId];
-    return { start: String(r?.startIndex ?? ""), end: String(r?.endIndex ?? ""), water: String(r?.waterM3 ?? "") };
+    return {
+      start: r?.startIndex != null ? String(r.startIndex) : "",
+      end:   r?.endIndex   != null ? String(r.endIndex)   : "",
+      water: r?.waterM3    != null ? String(r.waterM3)    : "",
+    };
   }
 
-  async function handleSaveReadings() {
-    const dirty = occupiedRooms.filter((r) => rows[r.id] && !isT1(r));
-    if (dirty.length === 0) { toast.info("Chưa có số đo nào để lưu"); return; }
-    setSaving(true);
-    try {
-      for (const r of dirty) {
-        const row = rows[r.id];
-        if (!row) continue;
-        const start  = parseFloat(row.start) || 0;
-        const end    = parseFloat(row.end)   || 0;
-        const water  = parseFloat(row.water) || 0;
-        if (end < start) { toast.error(`${r.name}: số cuối < số đầu`); continue; }
-        await actions.upsertElectricityReading(r.id, cycleId, start, end, water);
-      }
-      setRows({});
-      toast.success("Đã lưu số đo điện nước");
-    } catch {
-      toast.error("Lưu thất bại");
-    } finally {
-      setSaving(false);
-    }
+  function setSaveState(roomId: string, state: SaveState) {
+    setSaveStates((s) => ({ ...s, [roomId]: state }));
   }
+
+  function onReadingChange(roomId: string, field: keyof RowData, value: string) {
+    const newRow = { ...getRow(roomId), [field]: value };
+    setRows((p) => ({ ...p, [roomId]: newRow }));
+
+    /* debounce auto-save */
+    clearTimeout(debounceTimers.current[roomId]);
+    debounceTimers.current[roomId] = setTimeout(async () => {
+      const start = parseFloat(newRow.start) || 0;
+      const end   = parseFloat(newRow.end)   || 0;
+      const water = parseFloat(newRow.water) || 0;
+      if (end < start) return; // silently skip invalid range
+      setSaveState(roomId, "saving");
+      try {
+        await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
+        setSaveState(roomId, "saved");
+        setTimeout(() => setSaveState(roomId, "idle"), 2500);
+      } catch {
+        setSaveState(roomId, "error");
+      }
+    }, 600);
+  }
+
+  /* ─── toolbar handlers ──────────────────────────────────── */
 
   async function handleCreateDrafts() {
     setDrafting(true);
     try {
       const { created, skipped } = await actions.createDraftBills(month, year);
-      if (created === 0 && skipped === 0) {
-        toast.info("Không có phòng đang thuê");
-      } else if (created === 0) {
-        toast.info(`Tất cả ${skipped} phòng đã có hóa đơn (không ghi đè)`);
-      } else {
-        toast.success(`Đã tạo ${created} hóa đơn nháp${skipped > 0 ? `, bỏ qua ${skipped} đã chốt` : ""}`);
-      }
+      if (created === 0 && skipped === 0) toast.info("Không có phòng đang thuê");
+      else if (created === 0) toast.info(`Tất cả ${skipped} phòng đã có hóa đơn (không ghi đè)`);
+      else toast.success(`Đã tạo ${created} hóa đơn nháp${skipped > 0 ? `, bỏ qua ${skipped} đã chốt` : ""}`);
     } catch (err) {
       console.error(err);
       toast.error("Không tạo được hóa đơn");
@@ -157,13 +205,9 @@ export function ChotThang() {
     setConfirming(true);
     try {
       const { confirmed, alreadyDone } = await actions.confirmBills(month, year);
-      if (confirmed === 0 && alreadyDone === 0) {
-        toast.info("Chưa có hóa đơn nháp nào để chốt");
-      } else if (confirmed === 0) {
-        toast.info("Hóa đơn tháng này đã được chốt.");
-      } else {
-        toast.success(`Đã chốt ${confirmed} hóa đơn. Hóa đơn tháng này đã được chốt.`);
-      }
+      if (confirmed === 0 && alreadyDone === 0) toast.info("Chưa có hóa đơn nháp nào để chốt");
+      else if (confirmed === 0) toast.info("Hóa đơn tháng này đã được chốt.");
+      else toast.success(`Đã chốt ${confirmed} hóa đơn.`);
     } catch (err) {
       console.error(err);
       toast.error("Không chốt được hóa đơn");
@@ -177,7 +221,7 @@ export function ChotThang() {
     if (!bill || bill.status !== "draft") return;
     try {
       await actions.confirmSingleBill(bill.id);
-      toast.success(`Đã chốt hóa đơn ${roomMap[roomId]?.name}`);
+      toast.success(`Đã chốt ${roomMap[roomId]?.name}`);
     } catch {
       toast.error("Không chốt được hóa đơn");
     }
@@ -188,11 +232,13 @@ export function ChotThang() {
     const amount = parseFloat(payInput.replace(/[^\d.]/g, ""));
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = selectedBill.totalAmount - selectedBill.paidAmount;
-    if (amount > remaining + 0.5) { toast.error(`Vượt quá số tiền cần thu (${formatVND(remaining)})`); return; }
+    if (amount > remaining + 0.5) {
+      toast.error(`Vượt quá số tiền cần thu (${formatVND(remaining)})`);
+      return;
+    }
     try {
       await actions.recordPayment(selectedBill.id, amount, payMethod, payNote || undefined);
-      setPayInput("");
-      setPayNote("");
+      setPayInput(""); setPayNote("");
       toast.success("Đã ghi nhận thanh toán");
       setSelectedId(null);
     } catch {
@@ -205,7 +251,7 @@ export function ChotThang() {
     const bill = billMap[roomId];
     if (!room || !bill) { toast.error("Chưa có hóa đơn cho phòng này"); return; }
     exportSingleInvoice({ room, bill, month, year, settings, invoiceSettings: state.rental.invoiceSettings });
-    toast.success(`Đã xuất hóa đơn ${room.name}`);
+    toast.success(`Đang xuất hóa đơn ${room.name}…`);
   }
 
   function handleExportAll() {
@@ -214,7 +260,7 @@ export function ChotThang() {
       .map((r) => ({ room: r, bill: billMap[r.id]!, month, year, settings, invoiceSettings: state.rental.invoiceSettings }));
     if (inputs.length === 0) { toast.error("Chưa có hóa đơn nào để xuất"); return; }
     exportAllInvoices(inputs);
-    toast.success(`Đã xuất ${inputs.length} hóa đơn PDF`);
+    toast.success(`Đang xuất ${inputs.length} hóa đơn…`);
   }
 
   /* ─── month nav ─────────────────────────────────────────── */
@@ -231,60 +277,48 @@ export function ChotThang() {
     setMonth(nm); setYear(ny);
   }
 
-  /* ─── render ────────────────────────────────────────────── */
-
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+
+  /* ─── render ────────────────────────────────────────────── */
 
   return (
     <div className="space-y-5">
       {/* ── Top bar ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Month navigator */}
         <div className="flex items-center gap-2">
-          <button type="button" onClick={prevMonth} className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors">
+          <button type="button" onClick={prevMonth}
+            className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors">
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="min-w-32 text-center text-base font-semibold">
             Tháng {String(month).padStart(2, "0")}/{year}
-            {isCurrentMonth && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-normal text-blue-700">Hiện tại</span>}
+            {isCurrentMonth && (
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-normal text-blue-700">
+                Hiện tại
+              </span>
+            )}
           </span>
-          <button type="button" onClick={nextMonth} disabled={isCurrentMonth} className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors disabled:opacity-40">
+          <button type="button" onClick={nextMonth} disabled={isCurrentMonth}
+            className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors disabled:opacity-40">
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
 
+        {/* Toolbar — 3 actions (save button removed) */}
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleSaveReadings}
-            disabled={saving}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Lưu chỉ số
-          </button>
-          <button
-            type="button"
-            onClick={handleCreateDrafts}
-            disabled={drafting}
-            className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
-          >
+          <button type="button" onClick={handleCreateDrafts} disabled={drafting}
+            className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50">
             {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
             Tạo hóa đơn nháp
           </button>
-          <button
-            type="button"
-            onClick={handleConfirmAll}
-            disabled={confirming || draftCount === 0}
-            className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90 transition-colors disabled:opacity-50"
-          >
+          <button type="button" onClick={handleConfirmAll} disabled={confirming || draftCount === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90 transition-colors disabled:opacity-50">
             {confirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
             Chốt tất cả {draftCount > 0 && `(${draftCount})`}
           </button>
-          <button
-            type="button"
-            onClick={handleExportAll}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors"
-          >
+          <button type="button" onClick={handleExportAll}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors">
             <Download className="h-3.5 w-3.5" />
             Xuất tất cả PDF
           </button>
@@ -328,103 +362,140 @@ export function ChotThang() {
               const bill    = billMap[room.id];
               const reading = readingMap[room.id];
               const row     = getRow(room.id);
-              const displayStatus = getDisplayStatus(room, bill, !!reading, cycleId);
-              const cfg     = STATUS_CFG[displayStatus];
               const ground  = isT1(room);
-              const isDirty = !!rows[room.id];
+              const ss      = saveStates[room.id] ?? "idle";
+              const hasLocalEdit = !!rows[room.id];
+
+              const displayStatus = getDisplayStatus(room, bill, !!reading, cycleId);
+              const cfg = STATUS_CFG[displayStatus];
+
+              /* live total: use bill total if confirmed+, else compute live */
+              const liveTotal = bill
+                ? bill.totalAmount
+                : (room.occupied && (reading || hasLocalEdit))
+                  ? calcLiveTotal(room, settings, row)
+                  : null;
 
               return (
-                <tr key={room.id} className={`bg-card transition-colors ${room.occupied ? "hover:bg-muted/10" : "opacity-50"}`}>
+                <tr key={room.id}
+                  className={`bg-card transition-colors ${room.occupied ? "hover:bg-muted/10" : "opacity-50"}`}>
                   <td className="px-4 py-3 font-medium">{room.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{room.tenant || <span className="italic opacity-50">Trống</span>}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {room.tenant || <span className="italic opacity-50">Trống</span>}
+                  </td>
 
-                  {/* Meter inputs */}
+                  {/* Số đầu */}
                   <td className="px-4 py-2 text-center">
                     {ground ? (
                       <span className="text-xs text-muted-foreground italic">T1 — tổng</span>
                     ) : (
                       <input
-                        ref={(el) => { inputRefs.current[`${room.id}-start`] = el; }}
                         type="number"
                         value={row.start}
-                        onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...getRow(room.id), start: e.target.value } }))}
+                        onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
                         disabled={!room.occupied}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder="0"
                       />
                     )}
                   </td>
+
+                  {/* Số cuối */}
                   <td className="px-4 py-2 text-center">
                     {ground ? (
                       <span className="text-xs text-muted-foreground italic">—</span>
                     ) : (
                       <input
-                        ref={(el) => { inputRefs.current[`${room.id}-end`] = el; }}
                         type="number"
                         value={row.end}
-                        onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...getRow(room.id), end: e.target.value } }))}
+                        onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
                         disabled={!room.occupied}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder="0"
                       />
                     )}
                   </td>
+
+                  {/* Nước */}
                   <td className="px-4 py-2 text-center">
                     <input
                       type="number"
                       value={row.water}
-                      onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...getRow(room.id), water: e.target.value } }))}
+                      onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
                       disabled={!room.occupied}
                       className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                       placeholder="0"
                     />
                   </td>
 
-                  {/* Bill total */}
+                  {/* Tổng bill — auto-calc live */}
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {bill ? (
-                      <span className="font-semibold">{formatVND(bill.totalAmount)}</span>
-                    ) : isDirty ? (
-                      <span className="text-xs text-muted-foreground italic">Lưu để tính</span>
+                    {liveTotal != null ? (
+                      <div className="inline-flex flex-col items-end gap-0.5">
+                        <span className={`font-semibold ${!bill ? "text-muted-foreground" : ""}`}>
+                          {formatVND(liveTotal)}
+                        </span>
+                        {!bill && (
+                          <span className="text-[10px] text-muted-foreground/60">ước tính</span>
+                        )}
+                      </div>
                     ) : (
                       <span className="opacity-40">—</span>
+                    )}
+                    {/* per-row save indicator */}
+                    {ss !== "idle" && (
+                      <div className="mt-0.5 flex items-center justify-end gap-0.5">
+                        {ss === "saving" && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                        {ss === "saved"  && <Check className="h-3 w-3 text-emerald-500" />}
+                        {ss === "error"  && <X className="h-3 w-3 text-rose-500" />}
+                        <span className={`text-[10px] ${ss === "saved" ? "text-emerald-600" : ss === "error" ? "text-rose-600" : "text-muted-foreground"}`}>
+                          {ss === "saving" ? "Đang lưu…" : ss === "saved" ? "Đã lưu" : "Lỗi lưu"}
+                        </span>
+                      </div>
                     )}
                   </td>
 
                   {/* Status badge */}
                   <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}>{cfg.label}</span>
+                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}>
+                      {cfg.label}
+                    </span>
                   </td>
 
                   {/* Row actions */}
                   <td className="px-4 py-3">
                     {room.occupied && bill ? (
                       <div className="flex items-center justify-center gap-1">
-                        <ActionBtn
+                        <RowBtn
                           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
                           label="Chốt"
                           onClick={() => handleConfirmSingle(room.id)}
-                          cls="text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 disabled:pointer-events-none"
+                          color="indigo"
                           disabled={bill.status !== "draft"}
                         />
-                        <ActionBtn
+                        <RowBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
                           label="Thu tiền"
-                          onClick={() => { setDrawerMode("pay"); setSelectedId(room.id); setPayInput(""); setPayNote(""); }}
-                          cls="text-emerald-600 hover:bg-emerald-50 disabled:opacity-40 disabled:pointer-events-none"
+                          onClick={() => {
+                            setDrawerMode("pay");
+                            setSelectedId(room.id);
+                            setPayInput("");
+                            setPayNote("");
+                          }}
+                          color="emerald"
                           disabled={bill.status === "paid"}
                         />
-                        <ActionBtn
+                        <RowBtn
                           icon={<FileText className="h-3.5 w-3.5" />}
                           label="Chi tiết"
                           onClick={() => { setDrawerMode("detail"); setSelectedId(room.id); }}
-                          cls="text-slate-600 hover:bg-slate-100"
+                          color="slate"
                         />
-                        <ActionBtn
+                        <RowBtn
                           icon={<Download className="h-3.5 w-3.5" />}
                           label="PDF"
                           onClick={() => handleExportSingle(room.id)}
-                          cls="text-slate-600 hover:bg-slate-100"
+                          color="rose"
                         />
                       </div>
                     ) : null}
@@ -438,10 +509,10 @@ export function ChotThang() {
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
-        <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu/cuối vào bảng, bấm Lưu chỉ số" />
-        <WorkflowStep n={2} title="Tạo hóa đơn nháp" desc="Bấm Tạo hóa đơn nháp để tính toán chi phí" />
+        <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu/cuối — tự động lưu sau 0.6s" />
+        <WorkflowStep n={2} title="Tạo hóa đơn nháp" desc="Bấm Tạo hóa đơn nháp để khóa chi phí" />
         <WorkflowStep n={3} title="Chốt hóa đơn" desc='Kiểm tra xong bấm "Chốt tất cả"' />
-        <WorkflowStep n={4} title="Thu tiền" desc='Bấm "Thu tiền" ở từng hàng khi khách thanh toán' />
+        <WorkflowStep n={4} title="Thu tiền" desc='Bấm "Thu tiền" khi khách thanh toán' />
       </div>
 
       {/* ── Detail sheet ── */}
@@ -469,7 +540,6 @@ export function ChotThang() {
                 </div>
               </SheetHeader>
 
-              {/* Bill breakdown */}
               {selectedBill ? (
                 <div className="space-y-5">
                   <BillBreakdown bill={selectedBill} settings={state.rental.settings} />
@@ -477,15 +547,20 @@ export function ChotThang() {
                   {/* Payment history */}
                   {state.rental.payments.filter((p) => p.billId === selectedBill.id).length > 0 && (
                     <div>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lịch sử thanh toán</p>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Lịch sử thanh toán
+                      </p>
                       <div className="space-y-1">
                         {state.rental.payments
                           .filter((p) => p.billId === selectedBill.id)
                           .map((p) => (
-                            <div key={p.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 text-sm">
+                            <div key={p.id}
+                              className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 text-sm">
                               <div className="flex items-center gap-2">
                                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span className="text-muted-foreground">{new Date(p.paidAt).toLocaleDateString("vi-VN")}</span>
+                                <span className="text-muted-foreground">
+                                  {new Date(p.paidAt).toLocaleDateString("vi-VN")}
+                                </span>
                                 {p.note && <span className="text-muted-foreground">· {p.note}</span>}
                               </div>
                               <span className="font-medium text-emerald-600">+{formatVND(p.amount)}</span>
@@ -497,10 +572,7 @@ export function ChotThang() {
 
                   {/* Pay form */}
                   {["confirmed", "partial_paid"].includes(selectedBill.status) && (
-                    <div
-                      id="pay-form-section"
-                      className={`rounded-xl border p-4 space-y-3 ${drawerMode === "pay" ? "border-emerald-300 bg-emerald-50/40" : "border-border"}`}
-                    >
+                    <div className={`rounded-xl border p-4 space-y-3 ${drawerMode === "pay" ? "border-emerald-300 bg-emerald-50/40" : "border-border"}`}>
                       <p className="text-sm font-semibold">Thu tiền</p>
                       <div className="text-sm text-muted-foreground flex justify-between">
                         <span>Còn thiếu</span>
@@ -532,50 +604,44 @@ export function ChotThang() {
                         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
                       />
                       <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handlePay}
-                          className="flex-1 rounded-lg bg-foreground py-2 text-sm font-medium text-background hover:opacity-90"
-                        >
+                        <button type="button" onClick={handlePay}
+                          className="flex-1 rounded-lg bg-foreground py-2 text-sm font-medium text-background hover:opacity-90">
                           Thu tiền
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedId(null)}
-                          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/40"
-                        >
+                        <button type="button" onClick={() => setSelectedId(null)}
+                          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/40">
                           Đóng
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* Bank info + export */}
+                  {/* Bank info */}
                   {settings.bankAccount && (
                     <div className="rounded-xl border border-border p-4 space-y-2 text-sm">
-                      <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Thông tin chuyển khoản</p>
+                      <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                        Thông tin chuyển khoản
+                      </p>
                       {settings.bankName    && <p>🏦 {settings.bankName}</p>}
                       {settings.bankAccount && <p>STK: <span className="font-mono font-semibold">{settings.bankAccount}</span></p>}
                       {settings.bankHolder  && <p>Chủ TK: {settings.bankHolder}</p>}
                       {settings.bankNoteTemplate && (
                         <p className="text-muted-foreground">
-                          Nội dung CK: {settings.bankNoteTemplate
+                          Nội dung CK:{" "}
+                          {settings.bankNoteTemplate
                             .replace("{room}", selectedRoom.name)
                             .replace("{month}", String(month).padStart(2, "0"))
                             .replace("{year}", String(year))}
                         </p>
                       )}
                       {settings.bankQrUrl && (
-                        <img src={settings.bankQrUrl} alt="QR thanh toán" className="h-32 w-32 rounded-lg object-cover" />
+                        <img src={settings.bankQrUrl} alt="QR" className="h-32 w-32 rounded-lg object-cover" />
                       )}
                     </div>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => { handleExportSingle(selectedRoom.id); }}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium hover:bg-muted/40"
-                  >
+                  <button type="button" onClick={() => handleExportSingle(selectedRoom.id)}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium hover:bg-muted/40">
                     <Download className="h-4 w-4" />
                     Xuất hóa đơn PDF
                   </button>
@@ -585,7 +651,7 @@ export function ChotThang() {
                   <AlertTriangle className="h-8 w-8 text-amber-400" />
                   <p className="text-sm text-muted-foreground">
                     Chưa có hóa đơn cho phòng này tháng {month}/{year}.
-                    <br />Lưu chỉ số rồi bấm <strong>Tạo hóa đơn nháp</strong>.
+                    <br />Nhập chỉ số rồi bấm <strong>Tạo hóa đơn nháp</strong>.
                   </p>
                 </div>
               )}
@@ -599,8 +665,25 @@ export function ChotThang() {
 
 /* ─── sub-components ──────────────────────────────────────── */
 
-function ActionBtn({ icon, label, onClick, cls, disabled }: {
-  icon: React.ReactNode; label: string; onClick: () => void; cls: string; disabled?: boolean;
+const ROW_BTN_COLORS: Record<string, string> = {
+  indigo: "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm",
+  emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shadow-sm",
+  slate: "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 shadow-sm",
+  rose: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm",
+};
+
+function RowBtn({
+  icon,
+  label,
+  onClick,
+  color,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  color: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -608,16 +691,27 @@ function ActionBtn({ icon, label, onClick, cls, disabled }: {
       onClick={onClick}
       title={label}
       disabled={disabled}
-      className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${cls}`}
+      className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors
+        ${ROW_BTN_COLORS[color] ?? ""}
+        disabled:opacity-35 disabled:pointer-events-none`}
     >
       {icon}
-      <span className="hidden sm:inline">{label}</span>
+      <span className="hidden lg:inline">{label}</span>
     </button>
   );
 }
 
-function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: "emerald" | "rose" }) {
-  const color = accent === "emerald" ? "text-emerald-600" : accent === "rose" ? "text-rose-600" : "text-foreground";
+function SummaryCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: "emerald" | "rose";
+}) {
+  const color =
+    accent === "emerald" ? "text-emerald-600" : accent === "rose" ? "text-rose-600" : "text-foreground";
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -626,13 +720,19 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
   );
 }
 
-function BillBreakdown({ bill, settings }: { bill: RentalRoomBill; settings: ReturnType<typeof useFinance>["rental"]["settings"] }) {
+function BillBreakdown({
+  bill,
+  settings,
+}: {
+  bill: RentalRoomBill;
+  settings: ReturnType<typeof useFinance>["rental"]["settings"];
+}) {
   const rows = [
-    { label: "Tiền thuê",    amount: bill.rentAmount },
-    { label: "Điện",         amount: bill.electricityAmount },
-    { label: "Nước",         amount: bill.waterAmount },
-    { label: "Wifi",         amount: bill.wifiAmount },
-    { label: "Vệ sinh",      amount: bill.cleaningAmount },
+    { label: "Tiền thuê", amount: bill.rentAmount },
+    { label: "Điện", amount: bill.electricityAmount },
+    { label: "Nước", amount: bill.waterAmount },
+    { label: "Wifi", amount: bill.wifiAmount },
+    { label: "Vệ sinh", amount: bill.cleaningAmount },
     { label: settings.otherName || "Phụ phí", amount: bill.otherAmount },
   ].filter((r) => r.amount > 0);
 
@@ -671,7 +771,9 @@ function BillBreakdown({ bill, settings }: { bill: RentalRoomBill; settings: Ret
 function WorkflowStep({ n, title, desc }: { n: number; title: string; desc: string }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 flex-1 min-w-52">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">{n}</span>
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
+        {n}
+      </span>
       <div>
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
@@ -679,4 +781,3 @@ function WorkflowStep({ n, title, desc }: { n: number; title: string; desc: stri
     </div>
   );
 }
-
