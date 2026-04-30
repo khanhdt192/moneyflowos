@@ -30,7 +30,21 @@ function emptyState(): FinanceState {
     activeMonth: m,
     months: { [m]: emptyMonth() },
     goals: [],
-    rental: { rooms: [], autoSyncToIncome: true },
+    rental: {
+      rooms: [],
+      settings: {
+        defaultElectricityRate: 3500,
+        waterTotal: 0,
+        wifiTotal: 0,
+        cleaningTotal: 0,
+        otherTotal: 0,
+        allocationRule: "equal_occupied",
+      },
+      billingCycles: [],
+      roomBills: [],
+      electricityReadings: [],
+      autoSyncToIncome: true,
+    },
     settings: { name: "Bạn", currency: "VND" },
   };
 }
@@ -384,6 +398,107 @@ class FinanceStore {
 
   setRoomOccupied(id: string, occupied: boolean) {
     this.updateRoom(id, { occupied });
+  }
+
+  updateRentalSettings(patch: Partial<FinanceState["rental"]["settings"]>) {
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        settings: { ...this.state.rental.settings, ...patch },
+      },
+    });
+  }
+
+  upsertElectricityReading(roomId: string, cycleId: string, startIndex: number, endIndex: number) {
+    const nextReading = {
+      id: `${cycleId}:${roomId}`,
+      roomId,
+      cycleId,
+      startIndex,
+      endIndex,
+      consumptionKwh: Math.max(endIndex - startIndex, 0),
+    };
+    const existed = this.state.rental.electricityReadings.some(
+      (r) => r.roomId === roomId && r.cycleId === cycleId,
+    );
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        electricityReadings: existed
+          ? this.state.rental.electricityReadings.map((r) =>
+              r.roomId === roomId && r.cycleId === cycleId ? nextReading : r,
+            )
+          : [...this.state.rental.electricityReadings, nextReading],
+      },
+    });
+  }
+
+  generateBillingCycle(month: number, year: number) {
+    const cycleId = `${year}-${String(month).padStart(2, "0")}`;
+    const settings = this.state.rental.settings;
+    const occupied = this.state.rental.rooms.filter((r) => r.occupied);
+    const sharedTotal =
+      settings.waterTotal + settings.wifiTotal + settings.cleaningTotal + settings.otherTotal;
+    const sharedPerRoom = occupied.length > 0 ? sharedTotal / occupied.length : 0;
+
+    const cycle = {
+      id: cycleId,
+      month,
+      year,
+      status: "draft" as const,
+      closedAt: undefined,
+    };
+
+    const bills = occupied.map((room) => {
+      const reading = this.state.rental.electricityReadings.find(
+        (x) => x.roomId === room.id && x.cycleId === cycleId,
+      );
+      const electricityAmount =
+        (reading?.consumptionKwh ?? 0) *
+        (room.electricityRateOverride ?? settings.defaultElectricityRate);
+      return {
+        id: `${cycleId}:${room.id}`,
+        roomId: room.id,
+        cycleId,
+        rentAmount: room.rent,
+        electricityAmount,
+        waterAmount: occupied.length > 0 ? settings.waterTotal / occupied.length : 0,
+        wifiAmount: occupied.length > 0 ? settings.wifiTotal / occupied.length : 0,
+        cleaningAmount: occupied.length > 0 ? settings.cleaningTotal / occupied.length : 0,
+        otherAmount: occupied.length > 0 ? settings.otherTotal / occupied.length : 0,
+        totalAmount: room.rent + electricityAmount + sharedPerRoom,
+        paidAmount: 0,
+      };
+    });
+
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        billingCycles: [
+          ...this.state.rental.billingCycles.filter((c) => c.id !== cycleId),
+          cycle,
+        ],
+        roomBills: [
+          ...this.state.rental.roomBills.filter((b) => b.cycleId !== cycleId),
+          ...bills,
+        ],
+      },
+    });
+  }
+
+  markRoomBillPaid(roomBillId: string, paidAmount: number) {
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        roomBills: this.state.rental.roomBills.map((b) =>
+          b.id === roomBillId ? { ...b, paidAmount: Math.max(0, paidAmount) } : b,
+        ),
+      },
+    });
   }
 
   /* ------------------------------ Settings ------------------------------- */
