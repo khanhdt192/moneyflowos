@@ -42,6 +42,7 @@ export interface Goal {
 export interface RentalRoom {
   id: string;
   name: string;
+  floor?: number;
   rent: number;
   occupied: boolean;
   tenant?: string;
