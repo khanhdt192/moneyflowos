@@ -584,7 +584,7 @@ export function ChotThang() {
                   <AlertTriangle className="h-8 w-8 text-amber-400" />
                   <p className="text-sm text-muted-foreground">
                     Chưa có hóa đơn cho phòng này tháng {month}/{year}.
-                    <br />Lưu số đo rồi bấm <strong>Tạo hóa đơn nháp</strong>.
+                    <br />Lưu chỉ số rồi bấm <strong>Tạo hóa đơn nháp</strong>.
                   </p>
                 </div>
               )}

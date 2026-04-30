@@ -1,0 +1,221 @@
+Fix the billing workflow logic in Rental Module.
+
+IMPORTANT:
+Current UI text / button behavior / logic is incorrect in these areas:
+
+1. Toolbar actions
+2. Per-room row actions
+3. Sliding drawer behavior
+4. Billing state machine
+
+Need to correct labels, actions, and real business logic.
+
+Do NOT redesign the whole UI.
+
+Only fix functionality + wording.
+
+IMPORTANT:
+Connect everything to Supabase real database so the module can be used in production with persistent data.
+
+====================================================
+🎯 FIX TOP TOOLBAR
+
+Current toolbar should contain EXACTLY 4 actions:
+
+1. [Lưu chỉ số]
+= Save meter readings for current selected month
+
+2. [Tạo hóa đơn nháp]
+= Generate draft monthly bills only for rooms not yet billed
+
+3. [Chốt tất cả]
+= Confirm all draft invoices only
+
+4. [Xuất tất cả PDF]
+= Export all room invoices to PDF
+
+====================================================
+🎯 TOOLBAR RULES
+
+[Lưu chỉ số]
+- Save electric / water readings
+- Persist to Supabase meter_readings table
+- No billing status change
+
+[Tạo hóa đơn nháp]
+- Create draft bills only
+- Save to Supabase monthly_bills
+- Do not touch confirmed / paid bills
+
+[Chốt tất cả]
+- Convert all draft bills → confirmed
+- Update monthly_bills status in Supabase
+
+[Xuất tất cả PDF]
+- Export invoices for selected month
+
+====================================================
+🎯 FIX PER-ROOM ACTION BUTTONS
+
+Each room row should contain:
+
+1. [Chốt]
+= confirm this room only if status = draft
+
+2. [Thu tiền]
+= open payment modal
+
+3. [Chi tiết]
+= open side drawer
+
+4. [PDF]
+= export single room invoice
+
+====================================================
+🎯 BUTTON RULES
+
+If status = confirmed:
+- disable [Chốt]
+
+If status = paid:
+- disable [Chốt]
+- still allow [Chi tiết] and [PDF]
+
+If room vacant:
+- hide billing actions
+
+====================================================
+🎯 FIX SLIDING DRAWER
+
+Click [Chi tiết] opens right-side drawer.
+
+Drawer must load real data from Supabase and show:
+
+----------------------------------------------------
+HEADER
+----------------------------------------------------
+
+Phòng 201
+Khách thuê: Nguyễn Văn A
+Trạng thái: Confirmed / Paid
+
+----------------------------------------------------
+CHARGE BREAKDOWN
+----------------------------------------------------
+
+- Tiền thuê
+- Điện
+- Nước
+- Wifi
+- Rác
+- Phụ phí khác
+
+Tổng cộng
+
+----------------------------------------------------
+PAYMENT HISTORY
+----------------------------------------------------
+
+List payments:
+
+Ngày | Số tiền | Ghi chú
+
+----------------------------------------------------
+QUICK PAY FORM
+----------------------------------------------------
+
+Input:
+
+- Amount
+- Payment method
+- Note
+
+Buttons:
+
+[Thu tiền]
+[Đóng]
+
+====================================================
+🎯 BILLING STATE MACHINE
+
+Must use exact transitions:
+
+draft
+→ confirmed
+→ partial_paid
+→ paid
+
+Rules:
+
+1. draft:
+Bill created but not locked
+
+2. confirmed:
+Invoice finalized
+
+3. partial_paid:
+paid_amount > 0 and remaining > 0
+
+4. paid:
+remaining = 0
+
+====================================================
+🎯 IMPORTANT RULE
+
+Confirmed / paid bills are NEVER overwritten.
+
+Only draft bills can be recalculated or edited.
+
+====================================================
+🎯 PAYMENT RULES
+
+When recording payment:
+
+If paid_amount = 0:
+stay confirmed
+
+If 0 < paid_amount < total:
+status = partial_paid
+
+If paid_amount >= total:
+status = paid
+
+====================================================
+🎯 DATABASE SAFETY
+
+Use Supabase transactions / safe sequential updates.
+
+Update:
+
+paid_amount
+remaining_amount
+status
+paid_at
+
+Store payment rows in payments table.
+
+====================================================
+🎯 UI LABELS MUST BE VIETNAMESE
+
+Use:
+
+Lưu chỉ số
+Tạo hóa đơn nháp
+Chốt tất cả
+Xuất tất cả PDF
+Chốt
+Thu tiền
+Chi tiết
+
+====================================================
+🎯 IMPORTANT
+
+Do not break current UI.
+Do not redesign page unnecessarily.
+
+Only fix billing workflow correctness and connect fully to Supabase.
+
+====================================================
+🎯 OUTPUT NOW
+
+Implement corrected toolbar, row actions, drawer logic, billing state transitions, and real Supabase persistence.
