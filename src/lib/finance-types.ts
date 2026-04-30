@@ -45,10 +45,25 @@ export interface RentalRoom {
   rent: number;
   occupied: boolean;
   tenant?: string;
+  occupants?: number;
+  allocationWeight?: number;
+  electricityRateOverride?: number;
+}
+
+export type RentalAllocationRule = "equal_occupied" | "by_occupants" | "by_weight";
+
+export interface RentalSettings {
+  defaultElectricityRate: number;
+  waterTotal: number;
+  wifiTotal: number;
+  cleaningTotal: number;
+  otherTotal: number;
+  allocationRule: RentalAllocationRule;
 }
 
 export interface RentalState {
   rooms: RentalRoom[];
+  settings: RentalSettings;
   /** Auto-sync occupied rent into the active month income (true by default) */
   autoSyncToIncome: boolean;
 }

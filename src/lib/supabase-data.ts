@@ -99,7 +99,18 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     activeMonth,
     months,
     goals,
-    rental: { rooms, autoSyncToIncome: true },
+    rental: {
+      rooms,
+      settings: {
+        defaultElectricityRate: 3500,
+        waterTotal: 0,
+        wifiTotal: 0,
+        cleaningTotal: 0,
+        otherTotal: 0,
+        allocationRule: "equal_occupied",
+      },
+      autoSyncToIncome: true,
+    },
     settings: { name: profile?.full_name ?? "Bạn", currency: profile?.currency ?? "VND" },
   };
 }

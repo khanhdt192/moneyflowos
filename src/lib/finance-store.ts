@@ -30,7 +30,18 @@ function emptyState(): FinanceState {
     activeMonth: m,
     months: { [m]: emptyMonth() },
     goals: [],
-    rental: { rooms: [], autoSyncToIncome: true },
+    rental: {
+      rooms: [],
+      settings: {
+        defaultElectricityRate: 3500,
+        waterTotal: 0,
+        wifiTotal: 0,
+        cleaningTotal: 0,
+        otherTotal: 0,
+        allocationRule: "equal_occupied",
+      },
+      autoSyncToIncome: true,
+    },
     settings: { name: "Bạn", currency: "VND" },
   };
 }
@@ -384,6 +395,16 @@ class FinanceStore {
 
   setRoomOccupied(id: string, occupied: boolean) {
     this.updateRoom(id, { occupied });
+  }
+
+  updateRentalSettings(patch: Partial<FinanceState["rental"]["settings"]>) {
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        settings: { ...this.state.rental.settings, ...patch },
+      },
+    });
   }
 
   /* ------------------------------ Settings ------------------------------- */
