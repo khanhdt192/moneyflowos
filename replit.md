@@ -45,7 +45,8 @@ Because this is a pure SPA, only `VITE_*` env vars are needed (server-side `SUPA
 - **Schema:** Single migration at `supabase/migrations/0001_init.sql` (idempotent). Tables: `profiles`, `transactions`, `budget_items`, `goals`, `rental_rooms`. View: `monthly_summary`. Trigger `handle_new_user` auto-creates a profile row. RLS on every table: `auth.uid() = user_id`.
 - **Types:** `src/lib/finance-types.ts` for app types; `src/integrations/supabase/types.ts` is a hand-written `Database` interface (each table includes `Relationships: []` so `supabase-js` infers schemas correctly). The Supabase client at `src/integrations/supabase/client.ts` is a lazy proxy (so SSR doesn't trip on missing env vars at import).
 - **Layout:** `AppShell` wraps authenticated pages with sidebar + sticky header + mobile FAB + `<Toaster />`. UI state lives in `shell-context.ts`.
-- **Key UI:** AuthCard, MonthSelector, QuickAddDialog, TransactionList, GoalsBoard + GoalCard + WhatIfPanel, RentalBoard, ReportsPanel, SettingsPage (now: email, logout, cloud-aware reset/wipe).
+- **Key UI:** AuthCard, MonthSelector, QuickAddDialog, TransactionList, GoalsBoard + GoalCard + WhatIfPanel, RentalBoard (6-tab redesign: Tổng quan / Phòng / Ghi số / Hóa đơn / Báo cáo / Cấu hình), ReportsPanel, SettingsPage.
+- **Rental module:** Fully redesigned into a 6-tab SaaS workspace under `src/components/rental/`. Tabs are split into `src/components/rental/tabs/` — TongQuan.tsx (KPI dashboard + 6-month chart), Phong.tsx (room table + right-side Sheet drawer), GhiSo.tsx (keyboard-friendly meter reading table), HoaDon.tsx (invoice table with filters + modal), BaoCao.tsx (Recharts dashboards), CauHinh.tsx (per-section cost config form).
 - **Currency:** `formatVND` → "27.000.000 ₫" via `toLocaleString("vi-VN")`. UI is fully Vietnamese.
 
 ## One-time setup (user must do)

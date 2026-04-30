@@ -1,0 +1,232 @@
+Redesign the entire "Cho thuê" (Rental Management) module of Money Flow OS into a clean, modern, production-ready SaaS landlord management experience.
+
+IMPORTANT:
+Do NOT just beautify the current screen.
+Re-architect the UX based on real landlord workflows.
+
+Current issue:
+The page has too much information on one screen:
+- KPI cards
+- room cards
+- billing inputs
+- cost config
+- invoices
+- monthly calculations
+
+This creates clutter and poor usability.
+
+====================================================
+🎯 OBJECTIVE
+Transform Rental module into a professional workspace for managing 11 rental rooms efficiently.
+
+User manages:
+- 1 room tầng 1
+- rooms 201-205
+- rooms 301-305
+
+Need monthly workflow:
+1. Check occupancy
+2. Input electric/water meter
+3. Generate bills
+4. Track payment
+5. View revenue
+
+====================================================
+🎯 NEW UX STRUCTURE
+
+Inside sidebar keep:
+Cho thuê
+
+Inside Rental page create top sub-navigation tabs:
+
+[Tổng quan] [Phòng] [Ghi số] [Hóa đơn] [Báo cáo] [Cấu hình]
+
+Use tabbed workspace layout.
+
+====================================================
+🎯 TAB 1: TỔNG QUAN
+
+Create elegant dashboard cards:
+
+- Tỷ lệ lấp đầy (10/11)
+- Thu tháng này
+- Đã thu
+- Còn nợ
+- Phòng trống
+
+Below cards show actionable widgets:
+
+1. Phòng chưa nhập điện nước
+2. Hóa đơn chưa thanh toán
+3. Hợp đồng sắp hết hạn
+4. Thu nhập 6 tháng trend chart
+
+Minimal and clean.
+
+====================================================
+🎯 TAB 2: PHÒNG
+
+Replace room cards with professional data table.
+
+Columns:
+
+| Phòng | Khách thuê | Giá thuê | Trạng thái | Điện tháng này | Nợ | Action |
+
+Statuses:
+- Đang thuê
+- Trống
+- Sắp hết hợp đồng
+- Nợ tiền
+
+Click row opens RIGHT SIDE DRAWER.
+
+Drawer content:
+
+Room detail:
+- tenant info
+- phone
+- move in date
+- deposit
+- rent price
+- utilities rule
+- payment history
+- last 6 months bills
+- notes
+
+Actions:
+- Edit room
+- Create invoice
+- Mark payment
+- End contract
+
+====================================================
+🎯 TAB 3: GHI SỐ
+
+Create fast monthly utility input table.
+
+Header:
+Tháng / Năm selector
+
+Table:
+
+| Phòng | Điện cũ | Điện mới | Tiêu thụ | Nước m3 | Save |
+
+Rules:
+- auto calculate usage
+- keyboard friendly
+- Enter = next row
+- bulk save button
+- highlight missing rows
+- warning if new meter < old meter
+
+====================================================
+🎯 TAB 4: HÓA ĐƠN
+
+Professional invoice table:
+
+| Phòng | Tổng tiền | Đã thu | Còn thiếu | Trạng thái | Action |
+
+Statuses:
+- Chưa thu
+- Thu một phần
+- Đã thu
+- Quá hạn
+
+Actions:
+- View invoice
+- Mark paid
+- Send invoice
+- Download PDF
+
+Top filters:
+Month selector
+Status filter
+Search room
+
+Click row opens invoice modal.
+
+====================================================
+🎯 TAB 5: BÁO CÁO
+
+Charts:
+
+1. Rental income monthly trend
+2. Occupancy rate trend
+3. Outstanding debt
+4. Revenue by floor
+
+====================================================
+🎯 TAB 6: CẤU HÌNH
+
+Move all messy cost inputs here.
+
+Sections:
+
+Electric:
+- Room tầng 1 = custom gov meter
+- Other rooms = 4500 / kWh
+
+Water:
+- 24000 / m3
+
+Wifi:
+- 70000 each room except tầng 1
+
+Trash:
+- tầng 1 = 50000
+- others = 30000
+
+Editable rules per room.
+
+====================================================
+🎯 DESIGN STYLE
+
+Use premium startup SaaS style.
+
+Inspired by:
+Stripe + Linear + Ramp + Notion
+
+Visual rules:
+
+- Clean white background
+- Spacious padding
+- Rounded-xl cards
+- Soft shadows
+- Subtle borders
+- Excellent typography
+- Calm colors
+- Data-focused layout
+
+Use Inter font.
+
+====================================================
+🎯 UX RULES
+
+- No long scrolling page
+- Each tab focused on one task
+- Fast monthly operation
+- Mobile responsive
+- Sticky table headers
+- Loading skeletons
+- Empty states
+- Toast success messages
+
+====================================================
+🎯 TECH
+
+Keep existing React + Tailwind + Supabase stack.
+
+Do not break current database.
+
+Use reusable components.
+
+====================================================
+🎯 PRIORITY
+
+Build usable workflow first.
+Then polish visuals.
+
+====================================================
+🎯 OUTPUT NOW
+
+Please redesign the Rental module immediately with real code changes, not explanation only.

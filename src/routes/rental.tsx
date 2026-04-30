@@ -10,13 +10,7 @@ export const Route = createFileRoute("/rental")({
 
 function RentalPage() {
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Cho thuê căn hộ</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Theo dõi tỷ lệ lấp đầy, thu nhập từng phòng và doanh thu bị bỏ lỡ.
-        </p>
-      </header>
+    <div className="mx-auto max-w-6xl">
       <RentalBoard />
     </div>
   );
