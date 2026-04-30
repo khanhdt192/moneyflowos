@@ -5,8 +5,11 @@ import {
   type CategoryKey,
   type FinanceState,
   type Goal,
+  type InvoiceSettings,
   type MonthData,
+  type RentalBillStatus,
   type RentalRoom,
+  type RentalSettings,
   type Transaction,
   emptyMonth,
   monthKey,
@@ -22,7 +25,7 @@ const uid = () =>
     ? crypto.randomUUID()
     : `tmp-${Math.random().toString(36).slice(2, 11)}`;
 
-/* ------------------------- Empty initial state ------------------------- */
+/* ─── empty state ─────────────────────────────────────────── */
 
 function emptyState(): FinanceState {
   const m = monthKey();
@@ -52,16 +55,43 @@ function emptyState(): FinanceState {
         bankQrUrl: "",
         bankNoteTemplate: "Phong {room} T{month}/{year}",
       },
+      invoiceSettings: {
+        propertyName: "",
+        address: "",
+        contactPhone: "",
+        logoUrl: "",
+        footerNote: "Cảm ơn quý khách đã thanh toán đúng hạn.",
+      },
       billingCycles: [],
       roomBills: [],
       electricityReadings: [],
+      payments: [],
       autoSyncToIncome: true,
     },
     settings: { name: "Bạn", currency: "VND" },
   };
 }
 
-/* --------------------------------- Store --------------------------------- */
+/* ─── helpers ─────────────────────────────────────────────── */
+
+function isT1(room: RentalRoom) {
+  return room.floor === 1 || /t[aâ]ng\s*1/i.test(room.name);
+}
+
+function calcBillAmounts(room: RentalRoom, settings: RentalSettings, cycleReadings: { consumptionKwh: number; waterM3: number } | undefined) {
+  const groundFloor = isT1(room);
+  const electricityAmount = groundFloor
+    ? settings.t1ElectricityBill
+    : (cycleReadings?.consumptionKwh ?? 0) * (room.electricityRateOverride ?? settings.defaultElectricityRate);
+  const waterAmount = (cycleReadings?.waterM3 ?? 0) * settings.waterRatePerM3;
+  const wifiAmount = groundFloor ? (settings.t1HasWifi ? settings.t1WifiPerRoom : 0) : settings.wifiPerRoom;
+  const cleaningAmount = groundFloor ? settings.t1Cleaning : settings.cleaningPerRoom;
+  const otherAmount = groundFloor ? settings.t1OtherPerRoom : settings.otherPerRoom;
+  const totalAmount = room.rent + electricityAmount + waterAmount + wifiAmount + cleaningAmount + otherAmount;
+  return { rentAmount: room.rent, electricityAmount, waterAmount, wifiAmount, cleaningAmount, otherAmount, totalAmount };
+}
+
+/* ─── store ───────────────────────────────────────────────── */
 
 type Listener = () => void;
 
@@ -73,8 +103,6 @@ class FinanceStore {
   private userId: string | null = null;
   private hydrating = false;
   private realtimeCh: ReturnType<typeof supabase.channel> | null = null;
-
-  /* ---------------------------- subscription --------------------------- */
 
   getSnapshot = () => this.state;
   getServerSnapshot = () => this.serverSnapshot;
@@ -100,17 +128,14 @@ class FinanceStore {
   private mutateMonth(mutator: (m: MonthData) => MonthData, recordUndo = true) {
     const key = this.state.activeMonth;
     const month = this.state.months[key] ?? emptyMonth();
-    const nextMonth = mutator(month);
-    this.commit(
-      {
-        ...this.state,
-        months: { ...this.state.months, [key]: nextMonth },
-      },
-      recordUndo,
-    );
+    this.commit({ ...this.state, months: { ...this.state.months, [key]: mutator(month) } }, recordUndo);
   }
 
-  /* ------------------------------ Lifecycle ----------------------------- */
+  private mutateRental(patch: Partial<FinanceState["rental"]>, recordUndo = true) {
+    this.commit({ ...this.state, rental: { ...this.state.rental, ...patch } }, recordUndo);
+  }
+
+  /* ─── lifecycle ────────────────────────────────────────── */
 
   async hydrateForUser(userId: string) {
     if (this.hydrating) return;
@@ -143,26 +168,12 @@ class FinanceStore {
     if (this.realtimeCh) supabase.removeChannel(this.realtimeCh);
     this.realtimeCh = supabase
       .channel(`mfos-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "transactions", filter: `user_id=eq.${userId}` },
-        () => this.refetchSilent(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "budget_items", filter: `user_id=eq.${userId}` },
-        () => this.refetchSilent(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "goals", filter: `user_id=eq.${userId}` },
-        () => this.refetchSilent(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rental_rooms", filter: `user_id=eq.${userId}` },
-        () => this.refetchSilent(),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `user_id=eq.${userId}` }, () => this.refetchSilent())
+      .on("postgres_changes", { event: "*", schema: "public", table: "budget_items", filter: `user_id=eq.${userId}` }, () => this.refetchSilent())
+      .on("postgres_changes", { event: "*", schema: "public", table: "goals", filter: `user_id=eq.${userId}` }, () => this.refetchSilent())
+      .on("postgres_changes", { event: "*", schema: "public", table: "rental_rooms", filter: `user_id=eq.${userId}` }, () => this.refetchSilent())
+      .on("postgres_changes", { event: "*", schema: "public", table: "rental_room_bills", filter: `user_id=eq.${userId}` }, () => this.refetchSilent())
+      .on("postgres_changes", { event: "*", schema: "public", table: "rental_payments", filter: `user_id=eq.${userId}` }, () => this.refetchSilent())
       .subscribe();
   }
 
@@ -175,22 +186,29 @@ class FinanceStore {
       try {
         const next = await fetchAllForUser(this.userId);
         this.commit({ ...next, activeMonth: this.state.activeMonth }, false);
-      } catch {
-        /* noop */
-      }
+      } catch { /* noop */ }
     }, 300);
   }
 
-  /* ------------------------------- Months ------------------------------- */
+  /** Force a full refetch and return the fresh state */
+  async refetch(): Promise<void> {
+    if (!this.userId) return;
+    try {
+      const next = await fetchAllForUser(this.userId);
+      this.commit({ ...next, activeMonth: this.state.activeMonth }, false);
+    } catch (err) {
+      console.error("[finance-store] refetch failed", err);
+    }
+  }
+
+  /* ─── months ────────────────────────────────────────────── */
 
   setActiveMonth(key: string) {
     if (key === this.state.activeMonth) return;
     const months = { ...this.state.months };
     if (!months[key]) months[key] = emptyMonth();
     this.commit({ ...this.state, activeMonth: key, months }, false);
-    if (this.userId) {
-      void cloud.updateProfile(this.userId, { active_month: key });
-    }
+    if (this.userId) void cloud.updateProfile(this.userId, { active_month: key });
   }
 
   duplicateMonthFromPrev() {
@@ -199,59 +217,35 @@ class FinanceStore {
     const prev = shiftMonth(key, -1);
     const source = this.state.months[prev];
     if (!source) return;
-    const userId = this.userId;
     const tasks: Promise<unknown>[] = [];
     (["income", "needs", "wants", "savings"] as CategoryKey[]).forEach((cat) => {
       source[cat].forEach((item, idx) => {
-        tasks.push(
-          cloud.insertBudgetItem(userId, key, cat, item.name, item.amount, idx),
-        );
+        tasks.push(cloud.insertBudgetItem(this.userId!, key, cat, item.name, item.amount, idx));
       });
     });
     void Promise.all(tasks).then(() => this.refetchSilent());
   }
 
-  /* ------------------------------- Budget ------------------------------- */
+  /* ─── budget ────────────────────────────────────────────── */
 
   addBudgetItem(cat: CategoryKey, name: string, amount: number) {
     if (!this.userId) return;
     const tempId = uid();
     this.mutateMonth((m) => ({ ...m, [cat]: [...m[cat], { id: tempId, name, amount }] }));
-    void cloud
-      .insertBudgetItem(this.userId, this.state.activeMonth, cat, name, amount)
+    void cloud.insertBudgetItem(this.userId, this.state.activeMonth, cat, name, amount)
       .then((row) => {
-        this.mutateMonth(
-          (m) => ({
-            ...m,
-            [cat]: m[cat].map((i) => (i.id === tempId ? { ...i, id: row.id } : i)),
-          }),
-          false,
-        );
+        this.mutateMonth((m) => ({ ...m, [cat]: m[cat].map((i) => (i.id === tempId ? { ...i, id: row.id } : i)) }), false);
       })
-      .catch((err) => {
-        console.error(err);
-        toast.error("Không lưu được hạng mục");
-        this.refetchSilent();
-      });
+      .catch(() => { toast.error("Không lưu được hạng mục"); this.refetchSilent(); });
   }
 
   updateBudgetItem(cat: CategoryKey, id: string, patch: Partial<BudgetItem>) {
-    this.mutateMonth(
-      (m) => ({
-        ...m,
-        [cat]: m[cat].map((i) => (i.id === id ? { ...i, ...patch } : i)),
-      }),
-      false,
-    );
+    this.mutateMonth((m) => ({ ...m, [cat]: m[cat].map((i) => (i.id === id ? { ...i, ...patch } : i)) }), false);
     if (id.startsWith("tmp-") || !this.userId) return;
     const dbPatch: { name?: string; amount?: number } = {};
     if (patch.name !== undefined) dbPatch.name = patch.name;
     if (patch.amount !== undefined) dbPatch.amount = patch.amount;
-    void cloud.updateBudgetItem(id, dbPatch).catch((err) => {
-      console.error(err);
-      toast.error("Không lưu được thay đổi");
-      this.refetchSilent();
-    });
+    void cloud.updateBudgetItem(id, dbPatch).catch(() => { toast.error("Không lưu được thay đổi"); this.refetchSilent(); });
   }
 
   removeBudgetItem(cat: CategoryKey, id: string) {
@@ -260,7 +254,7 @@ class FinanceStore {
     void cloud.deleteBudgetItem(id).catch(() => this.refetchSilent());
   }
 
-  /* ----------------------------- Transactions ---------------------------- */
+  /* ─── transactions ──────────────────────────────────────── */
 
   addTransaction(tx: Omit<Transaction, "id">) {
     if (!this.userId) return;
@@ -269,35 +263,19 @@ class FinanceStore {
     const next = { ...this.state };
     next.months = { ...next.months };
     if (!next.months[targetMonth]) next.months[targetMonth] = emptyMonth();
-    const month = next.months[targetMonth];
-    next.months[targetMonth] = {
-      ...month,
-      transactions: [{ ...tx, id: tempId }, ...month.transactions],
-    };
+    const m = next.months[targetMonth];
+    next.months[targetMonth] = { ...m, transactions: [{ ...tx, id: tempId }, ...m.transactions] };
     this.commit(next);
-    void cloud
-      .insertTransaction(this.userId, tx)
+    void cloud.insertTransaction(this.userId, tx)
       .then((row) => {
-        this.mutateMonth(
-          (m) =>
-            m === next.months[targetMonth]
-              ? {
-                  ...m,
-                  transactions: m.transactions.map((t) =>
-                    t.id === tempId ? { ...t, id: row.id } : t,
-                  ),
-                }
-              : m,
-          false,
+        this.mutateMonth((m2) =>
+          m2 === next.months[targetMonth]
+            ? { ...m2, transactions: m2.transactions.map((t) => (t.id === tempId ? { ...t, id: row.id } : t)) }
+            : m2, false,
         );
-        // Refetch ensures the row lands in the right month even if active differs
         this.refetchSilent();
       })
-      .catch((err) => {
-        console.error(err);
-        toast.error("Không lưu được giao dịch");
-        this.refetchSilent();
-      });
+      .catch(() => { toast.error("Không lưu được giao dịch"); this.refetchSilent(); });
   }
 
   removeTransaction(id: string) {
@@ -314,34 +292,21 @@ class FinanceStore {
     void cloud.deleteTransaction(id).catch(() => this.refetchSilent());
   }
 
-  /* -------------------------------- Goals -------------------------------- */
+  /* ─── goals ─────────────────────────────────────────────── */
 
   addGoal(g: Omit<Goal, "id">) {
     if (!this.userId) return;
     const tempId = uid();
     this.commit({ ...this.state, goals: [...this.state.goals, { ...g, id: tempId }] });
-    void cloud
-      .insertGoal(this.userId, g)
+    void cloud.insertGoal(this.userId, g)
       .then((row) => {
-        this.commit(
-          {
-            ...this.state,
-            goals: this.state.goals.map((x) => (x.id === tempId ? { ...x, id: row.id } : x)),
-          },
-          false,
-        );
+        this.commit({ ...this.state, goals: this.state.goals.map((x) => (x.id === tempId ? { ...x, id: row.id } : x)) }, false);
       })
-      .catch(() => {
-        toast.error("Không lưu được mục tiêu");
-        this.refetchSilent();
-      });
+      .catch(() => { toast.error("Không lưu được mục tiêu"); this.refetchSilent(); });
   }
 
   updateGoal(id: string, patch: Partial<Goal>) {
-    this.commit({
-      ...this.state,
-      goals: this.state.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
-    });
+    this.commit({ ...this.state, goals: this.state.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)) });
     if (!this.userId || id.startsWith("tmp-")) return;
     void cloud.updateGoal(id, patch).catch(() => this.refetchSilent());
   }
@@ -352,58 +317,28 @@ class FinanceStore {
     void cloud.deleteGoal(id).catch(() => this.refetchSilent());
   }
 
-  /* -------------------------------- Rental ------------------------------- */
+  /* ─── rooms ─────────────────────────────────────────────── */
 
   addRoom(name: string, rent: number) {
     if (!this.userId) return;
     const tempId = uid();
     const room: RentalRoom = { id: tempId, name, rent, occupied: false };
-    this.commit({
-      ...this.state,
-      rental: { ...this.state.rental, rooms: [...this.state.rental.rooms, room] },
-    });
-    void cloud
-      .insertRoom(this.userId, name, rent)
+    this.mutateRental({ rooms: [...this.state.rental.rooms, room] });
+    void cloud.insertRoom(this.userId, name, rent)
       .then((row) => {
-        this.commit(
-          {
-            ...this.state,
-            rental: {
-              ...this.state.rental,
-              rooms: this.state.rental.rooms.map((r) =>
-                r.id === tempId ? { ...r, id: row.id } : r,
-              ),
-            },
-          },
-          false,
-        );
+        this.mutateRental({ rooms: this.state.rental.rooms.map((r) => (r.id === tempId ? { ...r, id: row.id } : r)) }, false);
       })
-      .catch(() => {
-        toast.error("Không lưu được phòng");
-        this.refetchSilent();
-      });
+      .catch(() => { toast.error("Không lưu được phòng"); this.refetchSilent(); });
   }
 
   updateRoom(id: string, patch: Partial<RentalRoom>) {
-    this.commit({
-      ...this.state,
-      rental: {
-        ...this.state.rental,
-        rooms: this.state.rental.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-      },
-    });
+    this.mutateRental({ rooms: this.state.rental.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)) });
     if (!this.userId || id.startsWith("tmp-")) return;
     void cloud.updateRoom(id, patch).catch(() => this.refetchSilent());
   }
 
   removeRoom(id: string) {
-    this.commit({
-      ...this.state,
-      rental: {
-        ...this.state.rental,
-        rooms: this.state.rental.rooms.filter((r) => r.id !== id),
-      },
-    });
+    this.mutateRental({ rooms: this.state.rental.rooms.filter((r) => r.id !== id) });
     if (!this.userId || id.startsWith("tmp-")) return;
     void cloud.deleteRoom(id).catch(() => this.refetchSilent());
   }
@@ -412,156 +347,216 @@ class FinanceStore {
     this.updateRoom(id, { occupied });
   }
 
-  updateRentalSettings(patch: Partial<FinanceState["rental"]["settings"]>) {
-    this.commit({
-      ...this.state,
-      rental: {
-        ...this.state.rental,
-        settings: { ...this.state.rental.settings, ...patch },
-      },
+  /* ─── rental settings ───────────────────────────────────── */
+
+  updateRentalSettings(patch: Partial<RentalSettings>) {
+    const merged = { ...this.state.rental.settings, ...patch };
+    this.mutateRental({ settings: merged });
+    if (!this.userId) return;
+    void cloud.upsertRentalSettings(this.userId, merged).catch(() => {
+      toast.error("Không lưu được cài đặt");
+      this.refetchSilent();
     });
   }
 
-  upsertElectricityReading(roomId: string, cycleId: string, startIndex: number, endIndex: number, waterM3 = 0) {
-    const existing = this.state.rental.electricityReadings.find(
-      (r) => r.roomId === roomId && r.cycleId === cycleId,
-    );
-    const nextReading = {
-      id: `${cycleId}:${roomId}`,
-      roomId,
-      cycleId,
-      startIndex,
-      endIndex,
-      consumptionKwh: Math.max(endIndex - startIndex, 0),
-      waterM3: waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0),
-    };
-    this.commit({
-      ...this.state,
-      rental: {
-        ...this.state.rental,
-        electricityReadings: existing
-          ? this.state.rental.electricityReadings.map((r) =>
-              r.roomId === roomId && r.cycleId === cycleId ? nextReading : r,
-            )
-          : [...this.state.rental.electricityReadings, nextReading],
-      },
+  updateInvoiceSettings(patch: Partial<InvoiceSettings>) {
+    const merged = { ...this.state.rental.invoiceSettings, ...patch };
+    this.mutateRental({ invoiceSettings: merged });
+    if (!this.userId) return;
+    void cloud.upsertInvoiceSettings(this.userId, merged).catch(() => {
+      toast.error("Không lưu được cài đặt hóa đơn");
+      this.refetchSilent();
     });
   }
 
-  generateBillingCycle(month: number, year: number) {
+  /* ─── electricity readings ──────────────────────────────── */
+
+  async upsertElectricityReading(roomId: string, cycleId: string, startIndex: number, endIndex: number, waterM3 = 0) {
+    if (!this.userId) return;
+    const [year, month] = cycleId.split("-").map(Number);
+    const consumptionKwh = Math.max(endIndex - startIndex, 0);
+
+    // Optimistic update
+    const existing = this.state.rental.electricityReadings.find((r) => r.roomId === roomId && r.cycleId === cycleId);
+    const nextReading = { id: existing?.id ?? `${cycleId}:${roomId}`, roomId, cycleId, startIndex, endIndex, consumptionKwh, waterM3: waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0) };
+    this.mutateRental({
+      electricityReadings: existing
+        ? this.state.rental.electricityReadings.map((r) => (r.roomId === roomId && r.cycleId === cycleId ? nextReading : r))
+        : [...this.state.rental.electricityReadings, nextReading],
+    });
+
+    try {
+      // Ensure cycle exists
+      const dbCycleId = await cloud.upsertCycle(this.userId, month, year);
+      const row = await cloud.upsertReading(this.userId, roomId, dbCycleId, startIndex, endIndex, waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0));
+      // Update the reading id from temp to real
+      const final = { ...nextReading, id: row.id, cycleId: dbCycleId, consumptionKwh: Math.max(row.end_index - row.start_index, 0), waterM3: row.water_m3 ?? 0 };
+      this.mutateRental({
+        electricityReadings: this.state.rental.electricityReadings.map((r) => (r.id === nextReading.id ? final : r)),
+      }, false);
+    } catch (err) {
+      console.error("[store] upsertReading failed", err);
+      toast.error("Không lưu được số đo");
+    }
+  }
+
+  /* ─── billing: draft creation ───────────────────────────── */
+
+  /**
+   * Create or recalculate draft bills for all occupied rooms.
+   * - Never overwrites confirmed/paid/partial_paid bills.
+   * - If a room already has a draft, recalculates amounts.
+   * Returns { created, skipped }.
+   */
+  async createDraftBills(month: number, year: number): Promise<{ created: number; skipped: number }> {
+    if (!this.userId) throw new Error("Not logged in");
     const cycleId = `${year}-${String(month).padStart(2, "0")}`;
     const settings = this.state.rental.settings;
     const occupied = this.state.rental.rooms.filter((r) => r.occupied);
 
-    // Identify ground-floor rooms: floor === 1 or name contains "tầng 1"
-    const isT1 = (r: (typeof occupied)[0]) =>
-      r.floor === 1 || /t[aâ]ng\s*1/i.test(r.name);
+    // Get or create the cycle in DB
+    const dbCycleId = await cloud.upsertCycle(this.userId, month, year);
 
-    const cycle = {
-      id: cycleId,
-      month,
-      year,
-      status: "draft" as const,
-      closedAt: undefined,
-    };
+    let created = 0;
+    let skipped = 0;
 
-    const bills = occupied.map((room) => {
-      const reading = this.state.rental.electricityReadings.find(
-        (x) => x.roomId === room.id && x.cycleId === cycleId,
-      );
-      const groundFloor = isT1(room);
+    for (const room of occupied) {
+      const existingBill = this.state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
+      // Don't touch confirmed/paid/partial_paid bills
+      if (existingBill && existingBill.status !== "draft") {
+        skipped++;
+        continue;
+      }
 
-      // Electricity
-      const electricityAmount = groundFloor
-        ? settings.t1ElectricityBill
-        : (reading?.consumptionKwh ?? 0) *
-          (room.electricityRateOverride ?? settings.defaultElectricityRate);
+      const reading = this.state.rental.electricityReadings.find((r) => r.roomId === room.id && r.cycleId === cycleId);
+      const amounts = calcBillAmounts(room, settings, reading);
 
-      // Water — same per-m³ rate for all rooms
-      const waterAmount = (reading?.waterM3 ?? 0) * settings.waterRatePerM3;
+      if (existingBill && existingBill.status === "draft") {
+        // Recalculate draft
+        await cloud.updateBillAmounts(existingBill.id, amounts);
+      } else {
+        // Create new draft
+        await cloud.upsertBill(this.userId!, room.id, dbCycleId, amounts);
+        created++;
+      }
+    }
 
-      // Wifi
-      const wifiAmount = groundFloor
-        ? settings.t1HasWifi ? settings.t1WifiPerRoom : 0
-        : settings.wifiPerRoom;
-
-      // Cleaning
-      const cleaningAmount = groundFloor
-        ? settings.t1Cleaning
-        : settings.cleaningPerRoom;
-
-      // Other fee
-      const otherAmount = groundFloor ? settings.t1OtherPerRoom : settings.otherPerRoom;
-
-      const totalAmount =
-        room.rent + electricityAmount + waterAmount + wifiAmount + cleaningAmount + otherAmount;
-
-      return {
-        id: `${cycleId}:${room.id}`,
-        roomId: room.id,
-        cycleId,
-        rentAmount: room.rent,
-        electricityAmount,
-        waterAmount,
-        wifiAmount,
-        cleaningAmount,
-        otherAmount,
-        totalAmount,
-        paidAmount: 0,
-      };
-    });
-
-    this.commit({
-      ...this.state,
-      rental: {
-        ...this.state.rental,
-        billingCycles: [
-          ...this.state.rental.billingCycles.filter((c) => c.id !== cycleId),
-          cycle,
-        ],
-        roomBills: [
-          ...this.state.rental.roomBills.filter((b) => b.cycleId !== cycleId),
-          ...bills,
-        ],
-      },
-    });
+    await this.refetch();
+    return { created, skipped };
   }
 
+  /**
+   * Confirm all draft bills for the given month.
+   * Bills that are already confirmed/paid are left untouched.
+   */
+  async confirmBills(month: number, year: number): Promise<{ confirmed: number; alreadyDone: number }> {
+    if (!this.userId) throw new Error("Not logged in");
+    const cycleId = `${year}-${String(month).padStart(2, "0")}`;
+    const draftBills = this.state.rental.roomBills.filter((b) => b.cycleId === cycleId && b.status === "draft");
+    const doneBills = this.state.rental.roomBills.filter((b) => b.cycleId === cycleId && b.status !== "draft" && b.status !== "cancelled");
+
+    for (const bill of draftBills) {
+      await cloud.confirmBill(bill.id);
+    }
+
+    if (draftBills.length > 0) await this.refetch();
+    return { confirmed: draftBills.length, alreadyDone: doneBills.length };
+  }
+
+  /**
+   * Confirm a single bill by ID. No-op if already confirmed.
+   */
+  async confirmSingleBill(billId: string): Promise<void> {
+    if (!this.userId) return;
+    const bill = this.state.rental.roomBills.find((b) => b.id === billId);
+    if (!bill || bill.status !== "draft") return;
+
+    // Optimistic update
+    this.mutateRental({
+      roomBills: this.state.rental.roomBills.map((b) =>
+        b.id === billId ? { ...b, status: "confirmed" as RentalBillStatus, confirmedAt: new Date().toISOString() } : b,
+      ),
+    });
+
+    try {
+      await cloud.confirmBill(billId);
+    } catch {
+      toast.error("Không chốt được hóa đơn");
+      this.refetchSilent();
+    }
+  }
+
+  /* ─── payments ──────────────────────────────────────────── */
+
+  /**
+   * Record a payment against a bill.
+   * Automatically updates bill status and paid_amount.
+   */
+  async recordPayment(billId: string, amount: number, method = "cash", note?: string): Promise<void> {
+    if (!this.userId) return;
+    const bill = this.state.rental.roomBills.find((b) => b.id === billId);
+    if (!bill) return;
+
+    const newPaid = Math.min(bill.paidAmount + amount, bill.totalAmount);
+    const remaining = bill.totalAmount - newPaid;
+    let newStatus: RentalBillStatus = "confirmed";
+    if (remaining <= 0) newStatus = "paid";
+    else if (newPaid > 0) newStatus = "partial_paid";
+
+    // Optimistic update
+    this.mutateRental({
+      roomBills: this.state.rental.roomBills.map((b) =>
+        b.id === billId
+          ? { ...b, paidAmount: newPaid, status: newStatus, paidAt: remaining <= 0 ? new Date().toISOString() : b.paidAt }
+          : b,
+      ),
+    });
+
+    try {
+      await cloud.insertPayment(this.userId, billId, bill.roomId, amount, method, note);
+      await cloud.updateBillPayment(billId, newPaid, bill.totalAmount);
+      await this.refetch();
+    } catch (err) {
+      console.error("[store] recordPayment failed", err);
+      toast.error("Không lưu được thanh toán");
+      this.refetchSilent();
+    }
+  }
+
+  /** Legacy compat — will migrate to recordPayment */
   markRoomBillPaid(roomBillId: string, paidAmount: number) {
-    this.commit({
-      ...this.state,
-      rental: {
-        ...this.state.rental,
-        roomBills: this.state.rental.roomBills.map((b) =>
-          b.id === roomBillId ? { ...b, paidAmount: Math.max(0, paidAmount) } : b,
-        ),
-      },
-    });
+    const bill = this.state.rental.roomBills.find((b) => b.id === roomBillId);
+    if (!bill) return;
+    const delta = Math.max(0, paidAmount - bill.paidAmount);
+    if (delta > 0) void this.recordPayment(roomBillId, delta);
   }
 
-  /* ------------------------------ Settings ------------------------------- */
+  /** generateBillingCycle compatibility shim → creates drafts then confirms */
+  generateBillingCycle(month: number, year: number) {
+    void this.createDraftBills(month, year);
+  }
+
+  /* ─── app settings ──────────────────────────────────────── */
 
   updateSettings(patch: Partial<FinanceState["settings"]>) {
     this.commit({ ...this.state, settings: { ...this.state.settings, ...patch } });
     if (!this.userId) return;
-    void cloud
-      .updateProfile(this.userId, {
-        full_name: patch.name,
-        currency: patch.currency,
-      })
-      .catch(() => toast.error("Không lưu được cài đặt"));
+    void cloud.updateProfile(this.userId, { full_name: patch.name, currency: patch.currency }).catch(() => toast.error("Không lưu được cài đặt"));
   }
 
-  /* -------------------------------- Misc -------------------------------- */
+  /* ─── undo / reset ──────────────────────────────────────── */
 
   undo() {
     const prev = this.undoStack.pop();
     if (!prev) return false;
     this.state = prev;
     this.emit();
-    // Refetch to keep cloud consistent — undo is a local convenience.
     this.refetchSilent();
     return true;
+  }
+
+  canUndo() {
+    return this.undoStack.length > 0;
   }
 
   async resetAll() {
@@ -588,21 +583,17 @@ class FinanceStore {
     }
   }
 
-  canUndo() {
-    return this.undoStack.length > 0;
+  getUserId() {
+    return this.userId;
   }
 }
 
 export const financeStore = new FinanceStore();
 
-/* --------------------------------- Hooks --------------------------------- */
+/* ─── hooks ───────────────────────────────────────────────── */
 
 export function useFinance(): FinanceState {
-  return useSyncExternalStore(
-    financeStore.subscribe,
-    financeStore.getSnapshot,
-    financeStore.getServerSnapshot,
-  );
+  return useSyncExternalStore(financeStore.subscribe, financeStore.getSnapshot, financeStore.getServerSnapshot);
 }
 
 export function useActiveMonth(): MonthData {

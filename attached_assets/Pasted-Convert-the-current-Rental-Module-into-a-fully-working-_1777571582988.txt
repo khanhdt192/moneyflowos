@@ -1,0 +1,461 @@
+Convert the current Rental Module into a fully working production-grade landlord management app using Supabase, fix the billing confirmation workflow, and add monthly invoice PDF export.
+
+IMPORTANT:
+Current UI already exists and is acceptable.
+
+Do NOT redesign the entire UI.
+
+Keep current visual layout where possible.
+
+Focus on:
+
+1. Connect all screens to real Supabase data
+2. Real billing / payment business logic
+3. Fix incorrect invoice confirmation behavior
+4. Add professional PDF invoice export
+5. Make module usable daily like a real landlord app
+
+====================================================
+🎯 OVERALL GOAL
+
+Turn the Rental module from UI demo into a real operating system for room rental management.
+
+All actions must:
+
+- load real data
+- save real data
+- persist correctly
+- refresh instantly
+- support monthly operations
+- prevent duplicate invoices
+- work reliably
+
+====================================================
+🎯 REQUIRED DATABASE TABLES
+
+Create / verify:
+
+1. rooms
+2. tenants
+3. meter_readings
+4. monthly_bills
+5. payments
+6. rental_settings
+7. bank_settings
+8. invoice_settings
+
+====================================================
+🎯 TABLE STRUCTURE
+
+rooms:
+- id
+- room_number
+- floor
+- rent_price
+- status
+- tenant_id
+
+tenants:
+- id
+- name
+- phone
+- move_in_date
+- deposit
+
+meter_readings:
+- id
+- room_id
+- month
+- year
+- old_electric
+- new_electric
+- water_usage
+- created_at
+
+monthly_bills:
+- id
+- room_id
+- month
+- year
+- status
+- rent_amount
+- electric_amount
+- water_amount
+- wifi_amount
+- trash_amount
+- other_amount
+- total_amount
+- paid_amount
+- remaining_amount
+- confirmed_at
+- paid_at
+- created_at
+
+payments:
+- id
+- room_id
+- bill_id
+- amount
+- payment_method
+- note
+- paid_at
+
+rental_settings:
+- shared config 201-305
+- tầng 1 config
+
+bank_settings:
+- bank_name
+- account_number
+- account_holder
+- qr_image_url
+- transfer_note_template
+
+invoice_settings:
+- property_name
+- address
+- contact_phone
+- logo_url
+- footer_note
+
+====================================================
+🎯 TAB PHÒNG
+
+Connect real DB data.
+
+Features:
+
+- Load room list
+- Edit room info
+- Change occupied / vacant status
+- Assign tenant
+- View debt
+- View current bill
+
+====================================================
+🎯 TAB CHỐT THÁNG
+
+Use existing UI.
+
+This is monthly command center.
+
+Workflow:
+
+STEP 1:
+Save meter readings
+
+STEP 2:
+Generate preview charges
+
+STEP 3:
+Confirm invoices
+
+STEP 4:
+Track payments
+
+====================================================
+🎯 FIX BILLING CONFIRMATION LOGIC
+
+Current issue:
+
+Pressing "Chốt hóa đơn" again resets or regenerates incorrectly.
+
+Need real accounting-safe behavior.
+
+====================================================
+🎯 UNIQUE MONTHLY BILL RULE
+
+Each room each month only ONE bill:
+
+(room_id + month + year)
+
+Add unique constraint if needed.
+
+Never duplicate.
+
+====================================================
+🎯 STATUS MODEL
+
+Use:
+
+- draft
+- confirmed
+- partial_paid
+- paid
+- cancelled
+
+====================================================
+🎯 GLOBAL BUTTON: CHỐT HÓA ĐƠN
+
+Behavior:
+
+If no bills exist:
+→ create draft bills
+
+If draft bills exist:
+→ confirm all draft bills
+
+If already confirmed / paid:
+→ do nothing destructive
+
+Show toast:
+
+"Hóa đơn tháng này đã được chốt."
+
+Never reset existing data.
+
+====================================================
+🎯 ADD PER ROOM ACTIONS
+
+Each room row should have:
+
+[Chốt phòng]
+[Xem bill]
+[Thu tiền]
+[Xuất hóa đơn]
+
+====================================================
+🎯 PER ROOM LOGIC
+
+If selected room = draft
+→ confirm only that room
+
+If already confirmed
+→ disable or show checked state
+
+====================================================
+🎯 BULK ACTIONS
+
+Top toolbar:
+
+[Chốt tất cả phòng nháp]
+[Export tất cả PDF]
+
+====================================================
+🎯 PAYMENT LOGIC
+
+Support:
+
+- full payment
+- partial payment
+- multiple payments
+
+Auto update:
+
+paid_amount
+remaining_amount
+
+Rules:
+
+remaining = 0
+→ paid
+
+0 < remaining < total
+→ partial_paid
+
+====================================================
+🎯 PREVENT DUPLICATE MONTH BILLING
+
+If selected month already has bills:
+
+Do not recreate confirmed / paid invoices.
+
+Allow:
+
+[Recalculate draft only]
+
+Only draft invoices may be recalculated.
+
+====================================================
+🎯 EXPORT MONTHLY INVOICE TO PDF
+
+Add professional invoice export inside tab Chốt tháng.
+
+====================================================
+🎯 BUTTONS
+
+Top toolbar:
+
+[Export tất cả PDF]
+
+Each room row:
+
+[Xuất hóa đơn]
+
+====================================================
+🎯 EXPORT TYPES
+
+1. Single Room PDF
+2. All Rooms PDF (multi-page preferred)
+
+====================================================
+🎯 PDF TEMPLATE
+
+Use clean professional Vietnamese style.
+
+A4 portrait.
+
+====================================================
+🎯 PDF CONTENT
+
+HEADER:
+
+PHIẾU THANH TOÁN TIỀN PHÒNG
+
+Kỳ thanh toán: Tháng MM/YYYY
+
+Ngày xuất: dd/mm/yyyy
+
+====================================================
+
+PROPERTY INFO:
+
+- Tên nhà trọ
+- Địa chỉ
+- SĐT liên hệ
+
+====================================================
+
+TENANT INFO:
+
+- Phòng
+- Khách thuê
+
+====================================================
+
+CHARGE TABLE:
+
+| Hạng mục | Số tiền |
+
+- Tiền thuê
+- Điện
+- Nước
+- Wifi
+- Vệ sinh / Rác
+- Phụ phí khác
+
+--------------------------------
+
+TỔNG CỘNG
+
+ĐÃ THANH TOÁN
+
+CÒN THIẾU
+
+====================================================
+
+PAYMENT BOX:
+
+Ngân hàng
+STK
+Chủ TK
+
+QR CODE IMAGE
+
+Nội dung CK:
+Phong 201 T05/2026
+
+====================================================
+
+FOOTER:
+
+Cảm ơn quý khách đã thanh toán đúng hạn.
+
+====================================================
+🎯 SETTINGS PAGE
+
+Need working save/load logic.
+
+Sections:
+
+1. Cấu hình chi phí thuê
+2. Bank transfer info
+3. Invoice template info
+
+====================================================
+🎯 COST CONFIG (KEEP CURRENT DUAL MODEL)
+
+A. Shared config rooms 201-305
+
+- electricity per kWh
+- water pricing
+- wifi per room
+- trash per room
+- other fee per room
+
+B. Ground floor config
+
+- manual electricity bill
+- inherit water price
+- optional wifi
+- custom trash
+- custom fee
+
+====================================================
+🎯 BANK SETTINGS
+
+Fields:
+
+- bank_name
+- account_number
+- account_holder
+- upload qr image
+- default transfer note
+
+Store image in Supabase Storage.
+
+====================================================
+🎯 INVOICE SETTINGS
+
+Fields:
+
+- property_name
+- address
+- phone
+- logo upload
+- footer note
+
+====================================================
+🎯 DASHBOARD
+
+Realtime metrics:
+
+- total income
+- unpaid debt
+- occupancy rate
+- paid invoices
+- unpaid invoices
+
+====================================================
+🎯 TECH STACK
+
+Use:
+
+- React
+- Tailwind
+- Supabase
+- React Query
+
+====================================================
+🎯 UX REQUIREMENTS
+
+- loading states
+- toast success/error
+- optimistic updates
+- no full reload
+- instant row refresh
+- responsive mobile
+
+====================================================
+🎯 IMPORTANT
+
+Do not redesign current UI heavily.
+Do not break current data.
+Do not remove working features.
+
+Only make it a real production-ready landlord system.
+
+====================================================
+🎯 OUTPUT NOW
+
+Implement complete Supabase integration + correct billing workflow + payment tracking + PDF invoice export.

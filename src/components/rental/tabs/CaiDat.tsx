@@ -369,20 +369,59 @@ function InfoRow2({ label, value }: { label: string; value: string }) {
 }
 
 /* ══════════════════════════════════════════════════════
-   D. Mẫu hóa đơn / Export
+   D. Thông tin hóa đơn (property info for PDF)
 ══════════════════════════════════════════════════════ */
 function SectionHoaDon() {
+  const state = useFinance();
+  const actions = useFinanceActions();
+  const iv = state.rental.invoiceSettings;
+
+  const [propertyName, setPropertyName] = useState(iv.propertyName);
+  const [address, setAddress] = useState(iv.address);
+  const [phone, setPhone] = useState(iv.contactPhone);
+  const [footer, setFooter] = useState(iv.footerNote);
+
+  const save = () => {
+    actions.updateInvoiceSettings({
+      propertyName: propertyName.trim(),
+      address: address.trim(),
+      contactPhone: phone.trim(),
+      footerNote: footer.trim() || "Cảm ơn quý khách đã thanh toán đúng hạn.",
+      logoUrl: iv.logoUrl,
+    });
+    toast.success("Đã lưu thông tin hóa đơn");
+  };
+
   return (
-    <div className="max-w-xl">
-      <ConfigCard title="📄 Mẫu hóa đơn & Export" desc="Tuỳ chỉnh mẫu in hóa đơn và xuất file">
-        <div className="rounded-lg border border-dashed border-border bg-muted/10 p-8 text-center">
-          <div className="text-2xl mb-2">🖨️</div>
-          <div className="text-sm font-medium text-foreground mb-1">Tính năng đang phát triển</div>
-          <div className="text-xs text-muted-foreground">
-            Xuất PDF / in hóa đơn với logo, QR code, và thông tin chuyển khoản sẽ có trong phiên bản tới.
-          </div>
+    <div className="max-w-xl space-y-5">
+      <ConfigCard title="📄 Thông tin hóa đơn PDF" desc="Thông tin này xuất hiện trên đầu mỗi tờ hóa đơn PDF">
+        <CTextField label="Tên nhà trọ" value={propertyName} onChange={setPropertyName} placeholder="VD: Nhà trọ Hoàng Gia" />
+        <CTextField label="Địa chỉ" value={address} onChange={setAddress} placeholder="VD: 123 Nguyễn Văn A, Q.1, TP.HCM" />
+        <CTextField label="SĐT liên hệ" value={phone} onChange={setPhone} placeholder="VD: 0901 234 567" />
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Lời cảm ơn cuối hóa đơn</label>
+          <textarea
+            value={footer}
+            onChange={(e) => setFooter(e.target.value)}
+            rows={2}
+            className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40 resize-none"
+            placeholder="Cảm ơn quý khách đã thanh toán đúng hạn."
+          />
         </div>
+        <SaveBtn onClick={save} />
       </ConfigCard>
+
+      {/* Preview */}
+      {(propertyName || address || phone) && (
+        <ConfigCard title="👁️ Preview đầu hóa đơn" desc="Hiển thị ở góc trên mỗi hóa đơn PDF">
+          <div className="rounded-lg border border-dashed border-border bg-muted/10 p-4 space-y-1 text-sm">
+            <p className="font-bold">{propertyName || "(Tên nhà trọ)"}</p>
+            {address && <p className="text-muted-foreground">{address}</p>}
+            {phone && <p className="text-muted-foreground">SĐT: {phone}</p>}
+          </div>
+          <p className="text-xs text-muted-foreground italic">&ldquo;{footer}&rdquo;</p>
+        </ConfigCard>
+      )}
     </div>
   );
 }

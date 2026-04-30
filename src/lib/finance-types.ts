@@ -56,10 +56,10 @@ export type RentalAllocationRule = "equal_occupied" | "by_occupants" | "by_weigh
 export interface RentalSettings {
   // ── Shared config (rooms 201–305) ──────────────────────────────────────
   defaultElectricityRate: number;   // đ/kWh
-  waterRatePerM3: number;           // đ/m³ (shared by all rooms)
-  wifiPerRoom: number;              // đ/phòng/tháng (was wifiTotal)
-  cleaningPerRoom: number;          // đ/phòng/tháng (was cleaningTotal)
-  otherPerRoom: number;             // đ/phòng/tháng (was otherTotal)
+  waterRatePerM3: number;           // đ/m³
+  wifiPerRoom: number;              // đ/phòng/tháng
+  cleaningPerRoom: number;          // đ/phòng/tháng
+  otherPerRoom: number;             // đ/phòng/tháng
   otherName: string;                // display name for the "other" fee
   allocationRule: RentalAllocationRule;
 
@@ -67,7 +67,7 @@ export interface RentalSettings {
   t1ElectricityBill: number;        // monthly bill amount entered manually
   t1HasWifi: boolean;               // false = no wifi charge
   t1WifiPerRoom: number;            // đ/tháng when t1HasWifi = true
-  t1Cleaning: number;               // đ/tháng (tầng 1 cleaning fee)
+  t1Cleaning: number;               // đ/tháng
   t1OtherName: string;              // label for tầng 1 extra fee
   t1OtherPerRoom: number;           // đ/tháng
 
@@ -79,6 +79,14 @@ export interface RentalSettings {
   bankNoteTemplate: string;         // e.g. "Phong {room} T{month}/{year}"
 }
 
+export interface InvoiceSettings {
+  propertyName: string;
+  address: string;
+  contactPhone: string;
+  logoUrl: string;
+  footerNote: string;
+}
+
 export type RentalBillingCycleStatus = "draft" | "finalized";
 
 export interface RentalBillingCycle {
@@ -88,6 +96,8 @@ export interface RentalBillingCycle {
   status: RentalBillingCycleStatus;
   closedAt?: string;
 }
+
+export type RentalBillStatus = "draft" | "confirmed" | "partial_paid" | "paid" | "cancelled";
 
 export interface RentalRoomBill {
   id: string;
@@ -101,6 +111,9 @@ export interface RentalRoomBill {
   otherAmount: number;
   totalAmount: number;
   paidAmount: number;
+  status: RentalBillStatus;
+  confirmedAt?: string;
+  paidAt?: string;
   note?: string;
 }
 
@@ -114,12 +127,24 @@ export interface RentalElectricityReading {
   waterM3: number;
 }
 
+export interface RentalPayment {
+  id: string;
+  billId: string;
+  roomId: string;
+  amount: number;
+  paymentMethod: string;
+  note?: string;
+  paidAt: string;
+}
+
 export interface RentalState {
   rooms: RentalRoom[];
   settings: RentalSettings;
+  invoiceSettings: InvoiceSettings;
   billingCycles: RentalBillingCycle[];
   roomBills: RentalRoomBill[];
   electricityReadings: RentalElectricityReading[];
+  payments: RentalPayment[];
   /** Auto-sync occupied rent into the active month income (true by default) */
   autoSyncToIncome: boolean;
 }
