@@ -30,7 +30,21 @@ function emptyState(): FinanceState {
     activeMonth: m,
     months: { [m]: emptyMonth() },
     goals: [],
-    rental: { rooms: [], autoSyncToIncome: true },
+    rental: {
+      rooms: [],
+      settings: {
+        defaultElectricityRate: 3500,
+        waterTotal: 0,
+        wifiTotal: 0,
+        cleaningTotal: 0,
+        otherTotal: 0,
+        allocationRule: "equal_occupied",
+      },
+      billingCycles: [],
+      roomBills: [],
+      electricityReadings: [],
+      autoSyncToIncome: true,
+    },
     settings: { name: "Bạn", currency: "VND" },
   };
 }
@@ -384,6 +398,122 @@ class FinanceStore {
 
   setRoomOccupied(id: string, occupied: boolean) {
     this.updateRoom(id, { occupied });
+  }
+
+  updateRentalSettings(patch: Partial<FinanceState["rental"]["settings"]>) {
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        settings: { ...this.state.rental.settings, ...patch },
+      },
+    });
+  }
+
+  upsertElectricityReading(
+    roomId: string,
+    cycleId: string,
+    startIndex: number,
+    endIndex: number,
+    waterUsageM3?: number,
+    manualElectricityAmount?: number,
+  ) {
+    const nextReading = {
+      id: `${cycleId}:${roomId}`,
+      roomId,
+      cycleId,
+      startIndex,
+      endIndex,
+      consumptionKwh: Math.max(endIndex - startIndex, 0),
+      waterUsageM3,
+      manualElectricityAmount,
+    };
+    const existed = this.state.rental.electricityReadings.some(
+      (r) => r.roomId === roomId && r.cycleId === cycleId,
+    );
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        electricityReadings: existed
+          ? this.state.rental.electricityReadings.map((r) =>
+              r.roomId === roomId && r.cycleId === cycleId ? nextReading : r,
+            )
+          : [...this.state.rental.electricityReadings, nextReading],
+      },
+    });
+  }
+
+  generateBillingCycle(month: number, year: number) {
+    const cycleId = `${year}-${String(month).padStart(2, "0")}`;
+    const settings = this.state.rental.settings;
+    const occupied = this.state.rental.rooms.filter((r) => r.occupied);
+    const WATER_RATE = 24000;
+    const ELECTRIC_RATE = 4500;
+    const WIFI_NORMAL = 70000;
+    const TRASH_FLOOR1 = 50000;
+    const TRASH_NORMAL = 30000;
+
+    const cycle = {
+      id: cycleId,
+      month,
+      year,
+      status: "draft" as const,
+      closedAt: undefined,
+    };
+
+    const bills = occupied.map((room) => {
+      const reading = this.state.rental.electricityReadings.find(
+        (x) => x.roomId === room.id && x.cycleId === cycleId,
+      );
+      const electricityAmount =
+        room.floor === 1
+          ? (reading?.manualElectricityAmount ?? 0)
+          : (reading?.consumptionKwh ?? 0) * ELECTRIC_RATE;
+      const waterAmount = (reading?.waterUsageM3 ?? 0) * WATER_RATE;
+      const wifiAmount = room.floor === 1 ? 0 : WIFI_NORMAL;
+      const trashAmount = room.floor === 1 ? TRASH_FLOOR1 : TRASH_NORMAL;
+      return {
+        id: `${cycleId}:${room.id}`,
+        roomId: room.id,
+        cycleId,
+        rentAmount: room.rent,
+        electricityAmount,
+        waterAmount,
+        wifiAmount,
+        cleaningAmount: 0,
+        otherAmount: trashAmount,
+        totalAmount: room.rent + electricityAmount + waterAmount + wifiAmount + trashAmount,
+        paidAmount: 0,
+      };
+    });
+
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        billingCycles: [
+          ...this.state.rental.billingCycles.filter((c) => c.id !== cycleId),
+          cycle,
+        ],
+        roomBills: [
+          ...this.state.rental.roomBills.filter((b) => b.cycleId !== cycleId),
+          ...bills,
+        ],
+      },
+    });
+  }
+
+  markRoomBillPaid(roomBillId: string, paidAmount: number) {
+    this.commit({
+      ...this.state,
+      rental: {
+        ...this.state.rental,
+        roomBills: this.state.rental.roomBills.map((b) =>
+          b.id === roomBillId ? { ...b, paidAmount: Math.max(0, paidAmount) } : b,
+        ),
+      },
+    });
   }
 
   /* ------------------------------ Settings ------------------------------- */

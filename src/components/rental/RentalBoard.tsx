@@ -11,6 +11,10 @@ export function RentalBoard() {
   const actions = useFinanceActions();
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const now = new Date();
+  const [cycleMonth, setCycleMonth] = useState(now.getMonth() + 1);
+  const [cycleYear, setCycleYear] = useState(now.getFullYear());
+  const cycleId = `${cycleYear}-${String(cycleMonth).padStart(2, "0")}`;
 
   const stats = useMemo(() => {
     const rooms = state.rental.rooms;
@@ -29,6 +33,19 @@ export function RentalBoard() {
     };
   }, [state.rental.rooms]);
 
+  const billingPreview = useMemo(() => {
+    const roomBills = state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => ({
+      roomId: b.roomId,
+      roomName: state.rental.rooms.find((r) => r.id === b.roomId)?.name ?? b.roomId,
+      rent: b.rentAmount,
+      electricity: b.electricityAmount,
+      shared: b.waterAmount + b.wifiAmount + b.otherAmount,
+      total: b.totalAmount,
+    }));
+    const totalMustCollect = roomBills.reduce((sum, r) => sum + r.total, 0);
+    return { roomBills, totalMustCollect };
+  }, [state.rental.roomBills, state.rental.rooms, cycleId]);
+
   return (
     <div className="space-y-5">
       {/* Stats */}
@@ -40,6 +57,42 @@ export function RentalBoard() {
       </div>
 
       {/* Rooms grid */}
+      <RentalSettingsPanel />
+      <BillingCyclePanel
+        cycleMonth={cycleMonth}
+        cycleYear={cycleYear}
+        onMonthChange={setCycleMonth}
+        onYearChange={setCycleYear}
+        onGenerate={() => {
+          actions.generateBillingCycle(cycleMonth, cycleYear);
+          toast.success(`Đã chốt kỳ ${cycleMonth}/${cycleYear}`);
+        }}
+      />
+      <ElectricityInputPanel cycleId={cycleId} />
+
+      <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-foreground">Bảng tính tiền tháng (MVP)</h3>
+          <span className="text-xs text-muted-foreground">Áp dụng rule tầng 1 + phòng thường</span>
+        </div>
+        <div className="space-y-2">
+          {billingPreview.roomBills.map((bill) => (
+            <div key={bill.roomId} className="flex items-center justify-between rounded-xl border border-border/60 px-3 py-2">
+              <div>
+                <div className="text-sm font-semibold">{bill.roomName}</div>
+                <div className="text-xs text-muted-foreground">Thuê: {formatVND(bill.rent)} · Tiền điện: {formatVND(bill.electricity)} · Phí DV: {formatVND(bill.shared)}</div>
+              </div>
+              <div className="num text-sm font-bold">{formatVND(bill.total)}</div>
+            </div>
+          ))}
+          <div className="flex items-center justify-between border-t border-border pt-2 text-sm font-semibold">
+            <span>Tổng phải thu</span>
+            <span className="num">{formatVND(billingPreview.totalMustCollect)}</span>
+          </div>
+        </div>
+      </div>
+      <RoomBillsList cycleId={cycleId} />
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <AnimatePresence initial={false}>
           {state.rental.rooms.map((room) => (
@@ -91,6 +144,84 @@ export function RentalBoard() {
             <span className="text-sm font-semibold">Thêm phòng</span>
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function BillingCyclePanel({ cycleMonth, cycleYear, onMonthChange, onYearChange, onGenerate }: { cycleMonth: number; cycleYear: number; onMonthChange: (m: number) => void; onYearChange: (y: number) => void; onGenerate: () => void; }) {
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+      <h3 className="mb-3 text-sm font-semibold">Chốt kỳ hóa đơn</h3>
+      <div className="flex items-end gap-2">
+        <label className="text-xs">Tháng<input type="number" min={1} max={12} value={cycleMonth} onChange={(e) => onMonthChange(Math.min(12, Math.max(1, Number(e.target.value) || 1)))} className="num mt-1 h-10 w-20 rounded-xl border border-border bg-background px-2" /></label>
+        <label className="text-xs">Năm<input type="number" value={cycleYear} onChange={(e) => onYearChange(Number(e.target.value) || new Date().getFullYear())} className="num mt-1 h-10 w-24 rounded-xl border border-border bg-background px-2" /></label>
+        <button type="button" onClick={onGenerate} className="h-10 rounded-xl bg-foreground px-4 text-sm font-semibold text-background">Chốt tiền tháng</button>
+      </div>
+    </div>
+  );
+}
+
+function ElectricityInputPanel({ cycleId }: { cycleId: string }) {
+  const state = useFinance();
+  const actions = useFinanceActions();
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+      <h3 className="mb-3 text-sm font-semibold">Nhập điện theo phòng ({cycleId})</h3>
+      <div className="space-y-2">
+        {state.rental.rooms.filter((r) => r.occupied).map((room) => {
+          const existing = state.rental.electricityReadings.find((x) => x.roomId === room.id && x.cycleId === cycleId);
+          return <ElectricityRow key={room.id} room={room} initialStart={existing?.startIndex ?? 0} initialEnd={existing?.endIndex ?? 0} initialWater={existing?.waterUsageM3 ?? 0} initialManualElectric={existing?.manualElectricityAmount ?? 0} onSave={(start, end, water, manualElectric) => actions.upsertElectricityReading(room.id, cycleId, start, end, water, manualElectric)} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ElectricityRow({ room, initialStart, initialEnd, initialWater, initialManualElectric, onSave }: { room: RentalRoom; initialStart: number; initialEnd: number; initialWater: number; initialManualElectric: number; onSave: (start: number, end: number, water: number, manualElectric?: number) => void; }) {
+  const [start, setStart] = useState(String(initialStart));
+  const [end, setEnd] = useState(String(initialEnd));
+  const [water, setWater] = useState(String(initialWater));
+  const [manualElectric, setManualElectric] = useState(String(initialManualElectric));
+  return <div className="flex items-end gap-2 rounded-xl border border-border/60 p-2"><div className="min-w-32 text-sm font-semibold">{room.name}</div>{room.floor === 1 ? <input type="number" value={manualElectric} onChange={(e) => setManualElectric(e.target.value)} className="num h-9 w-28 rounded-lg border border-border px-2" placeholder="Tiền điện" /> : <><input type="number" value={start} onChange={(e) => setStart(e.target.value)} className="num h-9 w-24 rounded-lg border border-border px-2" placeholder="Số cũ" /><input type="number" value={end} onChange={(e) => setEnd(e.target.value)} className="num h-9 w-24 rounded-lg border border-border px-2" placeholder="Số mới" /></>}<input type="number" value={water} onChange={(e) => setWater(e.target.value)} className="num h-9 w-24 rounded-lg border border-border px-2" placeholder="Nước m3" /><button type="button" className="h-9 rounded-lg border border-border px-3 text-xs" onClick={() => onSave(Number(start) || 0, Number(end) || 0, Number(water) || 0, Number(manualElectric) || 0)}>Lưu</button></div>;
+}
+
+function RoomBillsList({ cycleId }: { cycleId: string }) {
+  const state = useFinance();
+  const actions = useFinanceActions();
+  const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
+  const bills = state.rental.roomBills.filter((b) => b.cycleId === cycleId);
+  return <div className="rounded-3xl border border-border bg-card p-4 shadow-card"><h3 className="mb-3 text-sm font-semibold">Danh sách hóa đơn ({cycleId})</h3><div className="space-y-2">{bills.map((b) => { const remaining = Math.max(b.totalAmount - b.paidAmount, 0); return <div key={b.id} className="rounded-xl border border-border/60 p-3"><div className="flex items-center justify-between"><div className="text-sm font-semibold">{roomMap[b.roomId]?.name ?? b.roomId}</div><div className="num text-sm font-bold">{formatVND(b.totalAmount)}</div></div><div className="mt-1 text-xs text-muted-foreground">Đã thu: {formatVND(b.paidAmount)} · Còn thiếu: {formatVND(remaining)}</div><button type="button" className="mt-2 h-8 rounded-lg border border-border px-2 text-xs" onClick={() => actions.markRoomBillPaid(b.id, b.totalAmount)}>Đánh dấu đã thu đủ</button></div>; })}</div></div>;
+}
+
+function RentalSettingsPanel() {
+  const state = useFinance();
+  const actions = useFinanceActions();
+  const settings = state.rental.settings;
+
+  const fields: Array<{ key: "defaultElectricityRate" | "waterTotal" | "wifiTotal" | "cleaningTotal" | "otherTotal"; label: string }> = [
+    { key: "defaultElectricityRate", label: "Giá điện mặc định (đ/kWh)" },
+    { key: "waterTotal", label: "Nước chung/tháng" },
+    { key: "wifiTotal", label: "Wifi chung/tháng" },
+    { key: "cleaningTotal", label: "Dọn vệ sinh/tháng" },
+    { key: "otherTotal", label: "Phụ phí khác/tháng" },
+  ];
+
+  return (
+    <div className="rounded-3xl border border-border bg-card p-4 shadow-card">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">Cấu hình chi phí cho thuê</h3>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {fields.map((f) => (
+          <label key={f.key} className="text-xs text-muted-foreground">
+            {f.label}
+            <input
+              type="number"
+              value={settings[f.key]}
+              onChange={(e) => actions.updateRentalSettings({ [f.key]: Number(e.target.value) || 0 })}
+              className="num mt-1 h-10 w-full rounded-xl border border-border bg-background px-3 text-right text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </label>
+        ))}
       </div>
     </div>
   );
