@@ -51,7 +51,7 @@ function invoicePageHtml(input: PdfInvoiceInput): string {
     settings.bankName || settings.bankAccount || settings.bankHolder
       ? `<div class="section">
           <div class="section-title">Thông tin chuyển khoản</div>
-          ${settings.bankName ? `<p>🏦 ${settings.bankName}</p>` : ""}
+          ${settings.bankName ? `<p>Ngân hàng: ${settings.bankName}</p>` : ""}
           ${settings.bankAccount ? `<p>STK: <strong>${settings.bankAccount}</strong></p>` : ""}
           ${settings.bankHolder ? `<p>Chủ TK: ${settings.bankHolder}</p>` : ""}
           ${settings.bankNoteTemplate ? `<p>Nội dung CK: ${noteFromTemplate(settings.bankNoteTemplate, room.name, month, year)}</p>` : ""}
