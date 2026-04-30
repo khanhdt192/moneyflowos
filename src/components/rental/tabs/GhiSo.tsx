@@ -25,7 +25,7 @@ export function GhiSo() {
     return {
       start: existing ? String(existing.startIndex) : "",
       end: existing ? String(existing.endIndex) : "",
-      water: "",
+      water: existing?.waterM3 ? String(existing.waterM3) : "",
     };
   };
 
@@ -58,7 +58,8 @@ export function GhiSo() {
       toast.error("Số cuối không được nhỏ hơn số đầu");
       return;
     }
-    actions.upsertElectricityReading(roomId, cycleId, s, e);
+    const w = Number(row.water) || 0;
+    actions.upsertElectricityReading(roomId, cycleId, s, e, w);
     toast.success("Đã lưu");
   };
 
@@ -68,8 +69,9 @@ export function GhiSo() {
       const row = getRow(room.id);
       const s = Number(row.start) || 0;
       const e = Number(row.end) || 0;
+      const w = Number(row.water) || 0;
       if (e >= s || e === 0) {
-        actions.upsertElectricityReading(room.id, cycleId, s, e);
+        actions.upsertElectricityReading(room.id, cycleId, s, e, w);
         saved++;
       }
     }
@@ -128,7 +130,7 @@ export function GhiSo() {
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Điện cũ</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Điện mới</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tiêu thụ</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước m³</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước (m³) → tiền</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"></th>
               </tr>
             </thead>
@@ -140,6 +142,8 @@ export function GhiSo() {
                 const usage = e > s ? e - s : e === 0 ? 0 : 0;
                 const warning = e !== 0 && e < s;
                 const hasData = row.end !== "";
+                const waterM3 = Number(row.water) || 0;
+                const waterCost = waterM3 * state.rental.settings.waterRatePerM3;
 
                 return (
                   <tr key={room.id} className={`bg-card transition-colors ${warning ? "bg-amber-50" : ""}`}>
@@ -190,8 +194,13 @@ export function GhiSo() {
                         onChange={(e) => setField(room.id, "water", e.target.value)}
                         onKeyDown={(e) => handleKeyDown(e, room.id, "water")}
                         placeholder="0"
-                        className="num h-8 w-24 rounded-lg border border-border bg-background px-2 text-right text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                        className="num h-8 w-20 rounded-lg border border-border bg-background px-2 text-right text-sm outline-none focus:ring-2 focus:ring-ring/40"
                       />
+                      {waterM3 > 0 && (
+                        <div className="mt-0.5 text-xs text-blue-600 tabular-nums">
+                          = {waterCost.toLocaleString("vi-VN")} đ
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button

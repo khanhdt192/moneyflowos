@@ -9,7 +9,7 @@ export function CauHinh() {
   const settings = state.rental.settings;
 
   const [elecRate, setElecRate] = useState(String(settings.defaultElectricityRate));
-  const [water, setWater] = useState(String(settings.waterTotal));
+  const [waterRate, setWaterRate] = useState(String(settings.waterRatePerM3));
   const [wifi, setWifi] = useState(String(settings.wifiTotal));
   const [cleaning, setCleaning] = useState(String(settings.cleaningTotal));
   const [other, setOther] = useState(String(settings.otherTotal));
@@ -17,7 +17,7 @@ export function CauHinh() {
   const handleSave = () => {
     actions.updateRentalSettings({
       defaultElectricityRate: Number(elecRate) || 0,
-      waterTotal: Number(water) || 0,
+      waterRatePerM3: Number(waterRate) || 0,
       wifiTotal: Number(wifi) || 0,
       cleaningTotal: Number(cleaning) || 0,
       otherTotal: Number(other) || 0,
@@ -40,12 +40,12 @@ export function CauHinh() {
         </div>
       </Section>
 
-      <Section title="💧 Nước" description="Chi phí nước hàng tháng — chia đều cho các phòng đang thuê">
+      <Section title="💧 Nước" description="Giá nước tính theo m³ — mỗi phòng trả theo lượng tiêu thụ thực tế nhập ở tab Ghi số">
         <Field
-          label="Tổng tiền nước / tháng (đ)"
-          value={water}
-          onChange={setWater}
-          hint="VD: 24.000 × số m³ dùng trong tháng"
+          label="Giá nước (đ / m³)"
+          value={waterRate}
+          onChange={setWaterRate}
+          hint="Mặc định 24.000 đ/m³ — tiền nước = số m³ nhập × giá này"
         />
       </Section>
 
@@ -79,14 +79,14 @@ export function CauHinh() {
       <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs text-muted-foreground space-y-1">
         <div className="font-semibold text-foreground text-sm mb-2">📊 Tóm tắt hiện tại</div>
         <SummaryRow label="Điện mặc định" value={`${(Number(elecRate) || 0).toLocaleString("vi-VN")} đ/kWh`} />
-        <SummaryRow label="Nước" value={`${(Number(water) || 0).toLocaleString("vi-VN")} đ/tháng`} />
-        <SummaryRow label="Wifi" value={`${(Number(wifi) || 0).toLocaleString("vi-VN")} đ/tháng`} />
-        <SummaryRow label="Vệ sinh" value={`${(Number(cleaning) || 0).toLocaleString("vi-VN")} đ/tháng`} />
-        <SummaryRow label="Phụ phí" value={`${(Number(other) || 0).toLocaleString("vi-VN")} đ/tháng`} />
+        <SummaryRow label="Nước" value={`${(Number(waterRate) || 0).toLocaleString("vi-VN")} đ/m³`} />
+        <SummaryRow label="Wifi (chung)" value={`${(Number(wifi) || 0).toLocaleString("vi-VN")} đ/tháng`} />
+        <SummaryRow label="Vệ sinh (chung)" value={`${(Number(cleaning) || 0).toLocaleString("vi-VN")} đ/tháng`} />
+        <SummaryRow label="Phụ phí (chung)" value={`${(Number(other) || 0).toLocaleString("vi-VN")} đ/tháng`} />
         <div className="border-t border-border pt-2 mt-2">
           <SummaryRow
-            label="Tổng phí chung / tháng"
-            value={`${((Number(water) || 0) + (Number(wifi) || 0) + (Number(cleaning) || 0) + (Number(other) || 0)).toLocaleString("vi-VN")} đ`}
+            label="Phí chung / tháng (wifi + vệ sinh + khác)"
+            value={`${((Number(wifi) || 0) + (Number(cleaning) || 0) + (Number(other) || 0)).toLocaleString("vi-VN")} đ`}
             bold
           />
         </div>

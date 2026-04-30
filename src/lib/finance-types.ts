@@ -55,7 +55,7 @@ export type RentalAllocationRule = "equal_occupied" | "by_occupants" | "by_weigh
 
 export interface RentalSettings {
   defaultElectricityRate: number;
-  waterTotal: number;
+  waterRatePerM3: number;
   wifiTotal: number;
   cleaningTotal: number;
   otherTotal: number;
@@ -94,6 +94,7 @@ export interface RentalElectricityReading {
   startIndex: number;
   endIndex: number;
   consumptionKwh: number;
+  waterM3: number;
 }
 
 export interface RentalState {

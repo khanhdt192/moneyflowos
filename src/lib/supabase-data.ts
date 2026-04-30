@@ -103,7 +103,7 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
       rooms,
       settings: {
         defaultElectricityRate: 3500,
-        waterTotal: 0,
+        waterRatePerM3: 24000,
         wifiTotal: 0,
         cleaningTotal: 0,
         otherTotal: 0,

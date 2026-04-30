@@ -34,7 +34,7 @@ function emptyState(): FinanceState {
       rooms: [],
       settings: {
         defaultElectricityRate: 3500,
-        waterTotal: 0,
+        waterRatePerM3: 24000,
         wifiTotal: 0,
         cleaningTotal: 0,
         otherTotal: 0,
@@ -410,7 +410,10 @@ class FinanceStore {
     });
   }
 
-  upsertElectricityReading(roomId: string, cycleId: string, startIndex: number, endIndex: number) {
+  upsertElectricityReading(roomId: string, cycleId: string, startIndex: number, endIndex: number, waterM3 = 0) {
+    const existing = this.state.rental.electricityReadings.find(
+      (r) => r.roomId === roomId && r.cycleId === cycleId,
+    );
     const nextReading = {
       id: `${cycleId}:${roomId}`,
       roomId,
@@ -418,15 +421,13 @@ class FinanceStore {
       startIndex,
       endIndex,
       consumptionKwh: Math.max(endIndex - startIndex, 0),
+      waterM3: waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0),
     };
-    const existed = this.state.rental.electricityReadings.some(
-      (r) => r.roomId === roomId && r.cycleId === cycleId,
-    );
     this.commit({
       ...this.state,
       rental: {
         ...this.state.rental,
-        electricityReadings: existed
+        electricityReadings: existing
           ? this.state.rental.electricityReadings.map((r) =>
               r.roomId === roomId && r.cycleId === cycleId ? nextReading : r,
             )
@@ -440,7 +441,7 @@ class FinanceStore {
     const settings = this.state.rental.settings;
     const occupied = this.state.rental.rooms.filter((r) => r.occupied);
     const sharedTotal =
-      settings.waterTotal + settings.wifiTotal + settings.cleaningTotal + settings.otherTotal;
+      settings.wifiTotal + settings.cleaningTotal + settings.otherTotal;
     const sharedPerRoom = occupied.length > 0 ? sharedTotal / occupied.length : 0;
 
     const cycle = {
@@ -458,17 +459,18 @@ class FinanceStore {
       const electricityAmount =
         (reading?.consumptionKwh ?? 0) *
         (room.electricityRateOverride ?? settings.defaultElectricityRate);
+      const waterAmount = (reading?.waterM3 ?? 0) * settings.waterRatePerM3;
       return {
         id: `${cycleId}:${room.id}`,
         roomId: room.id,
         cycleId,
         rentAmount: room.rent,
         electricityAmount,
-        waterAmount: occupied.length > 0 ? settings.waterTotal / occupied.length : 0,
+        waterAmount,
         wifiAmount: occupied.length > 0 ? settings.wifiTotal / occupied.length : 0,
         cleaningAmount: occupied.length > 0 ? settings.cleaningTotal / occupied.length : 0,
         otherAmount: occupied.length > 0 ? settings.otherTotal / occupied.length : 0,
-        totalAmount: room.rent + electricityAmount + sharedPerRoom,
+        totalAmount: room.rent + electricityAmount + waterAmount + sharedPerRoom,
         paidAmount: 0,
       };
     });
