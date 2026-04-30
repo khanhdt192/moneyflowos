@@ -389,8 +389,8 @@ class FinanceStore {
       // Ensure cycle exists
       const dbCycleId = await cloud.upsertCycle(this.userId, month, year);
       const row = await cloud.upsertReading(this.userId, roomId, dbCycleId, startIndex, endIndex, waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0));
-      // Update the reading id from temp to real
-      const final = { ...nextReading, id: row.id, cycleId: dbCycleId, consumptionKwh: Math.max(row.end_index - row.start_index, 0), waterM3: row.water_m3 ?? 0 };
+      // Update the reading id from temp to real; keep cycleId as formatted "YYYY-MM" string (not the UUID)
+      const final = { ...nextReading, id: row.id, cycleId: cycleId, consumptionKwh: Math.max(row.end_index - row.start_index, 0), waterM3: row.water_m3 ?? 0 };
       this.mutateRental({
         electricityReadings: this.state.rental.electricityReadings.map((r) => (r.id === nextReading.id ? final : r)),
       }, false);

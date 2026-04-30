@@ -167,10 +167,17 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     closedAt: c.closed_at ?? undefined,
   }));
 
+  // Build a map from DB cycle UUID → formatted "YYYY-MM" string so that
+  // readings and bills use the same cycleId format the UI expects.
+  const cycleFormatMap: Record<string, string> = {};
+  for (const c of cyclesRes.data ?? []) {
+    cycleFormatMap[c.id] = `${c.year}-${String(c.month).padStart(2, "0")}`;
+  }
+
   const roomBills: RentalRoomBill[] = (billsRes.data ?? []).map((b) => ({
     id: b.id,
     roomId: b.room_id,
-    cycleId: b.cycle_id,
+    cycleId: cycleFormatMap[b.cycle_id] ?? b.cycle_id,
     rentAmount: num(b.rent_amount),
     electricityAmount: num(b.electricity_amount),
     waterAmount: num(b.water_amount),
@@ -188,7 +195,7 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
   const electricityReadings: RentalElectricityReading[] = (readingsRes.data ?? []).map((r) => ({
     id: r.id,
     roomId: r.room_id,
-    cycleId: r.cycle_id,
+    cycleId: cycleFormatMap[r.cycle_id] ?? r.cycle_id,
     startIndex: num(r.start_index),
     endIndex: num(r.end_index),
     consumptionKwh: num(r.consumption_kwh),

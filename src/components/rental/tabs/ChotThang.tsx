@@ -22,11 +22,11 @@ import { exportSingleInvoice, exportAllInvoices } from "@/lib/rental-pdf";
 
 /* ─── types ───────────────────────────────────────────────── */
 
-type BillStatus = "empty" | "no_reading" | "draft" | "confirmed" | "partial_paid" | "paid" | "overdue" | "cancelled";
+type BillStatus = "empty" | "no_reading" | "has_reading" | "draft" | "confirmed" | "partial_paid" | "paid" | "overdue" | "cancelled";
 
 function getDisplayStatus(room: RentalRoom, bill: RentalRoomBill | undefined, hasReading: boolean, cycleId: string): BillStatus {
   if (!room.occupied) return "empty";
-  if (!bill) return hasReading ? "draft" : "no_reading";
+  if (!bill) return hasReading ? "has_reading" : "no_reading";
   if (bill.status === "paid")          return "paid";
   if (bill.status === "partial_paid")  return "partial_paid";
   if (bill.status === "confirmed") {
@@ -36,13 +36,14 @@ function getDisplayStatus(room: RentalRoom, bill: RentalRoomBill | undefined, ha
     return "confirmed";
   }
   if (bill.status === "cancelled") return "cancelled";
-  // draft
+  // draft bill exists
   return "draft";
 }
 
 const STATUS_CFG: Record<BillStatus, { label: string; cls: string }> = {
   empty:       { label: "Trống",          cls: "bg-slate-100 text-slate-500 border-slate-200" },
   no_reading:  { label: "Chưa nhập số",   cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  has_reading: { label: "Đã nhập số",     cls: "bg-sky-50 text-sky-700 border-sky-200" },
   draft:       { label: "Nháp",           cls: "bg-blue-50 text-blue-700 border-blue-200" },
   confirmed:   { label: "Đã chốt",        cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   partial_paid:{ label: "Thu một phần",   cls: "bg-violet-50 text-violet-700 border-violet-200" },
