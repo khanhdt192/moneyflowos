@@ -51,8 +51,7 @@ const STATUS_CFG: Record<BillStatus, { label: string; cls: string }> = {
 };
 
 function isT1(room: RentalRoom) {
-  const n = room.name.toLowerCase();
-  return n.includes("1") || n.includes("tầng 1");
+  return room.floor === 1;
 }
 
 type RowData = { start: string; end: string; water: string };
