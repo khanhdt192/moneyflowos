@@ -39,6 +39,7 @@ export type RentalRoomUiModel = {
   floor: number | null;
   bill_id: string | null;
   bill_status: RentalBillStatus | null;
+  total_amount: number | null;
   reading: {
     start: number | null;
     end: number | null;
@@ -123,6 +124,9 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
     name: row.name,
     tenant: row.tenant,
     floor: row.floor,
+    bill_id: row.bill_id,
+    bill_status: row.bill_status,
+    total_amount: row.total_amount,
     reading: {
       start: row.start_index,
       end: row.end_index,

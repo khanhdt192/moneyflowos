@@ -23,10 +23,10 @@ import { useRentalRooms } from "@/hooks/use-rental-rooms";
 
 type BillStatus = "missing" | "ready" | "confirmed" | "partial" | "paid";
 
-function mapStatus(bill: { status: string } | null | undefined): BillStatus {
-  if (!bill) return "missing";
+function getStatus(row: { bill_id: string | null; bill_status: string | null } | undefined): BillStatus {
+  if (!row?.bill_id) return "missing";
 
-  switch (bill.status) {
+  switch (row.bill_status) {
     case "draft":
       return "ready";
     case "confirmed":
@@ -66,7 +66,7 @@ export function ChotThang() {
   const [year, setYear]   = useState(now.getFullYear());
   const cycleId   = `${year}-${String(month).padStart(2, "0")}`;
   const settings  = state.rental.settings;
-  const { rooms: apiRooms } = useRentalRooms(cycleId);
+  const { rooms: apiRooms, refetch: fetchRooms } = useRentalRooms(cycleId);
 
   /* local editing rows (controlled inputs) */
   const [rows, setRows]           = useState<Record<string, RowData>>({});
@@ -95,7 +95,7 @@ export function ChotThang() {
   const billMap = Object.fromEntries(
     state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
   );
-  const apiBillMap = useMemo(() => Object.fromEntries(apiRooms.map((r) => [r.room_id, r.bill])), [apiRooms]);
+  const apiRoomMap = Object.fromEntries(apiRooms.map((r) => [r.room_id, r]));
   const readingMap = Object.fromEntries(
     state.rental.electricityReadings
       .filter((r) => r.cycleId === cycleId)
@@ -157,7 +157,9 @@ export function ChotThang() {
 
   async function handleConfirmSingle(roomId: string) {
     const bill = billMap[roomId];
-    if (!bill || bill.status !== "ready") return;
+    const apiRow = apiRoomMap[roomId];
+    if (!apiRow?.bill_id || apiRow.bill_status !== "draft") return;
+    if (!bill) return;
     try {
       await actions.confirmSingleBill(bill.id);
       toast.success(`Đã chốt ${roomMap[roomId]?.name}`);
@@ -280,11 +282,12 @@ export function ChotThang() {
               const ground  = isT1(room);
               const ss      = saveStates[room.id] ?? "idle";
 
-              const apiBill = apiBillMap[room.id] ?? null;
-              const displayStatus = mapStatus(apiBill);
+              const apiRow = apiRoomMap[room.id];
+              console.log("ROW:", apiRow);
+              const displayStatus = getStatus(apiRow);
               const cfg = STATUS_CFG[displayStatus];
 
-              const liveTotal = bill?.totalAmount ?? null;
+              const apiTotal = apiRow?.total_amount ?? null;
 
               return (
                 <tr key={room.id}
@@ -332,14 +335,12 @@ export function ChotThang() {
 
                   {/* Tổng bill — auto-calc live */}
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {liveTotal != null ? (
+                    {apiTotal ? (
                       <div className="inline-flex flex-col items-end gap-0.5">
                         <span className={`font-semibold ${!bill ? "text-muted-foreground" : ""}`}>
-                          {formatMoney(liveTotal)}
+                          {formatMoney(apiTotal)}
                         </span>
-                        {!bill && (
-                          <span className="text-[10px] text-muted-foreground/60">ước tính</span>
-                        )}
+                        
                       </div>
                     ) : (
                       <span className="opacity-40">—</span>
@@ -366,7 +367,7 @@ export function ChotThang() {
 
                   {/* Row actions */}
                   <td className="px-4 py-3">
-                    {room.occupied && bill ? (
+                    {room.occupied && apiRow?.bill_id ? (
                       <div className="flex items-center justify-center gap-1">
                         <RowBtn
                           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
@@ -385,7 +386,7 @@ export function ChotThang() {
                             setPayNote("");
                           }}
                           color="emerald"
-                          disabled={bill.status === "draft" || bill.status === "paid"}
+                          disabled={apiRow.bill_status === "draft" || apiRow.bill_status === "paid"}
                         />
                         <RowBtn
                           icon={<Download className="h-3.5 w-3.5" />}
@@ -398,7 +399,7 @@ export function ChotThang() {
                           label="Hoàn tác"
                           onClick={() => void actions.rollbackBill(bill.id)}
                           color="slate"
-                          disabled={bill.status !== "confirmed"}
+                          disabled={apiRow.bill_status !== "confirmed"}
                         />
                       </div>
                     ) : null}
