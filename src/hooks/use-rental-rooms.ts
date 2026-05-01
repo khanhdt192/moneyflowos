@@ -45,23 +45,6 @@ export type RentalRoomUiModel = {
   };
 };
 
-function mapStatus(row: Pick<RentalRoomOverviewRow, "bill_id" | "bill_status">): RentalRoomUiModel["ui"]["status"] {
-  if (!row.bill_id) return "missing";
-
-  switch (row.bill_status) {
-    case "draft":
-      return "ready";
-    case "confirmed":
-      return "confirmed";
-    case "partial_paid":
-      return "partial";
-    case "paid":
-      return "paid";
-    default:
-      return "missing";
-  }
-}
-
 function getActions(row: Pick<RentalRoomOverviewRow, "bill_id" | "bill_status">) {
   if (!row.bill_id) {
     return {
@@ -98,6 +81,18 @@ function getActions(row: Pick<RentalRoomOverviewRow, "bill_id" | "bill_status">)
 }
 
 export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
+  const uiStatus: RentalRoomUiModel["ui"]["status"] = !row.bill_id
+    ? "missing"
+    : row.bill_status === "draft"
+      ? "ready"
+      : row.bill_status === "confirmed"
+        ? "confirmed"
+        : row.bill_status === "partial_paid"
+          ? "partial"
+          : row.bill_status === "paid"
+            ? "paid"
+            : "missing";
+
   const bill = row.bill_id
     ? {
         id: row.bill_id,
@@ -121,7 +116,7 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
     total_amount: row.total_amount,
     bill,
     ui: {
-      status: mapStatus(row),
+      status: uiStatus,
       ...getActions(row),
     },
   };

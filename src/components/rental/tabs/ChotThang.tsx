@@ -282,11 +282,11 @@ export function ChotThang() {
               const ss      = saveStates[room.id] ?? "idle";
 
               const apiRow = apiRoomMap[room.id];
-              console.log("RENDER USING:", apiRow);
+              console.log("ROW:", apiRow);
               const displayStatus = getStatus(apiRow);
               const cfg = STATUS_CFG[displayStatus];
 
-              const total = apiRow?.total_amount ?? null;
+              const total = apiRow?.total_amount ?? 0;
 
               return (
                 <tr key={room.id}
@@ -334,7 +334,7 @@ export function ChotThang() {
 
                   {/* Tổng bill — auto-calc live */}
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {total ? (
+                    {total > 0 ? (
                       <div className="inline-flex flex-col items-end gap-0.5">
                         <span className="font-semibold">
                           {formatMoney(total)}
@@ -373,7 +373,7 @@ export function ChotThang() {
                           label="Chốt"
                           onClick={() => handleConfirmSingle(room.id)}
                           color="indigo"
-                          disabled={bill.status !== "ready"}
+                          disabled={apiRow.bill_status !== "draft"}
                         />
                         <RowBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
