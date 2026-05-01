@@ -7,6 +7,7 @@ type RentalRoomOverviewRow = {
   room_id: string;
   name: string;
   tenant: string | null;
+  floor: number | null;
   start_index: number | null;
   end_index: number | null;
   water_m3: number | null;
@@ -118,6 +119,7 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
     room_id: row.room_id,
     name: row.name,
     tenant: row.tenant,
+    floor: row.floor,
     reading: {
       start: row.start_index,
       end: row.end_index,
