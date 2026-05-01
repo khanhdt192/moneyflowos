@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
-import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
+import type { RentalRoom, RentalRoomBill } from "@/lib/finance-types";
 import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { exportSingleInvoice } from "@/lib/rental-pdf";
@@ -75,19 +75,6 @@ function isT1(room: RentalRoom) {
 }
 
 type RowData = { start: string; end: string; water: string };
-
-/** Pure live-total calculator — mirrors calcBillAmounts in finance-store */
-function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
-  const ground = isT1(room);
-  const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
-  const water = parseFloat(row.water) || 0;
-  const elec = ground ? settings.t1ElectricityBill : kwh * settings.defaultElectricityRate;
-  const waterAmt = water * settings.waterRatePerM3;
-  const wifi = ground ? (settings.t1HasWifi ? settings.t1WifiPerRoom : 0) : settings.wifiPerRoom;
-  const cleaning = ground ? settings.t1Cleaning : settings.cleaningPerRoom;
-  const other = ground ? settings.t1OtherPerRoom : settings.otherPerRoom;
-  return room.rent + elec + waterAmt + wifi + cleaning + other;
-}
 
 /* ─── component ───────────────────────────────────────────── */
 
@@ -310,17 +297,11 @@ export function ChotThang() {
               const row     = getRow(room.id);
               const ground  = isT1(room);
               const ss      = saveStates[room.id] ?? "idle";
-              const hasLocalEdit = !!rows[room.id];
 
               const displayStatus = getDisplayStatus(room, bill, !!reading, cycleId);
               const cfg = STATUS_CFG[displayStatus];
 
-              /* live total: use bill total if confirmed+, else compute live */
-              const liveTotal = bill
-                ? bill.totalAmount
-                : (room.occupied && (reading || hasLocalEdit))
-                  ? calcLiveTotal(room, settings, row)
-                  : null;
+              const liveTotal = bill?.totalAmount ?? null;
 
               return (
                 <tr key={room.id}
