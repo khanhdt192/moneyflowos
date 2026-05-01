@@ -1,16 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Zap,
-  CheckCircle,
   CheckCircle2,
-  AlertTriangle,
-  DollarSign,
-  FileText,
   Download,
   Loader2,
-  Clock,
   Check,
   X,
   RefreshCw,
@@ -19,8 +13,7 @@ import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { exportSingleInvoice, exportAllInvoices } from "@/lib/rental-pdf";
+import { exportSingleInvoice } from "@/lib/rental-pdf";
 import { useRentalRooms, type RentalRoomUiModel } from "@/hooks/use-rental-rooms";
 
 /* ─── types ───────────────────────────────────────────────── */
@@ -56,12 +49,6 @@ function isT1(room: RentalRoom) {
 
 type RowData = { start: string; end: string; water: string };
 
-/**
- * Derive display status from:
- * - API bill status (from rental_room_overview — always fresh from DB)
- * - whether a reading exists (from local store)
- * - whether the room is occupied (from local store)
- */
 function getDisplayStatus(
   room: RentalRoom,
   apiBillStatus: string | null,
@@ -83,7 +70,6 @@ function getDisplayStatus(
   return "draft";
 }
 
-/** Pure live-total calculator — mirrors calcBillAmounts in finance-store */
 function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
   const ground = isT1(room);
   const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
@@ -104,8 +90,8 @@ export function ChotThang() {
   const now     = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear]   = useState(now.getFullYear());
-  const cycleId   = `${year}-${String(month).padStart(2, "0")}`;
-  const settings  = state.rental.settings;
+  const cycleId  = `${year}-${String(month).padStart(2, "0")}`;
+  const settings = state.rental.settings;
 
   /* ── Supabase view: single source of truth for bill status ── */
   const {
@@ -123,27 +109,24 @@ export function ChotThang() {
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
   const debounceTimers              = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  /* detail drawer */
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [drawerMode, setDrawerMode] = useState<"detail" | "pay">("detail");
-  const [payInput, setPayInput]     = useState("");
-  const [payMethod, setPayMethod]   = useState("cash");
-  const [payNote, setPayNote]       = useState("");
+  /* expanded row (replaces drawer) */
+  const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
 
-  /* toolbar async state */
-  const [drafting,   setDrafting]   = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  /* payment form — single shared state; cleared when a new row expands */
+  const [payInput, setPayInput]   = useState("");
+  const [payMethod, setPayMethod] = useState("cash");
+  const [payNote, setPayNote]     = useState("");
 
-  /* clear local rows when month changes */
+  /* clear local rows and collapse expansion when month changes */
   useEffect(() => {
     setRows({});
     setSaveStates({});
+    setExpandedRoomId(null);
   }, [month, year]);
 
-  /* ─── local store maps (for readings + drawer detail) ─────── */
+  /* ─── local store maps ──────────────────────────────────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
 
-  /** billMap from local store — used ONLY for drawer detail (rent/paid amounts) */
   const storeBillMap = Object.fromEntries(
     state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
   );
@@ -156,13 +139,9 @@ export function ChotThang() {
 
   const allRooms      = state.rental.rooms;
   const occupiedRooms = allRooms.filter((r) => r.occupied);
-  const selectedRoom  = selectedId ? roomMap[selectedId] : null;
-  /** Drawer always reads from local store — refetch() syncs it */
-  const selectedBill: RentalRoomBill | undefined = selectedId ? storeBillMap[selectedId] : undefined;
 
-  /* KPI from API data (fresh) */
-  const allApiBills = Object.values(apiBillMap).filter((r) => r.bill_id);
-  const draftCount     = allApiBills.filter((r) => r.bill_status === "draft").length;
+  /* KPI from API data */
+  const allApiBills    = Object.values(apiBillMap).filter((r) => r.bill_id);
   const confirmedCount = allApiBills.filter((r) =>
     r.bill_status && ["confirmed", "partial_paid", "paid"].includes(r.bill_status)).length;
   const paidCount      = allApiBills.filter((r) => r.bill_status === "paid").length;
@@ -202,7 +181,7 @@ export function ChotThang() {
         setTimeout(() => setSaveState(roomId, "idle"), 2500);
         // store.refetch() already ran inside upsertElectricityReading.
         // Wait 200ms for the Supabase view (rental_room_overview) to propagate,
-        // then sync apiRooms so the action buttons reflect the new bill.
+        // then sync apiRooms so action buttons reflect the new bill.
         await new Promise<void>((r) => setTimeout(r, 200));
         await apiRefetch();
       } catch {
@@ -211,39 +190,7 @@ export function ChotThang() {
     }, 600);
   }
 
-  /* ─── toolbar handlers ──────────────────────────────────── */
-
-  async function handleCreateDrafts() {
-    setDrafting(true);
-    try {
-      const { created, skipped } = await actions.createDraftBills(month, year);
-      if (created === 0 && skipped === 0) toast.info("Không có phòng đang thuê");
-      else if (created === 0) toast.info(`Tất cả ${skipped} phòng đã có hóa đơn (không ghi đè)`);
-      else toast.success(`Đã tạo ${created} hóa đơn nháp${skipped > 0 ? `, bỏ qua ${skipped} đã chốt` : ""}`);
-    } catch (err) {
-      console.error(err);
-      toast.error("Không tạo được hóa đơn");
-    } finally {
-      setDrafting(false);
-      await apiRefetch(); /* sync view immediately */
-    }
-  }
-
-  async function handleConfirmAll() {
-    setConfirming(true);
-    try {
-      const { confirmed, alreadyDone } = await actions.confirmBills(month, year);
-      if (confirmed === 0 && alreadyDone === 0) toast.info("Chưa có hóa đơn nháp nào để chốt");
-      else if (confirmed === 0) toast.info("Hóa đơn tháng này đã được chốt.");
-      else toast.success(`Đã chốt ${confirmed} hóa đơn.`);
-    } catch (err) {
-      console.error(err);
-      toast.error("Không chốt được hóa đơn");
-    } finally {
-      setConfirming(false);
-      await apiRefetch(); /* sync view immediately */
-    }
-  }
+  /* ─── handlers ──────────────────────────────────────────── */
 
   async function handleConfirmSingle(roomId: string) {
     const storeBill = storeBillMap[roomId];
@@ -254,24 +201,25 @@ export function ChotThang() {
     } catch {
       toast.error("Không chốt được hóa đơn");
     } finally {
-      await apiRefetch(); /* view is single source of truth — force sync */
+      await apiRefetch();
     }
   }
 
-  async function handlePay() {
-    if (!selectedBill) return;
+  async function handlePay(roomId: string) {
+    const bill = storeBillMap[roomId];
+    if (!bill) return;
     const amount = parseFloat(payInput.replace(/[^\d.]/g, ""));
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
-    const remaining = selectedBill.totalAmount - selectedBill.paidAmount;
+    const remaining = bill.totalAmount - bill.paidAmount;
     if (amount > remaining + 0.5) {
       toast.error(`Vượt quá số tiền cần thu (${formatMoney(remaining)})`);
       return;
     }
     try {
-      await actions.recordPayment(selectedBill.id, amount, payMethod, payNote || undefined);
+      await actions.recordPayment(bill.id, amount, payMethod, payNote || undefined);
       setPayInput(""); setPayNote("");
       toast.success("Đã ghi nhận thanh toán");
-      setSelectedId(null);
+      setExpandedRoomId(null);
     } catch {
       toast.error("Không ghi nhận được thanh toán");
     } finally {
@@ -280,27 +228,11 @@ export function ChotThang() {
   }
 
   function handleExportSingle(roomId: string) {
-    const room     = roomMap[roomId];
-    const bill     = storeBillMap[roomId];
+    const room = roomMap[roomId];
+    const bill = storeBillMap[roomId];
     if (!room || !bill) { toast.error("Chưa có hóa đơn cho phòng này"); return; }
     exportSingleInvoice({ room, bill, month, year, settings, invoiceSettings: state.rental.invoiceSettings });
     toast.success(`Đang xuất hóa đơn ${room.name}…`);
-  }
-
-  function handleExportAll() {
-    const inputs = occupiedRooms
-      .filter((r) => storeBillMap[r.id])
-      .map((r) => ({
-        room: r,
-        bill: storeBillMap[r.id]!,
-        month,
-        year,
-        settings,
-        invoiceSettings: state.rental.invoiceSettings,
-      }));
-    if (inputs.length === 0) { toast.error("Chưa có hóa đơn nào để xuất"); return; }
-    exportAllInvoices(inputs);
-    toast.success(`Đang xuất ${inputs.length} hóa đơn…`);
   }
 
   /* ─── month nav ─────────────────────────────────────────── */
@@ -323,57 +255,35 @@ export function ChotThang() {
 
   return (
     <div className="space-y-5">
-      {/* ── Top bar ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Month navigator */}
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={prevMonth}
-            className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="min-w-32 text-center text-base font-semibold">
-            Tháng {String(month).padStart(2, "0")}/{year}
-            {isCurrentMonth && (
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-normal text-blue-700">
-                Hiện tại
-              </span>
-            )}
-          </span>
-          <button type="button" onClick={nextMonth} disabled={isCurrentMonth}
-            className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors disabled:opacity-40">
-            <ChevronRight className="h-4 w-4" />
-          </button>
-          {apiLoading && (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+      {/* ── Month navigator ── */}
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={prevMonth}
+          className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="min-w-32 text-center text-base font-semibold">
+          Tháng {String(month).padStart(2, "0")}/{year}
+          {isCurrentMonth && (
+            <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-normal text-blue-700">
+              Hiện tại
+            </span>
           )}
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleCreateDrafts} disabled={drafting}
-            className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50">
-            {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-            Tạo hóa đơn nháp
-          </button>
-          <button type="button" onClick={handleConfirmAll} disabled={confirming || draftCount === 0}
-            className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90 transition-colors disabled:opacity-50">
-            {confirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-            Chốt tất cả {draftCount > 0 && `(${draftCount})`}
-          </button>
-          <button type="button" onClick={handleExportAll}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors">
-            <Download className="h-3.5 w-3.5" />
-            Xuất tất cả PDF
-          </button>
-        </div>
+        </span>
+        <button type="button" onClick={nextMonth} disabled={isCurrentMonth}
+          className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors disabled:opacity-40">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        {apiLoading && (
+          <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        )}
       </div>
 
       {/* ── KPI summary ── */}
       {allApiBills.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard label="Tổng hóa đơn" value={formatMoney(totalBilled)} />
-          <SummaryCard label="Đã thu" value={formatMoney(totalPaid)} accent="emerald" />
-          <SummaryCard label="Còn lại" value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
+          <SummaryCard label="Tổng hóa đơn"    value={formatMoney(totalBilled)} />
+          <SummaryCard label="Đã thu"           value={formatMoney(totalPaid)} accent="emerald" />
+          <SummaryCard label="Còn lại"          value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
           <SummaryCard label="Đã chốt / Đã thu" value={`${confirmedCount} / ${paidCount} phòng`} />
         </div>
       )}
@@ -383,12 +293,12 @@ export function ChotThang() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
+              <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
+              <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Số đầu</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Số cuối</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước (m³)</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng bill</th>
+              <th className="px-4 py-3 text-right  text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng bill</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trạng thái</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác</th>
             </tr>
@@ -402,23 +312,23 @@ export function ChotThang() {
               </tr>
             )}
             {allRooms.map((room) => {
-              /** API row — authoritative for bill status & amounts */
-              const apiRow   = apiBillMap[room.id];
-              const reading  = readingMap[room.id];
-              const row      = getRow(room.id);
-              const ground   = isT1(room);
-              const ss       = saveStates[room.id] ?? "idle";
+              const apiRow       = apiBillMap[room.id];
+              const reading      = readingMap[room.id];
+              const row          = getRow(room.id);
+              const ground       = isT1(room);
+              const ss           = saveStates[room.id] ?? "idle";
               const hasLocalEdit = !!rows[room.id];
+              const isExpanded   = expandedRoomId === room.id;
 
               // storeBill is always up-to-date: store.refetch() runs inside
-              // upsertElectricityReading, so it reflects the DB state immediately.
+              // upsertElectricityReading, so it reflects DB state immediately.
               // apiRow catches up 200ms later after apiRefetch().
               const storeBill = storeBillMap[room.id];
 
-              /* Bill status: prefer API view (authoritative); fall back to local store */
+              /* Bill status: prefer API view; fall back to local store */
               const apiBillStatus = apiRow?.bill_status ?? storeBill?.status ?? null;
               const displayStatus = getDisplayStatus(room, apiBillStatus, !!reading, cycleId);
-              const cfg = STATUS_CFG[displayStatus];
+              const cfg           = STATUS_CFG[displayStatus];
 
               /* Action availability: prefer API view flags; fall back to store */
               const hasBill    = !!apiRow?.bill_id || !!storeBill;
@@ -427,137 +337,176 @@ export function ChotThang() {
               const canPay     = apiRow?.ui?.can_pay
                 ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
 
-              /* live total: use confirmed DB value when available, else estimate */
+              /* live total: DB value when available, else estimate */
               const liveTotal = apiRow?.total_amount != null
                 ? apiRow.total_amount
                 : room.occupied && (reading || hasLocalEdit)
                   ? calcLiveTotal(room, settings, row)
                   : null;
 
+              function toggleExpand() {
+                if (!room.occupied || !hasBill) return;
+                setExpandedRoomId((prev) => {
+                  const next = prev === room.id ? null : room.id;
+                  if (next !== null) { setPayInput(""); setPayNote(""); }
+                  return next;
+                });
+              }
+
               return (
-                <tr key={room.id}
-                  className={`bg-card transition-colors ${room.occupied ? "hover:bg-muted/10" : "opacity-50"}`}>
-                  <td className="px-4 py-3 font-medium">{room.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {room.tenant || <span className="italic opacity-50">Trống</span>}
-                  </td>
+                <Fragment key={room.id}>
+                  {/* ── Main data row ── */}
+                  <tr
+                    onClick={toggleExpand}
+                    className={[
+                      "bg-card transition-colors",
+                      room.occupied && hasBill ? "cursor-pointer hover:bg-muted/10" : "",
+                      !room.occupied ? "opacity-50" : "",
+                      isExpanded ? "bg-muted/5" : "",
+                    ].join(" ")}
+                  >
+                    {/* Phòng */}
+                    <td className="px-4 py-3 font-medium">{room.name}</td>
 
-                  {/* Số đầu */}
-                  <td className="px-4 py-2 text-center">
-                    {ground ? (
-                      <span className="text-xs text-muted-foreground italic">T1 — tổng</span>
-                    ) : (
+                    {/* Khách thuê */}
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {room.tenant || <span className="italic opacity-50">Trống</span>}
+                    </td>
+
+                    {/* Số đầu */}
+                    <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      {ground ? (
+                        <span className="text-xs text-muted-foreground italic">T1 — tổng</span>
+                      ) : (
+                        <input
+                          type="number"
+                          value={row.start}
+                          onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
+                          disabled={!room.occupied}
+                          className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
+                          placeholder="0"
+                        />
+                      )}
+                    </td>
+
+                    {/* Số cuối */}
+                    <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      {ground ? (
+                        <span className="text-xs text-muted-foreground italic">—</span>
+                      ) : (
+                        <input
+                          type="number"
+                          value={row.end}
+                          onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
+                          disabled={!room.occupied}
+                          className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
+                          placeholder="0"
+                        />
+                      )}
+                    </td>
+
+                    {/* Nước */}
+                    <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="number"
-                        value={row.start}
-                        onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
+                        value={row.water}
+                        onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
                         disabled={!room.occupied}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder="0"
                       />
-                    )}
-                  </td>
+                    </td>
 
-                  {/* Số cuối */}
-                  <td className="px-4 py-2 text-center">
-                    {ground ? (
-                      <span className="text-xs text-muted-foreground italic">—</span>
-                    ) : (
-                      <input
-                        type="number"
-                        value={row.end}
-                        onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
-                        disabled={!room.occupied}
-                        className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                        placeholder="0"
-                      />
-                    )}
-                  </td>
+                    {/* Tổng bill */}
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {liveTotal != null ? (
+                        <div className="inline-flex flex-col items-end gap-0.5">
+                          <span className={`font-semibold ${!hasBill ? "text-muted-foreground" : ""}`}>
+                            {formatMoney(liveTotal)}
+                          </span>
+                          {!hasBill && (
+                            <span className="text-[10px] text-muted-foreground/60">ước tính</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="opacity-40">—</span>
+                      )}
+                      {ss !== "idle" && (
+                        <div className="mt-0.5 flex items-center justify-end gap-0.5">
+                          {ss === "saving" && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                          {ss === "saved"  && <Check className="h-3 w-3 text-emerald-500" />}
+                          {ss === "error"  && <X className="h-3 w-3 text-rose-500" />}
+                          <span className={`text-[10px] ${
+                            ss === "saved" ? "text-emerald-600" :
+                            ss === "error" ? "text-rose-600" :
+                            "text-muted-foreground"
+                          }`}>
+                            {ss === "saving" ? "Đang lưu…" : ss === "saved" ? "Đã lưu" : "Lỗi lưu"}
+                          </span>
+                        </div>
+                      )}
+                    </td>
 
-                  {/* Nước */}
-                  <td className="px-4 py-2 text-center">
-                    <input
-                      type="number"
-                      value={row.water}
-                      onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
-                      disabled={!room.occupied}
-                      className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                      placeholder="0"
-                    />
-                  </td>
+                    {/* Status badge */}
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}>
+                        {cfg.label}
+                      </span>
+                    </td>
 
-                  {/* Tổng bill */}
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {liveTotal != null ? (
-                      <div className="inline-flex flex-col items-end gap-0.5">
-                        <span className={`font-semibold ${!hasBill ? "text-muted-foreground" : ""}`}>
-                          {formatMoney(liveTotal)}
-                        </span>
-                        {!hasBill && (
-                          <span className="text-[10px] text-muted-foreground/60">ước tính</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="opacity-40">—</span>
-                    )}
-                    {ss !== "idle" && (
-                      <div className="mt-0.5 flex items-center justify-end gap-0.5">
-                        {ss === "saving" && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-                        {ss === "saved"  && <Check className="h-3 w-3 text-emerald-500" />}
-                        {ss === "error"  && <X className="h-3 w-3 text-rose-500" />}
-                        <span className={`text-[10px] ${ss === "saved" ? "text-emerald-600" : ss === "error" ? "text-rose-600" : "text-muted-foreground"}`}>
-                          {ss === "saving" ? "Đang lưu…" : ss === "saved" ? "Đã lưu" : "Lỗi lưu"}
-                        </span>
-                      </div>
-                    )}
-                  </td>
+                    {/* Row actions */}
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {room.occupied && hasBill ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <RowBtn
+                            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                            label="Chốt"
+                            onClick={() => handleConfirmSingle(room.id)}
+                            color="indigo"
+                            disabled={!canConfirm}
+                          />
+                          <RowBtn
+                            icon={<Download className="h-3.5 w-3.5" />}
+                            label="PDF"
+                            onClick={() => handleExportSingle(room.id)}
+                            color="rose"
+                          />
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
 
-                  {/* Status badge — from API */}
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}>
-                      {cfg.label}
-                    </span>
-                  </td>
-
-                  {/* Row actions */}
-                  <td className="px-4 py-3">
-                    {room.occupied && hasBill ? (
-                      <div className="flex items-center justify-center gap-1">
-                        <RowBtn
-                          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                          label="Chốt"
-                          onClick={() => handleConfirmSingle(room.id)}
-                          color="indigo"
-                          disabled={!canConfirm}
-                        />
-                        <RowBtn
-                          icon={<DollarSign className="h-3.5 w-3.5" />}
-                          label="Thu tiền"
-                          onClick={() => {
-                            setDrawerMode("pay");
-                            setSelectedId(room.id);
-                            setPayInput("");
-                            setPayNote("");
-                          }}
-                          color="emerald"
-                          disabled={!canPay}
-                        />
-                        <RowBtn
-                          icon={<FileText className="h-3.5 w-3.5" />}
-                          label="Chi tiết"
-                          onClick={() => { setDrawerMode("detail"); setSelectedId(room.id); }}
-                          color="slate"
-                        />
-                        <RowBtn
-                          icon={<Download className="h-3.5 w-3.5" />}
-                          label="PDF"
-                          onClick={() => handleExportSingle(room.id)}
-                          color="rose"
-                        />
-                      </div>
-                    ) : null}
-                  </td>
-                </tr>
+                  {/* ── Expanded detail row ── */}
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={8} className="p-0">
+                        <div className="border-t border-border bg-muted/5 px-6 py-5 space-y-4">
+                          {storeBill ? (
+                            <>
+                              <BillBreakdown bill={storeBill} settings={settings} />
+                              {canPay && (
+                                <PaymentSection
+                                  bill={storeBill}
+                                  payInput={payInput}
+                                  setPayInput={setPayInput}
+                                  payMethod={payMethod}
+                                  setPayMethod={setPayMethod}
+                                  payNote={payNote}
+                                  setPayNote={setPayNote}
+                                  onPay={() => handlePay(room.id)}
+                                />
+                              )}
+                            </>
+                          ) : (
+                            <p className="py-4 text-center text-sm text-muted-foreground">
+                              Chưa có hóa đơn cho phòng này tháng {month}/{year}.
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -566,156 +515,10 @@ export function ChotThang() {
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
-        <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu/cuối — tự động lưu sau 0.6s" />
-        <WorkflowStep n={2} title="Tạo hóa đơn nháp" desc="Bấm Tạo hóa đơn nháp để khóa chi phí" />
-        <WorkflowStep n={3} title="Chốt hóa đơn" desc='Kiểm tra xong bấm "Chốt tất cả"' />
-        <WorkflowStep n={4} title="Thu tiền" desc='Bấm "Thu tiền" khi khách thanh toán' />
+        <WorkflowStep n={1} title="Nhập chỉ số"   desc="Điền số đầu/cuối — tự động lưu sau 0.6s" />
+        <WorkflowStep n={2} title="Chốt hóa đơn"  desc='Bấm "Chốt" để xác nhận chi phí tháng' />
+        <WorkflowStep n={3} title="Thu tiền"       desc="Click vào hàng để mở chi tiết và thu tiền" />
       </div>
-
-      {/* ── Detail sheet ── */}
-      <Sheet open={!!selectedId} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          {selectedRoom && (
-            <>
-              <SheetHeader className="mb-5">
-                <SheetTitle>{selectedRoom.name}</SheetTitle>
-                <div className="mt-1 space-y-0.5 text-sm">
-                  <p className="text-muted-foreground">
-                    Khách thuê:{" "}
-                    <span className="font-medium text-foreground">
-                      {selectedRoom.tenant || <em className="opacity-50">Chưa có</em>}
-                    </span>
-                  </p>
-                  {selectedBill && (
-                    <p className="text-muted-foreground flex items-center gap-2">
-                      Trạng thái:{" "}
-                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_CFG[selectedBill.status as BillStatus]?.cls ?? ""}`}>
-                        {STATUS_CFG[selectedBill.status as BillStatus]?.label ?? selectedBill.status}
-                      </span>
-                    </p>
-                  )}
-                </div>
-              </SheetHeader>
-
-              {selectedBill ? (
-                <div className="space-y-5">
-                  <BillBreakdown bill={selectedBill} settings={state.rental.settings} />
-
-                  {/* Payment history */}
-                  {state.rental.payments.filter((p) => p.billId === selectedBill.id).length > 0 && (
-                    <div>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Lịch sử thanh toán
-                      </p>
-                      <div className="space-y-1">
-                        {state.rental.payments
-                          .filter((p) => p.billId === selectedBill.id)
-                          .map((p) => (
-                            <div key={p.id}
-                              className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 text-sm">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span className="text-muted-foreground">
-                                  {new Date(p.paidAt).toLocaleDateString("vi-VN")}
-                                </span>
-                                {p.note && <span className="text-muted-foreground">· {p.note}</span>}
-                              </div>
-                              <span className="font-medium text-emerald-600">+{formatMoney(p.amount)}</span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Pay form */}
-                  {["confirmed", "partial_paid"].includes(selectedBill.status) && (
-                    <div className={`rounded-xl border p-4 space-y-3 ${drawerMode === "pay" ? "border-emerald-300 bg-emerald-50/40" : "border-border"}`}>
-                      <p className="text-sm font-semibold">Thu tiền</p>
-                      <div className="text-sm text-muted-foreground flex justify-between">
-                        <span>Còn thiếu</span>
-                        <span className="font-semibold text-rose-600">
-                          {formatMoney(Math.max(0, selectedBill.totalAmount - selectedBill.paidAmount))}
-                        </span>
-                      </div>
-                      <input
-                        type="number"
-                        value={payInput}
-                        onChange={(e) => setPayInput(e.target.value)}
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                        placeholder="Số tiền thu"
-                        autoFocus={drawerMode === "pay"}
-                      />
-                      <select
-                        value={payMethod}
-                        onChange={(e) => setPayMethod(e.target.value)}
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
-                      >
-                        <option value="cash">Tiền mặt</option>
-                        <option value="transfer">Chuyển khoản</option>
-                      </select>
-                      <input
-                        type="text"
-                        value={payNote}
-                        onChange={(e) => setPayNote(e.target.value)}
-                        placeholder="Ghi chú (tùy chọn)"
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
-                      />
-                      <div className="flex gap-2">
-                        <button type="button" onClick={handlePay}
-                          className="flex-1 rounded-lg bg-foreground py-2 text-sm font-medium text-background hover:opacity-90">
-                          Thu tiền
-                        </button>
-                        <button type="button" onClick={() => setSelectedId(null)}
-                          className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/40">
-                          Đóng
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Bank info */}
-                  {settings.bankAccount && (
-                    <div className="rounded-xl border border-border p-4 space-y-2 text-sm">
-                      <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                        Thông tin chuyển khoản
-                      </p>
-                      {settings.bankName    && <p>🏦 {settings.bankName}</p>}
-                      {settings.bankAccount && <p>STK: <span className="font-mono font-semibold">{settings.bankAccount}</span></p>}
-                      {settings.bankHolder  && <p>Chủ TK: {settings.bankHolder}</p>}
-                      {settings.bankNoteTemplate && (
-                        <p className="text-muted-foreground">
-                          Nội dung CK:{" "}
-                          {settings.bankNoteTemplate
-                            .replace("{room}", selectedRoom.name)
-                            .replace("{month}", String(month).padStart(2, "0"))
-                            .replace("{year}", String(year))}
-                        </p>
-                      )}
-                      {settings.bankQrUrl && (
-                        <img src={settings.bankQrUrl} alt="QR" className="h-32 w-32 rounded-lg object-cover" />
-                      )}
-                    </div>
-                  )}
-
-                  <button type="button" onClick={() => handleExportSingle(selectedRoom.id)}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium hover:bg-muted/40">
-                    <Download className="h-4 w-4" />
-                    Xuất hóa đơn PDF
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <AlertTriangle className="h-8 w-8 text-amber-400" />
-                  <p className="text-sm text-muted-foreground">
-                    Chưa có hóa đơn cho phòng này tháng {month}/{year}.
-                    <br />Nhập chỉ số rồi bấm <strong>Tạo hóa đơn nháp</strong>.
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
@@ -765,9 +568,9 @@ function BillBreakdown({
   bill, settings,
 }: {
   bill: RentalRoomBill;
-  settings: ReturnType<typeof useFinance>["rental"]["settings"];
+  settings: RentalSettings;
 }) {
-  const rows = [
+  const items = [
     { label: "Tiền thuê",  amount: bill.rentAmount },
     { label: "Điện",       amount: bill.electricityAmount },
     { label: "Nước",       amount: bill.waterAmount },
@@ -778,9 +581,12 @@ function BillBreakdown({
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
+      <p className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/20 border-b border-border">
+        Chi tiết hóa đơn
+      </p>
       <table className="w-full text-sm">
         <tbody>
-          {rows.map((r) => (
+          {items.map((r) => (
             <tr key={r.label} className="border-b border-border last:border-0">
               <td className="px-4 py-2 text-muted-foreground">{r.label}</td>
               <td className="px-4 py-2 text-right tabular-nums">{formatMoney(r.amount)}</td>
@@ -792,18 +598,59 @@ function BillBreakdown({
             <td className="px-4 py-2.5 font-semibold">Tổng cộng</td>
             <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatMoney(bill.totalAmount)}</td>
           </tr>
-          <tr className="border-t border-border">
-            <td className="px-4 py-2 text-emerald-600">Đã thanh toán</td>
-            <td className="px-4 py-2 text-right text-emerald-600 tabular-nums">{formatMoney(bill.paidAmount)}</td>
-          </tr>
-          <tr className="border-t border-border">
-            <td className="px-4 py-2 font-semibold text-rose-600">Còn lại</td>
-            <td className="px-4 py-2 text-right font-semibold text-rose-600 tabular-nums">
-              {formatMoney(Math.max(0, bill.totalAmount - bill.paidAmount))}
-            </td>
-          </tr>
         </tfoot>
       </table>
+    </div>
+  );
+}
+
+function PaymentSection({
+  bill, payInput, setPayInput, payMethod, setPayMethod, payNote, setPayNote, onPay,
+}: {
+  bill: RentalRoomBill;
+  payInput: string;   setPayInput: (v: string) => void;
+  payMethod: string;  setPayMethod: (v: string) => void;
+  payNote: string;    setPayNote: (v: string) => void;
+  onPay: () => void;
+}) {
+  const remaining = Math.max(0, bill.totalAmount - bill.paidAmount);
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+      <p className="text-sm font-semibold">Thu tiền</p>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Còn thiếu</span>
+        <span className="font-semibold text-rose-600">{formatMoney(remaining)}</span>
+      </div>
+      <input
+        type="number"
+        value={payInput}
+        onChange={(e) => setPayInput(e.target.value)}
+        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        placeholder="Số tiền thu"
+        autoFocus
+      />
+      <select
+        value={payMethod}
+        onChange={(e) => setPayMethod(e.target.value)}
+        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+      >
+        <option value="cash">Tiền mặt</option>
+        <option value="transfer">Chuyển khoản</option>
+      </select>
+      <input
+        type="text"
+        value={payNote}
+        onChange={(e) => setPayNote(e.target.value)}
+        placeholder="Ghi chú (tùy chọn)"
+        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+      />
+      <button
+        type="button"
+        onClick={onPay}
+        className="w-full rounded-lg bg-foreground py-2 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+      >
+        Thu tiền
+      </button>
     </div>
   );
 }

@@ -1,0 +1,192 @@
+You are a senior React frontend engineer.
+
+I have a rental management UI (MoneyFlowOS) built with React + Supabase.
+
+---
+
+# 🎯 GOAL
+
+Refactor the UI with the following requirements:
+
+---
+
+# 1. REMOVE TOP ACTION BAR COMPLETELY
+
+Remove the entire top toolbar section that includes:
+
+* "Tạo hóa đơn nháp"
+* "Chốt tất cả"
+* "Xuất tất cả PDF"
+
+### Requirements:
+
+* Delete ALL related UI components
+* Delete ALL related handlers / functions
+* Delete ALL related imports
+* Ensure no dead code remains
+* Ensure layout spacing is still clean after removal
+
+---
+
+# 2. REPLACE DRAWER WITH EXPANDABLE ROW
+
+Currently:
+
+* Clicking a room opens a side drawer (Sheet)
+* This drawer shows bill details and payment form
+
+---
+
+## NEW UX (REQUIRED)
+
+👉 Replace drawer with expandable row inside the table
+
+---
+
+## BEHAVIOR
+
+When user clicks a row:
+
+* Toggle expand/collapse
+* Show a new row BELOW the clicked row
+
+---
+
+## STATE
+
+```ts
+const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
+```
+
+---
+
+## TOGGLE LOGIC
+
+```ts
+onClick={() =>
+  setExpandedRoomId(prev => prev === room.id ? null : room.id)
+}
+```
+
+---
+
+## RENDER EXPANDED ROW
+
+```tsx
+{expandedRoomId === room.id && (
+  <tr>
+    <td colSpan={8}>
+      {/* Expanded content */}
+    </td>
+  </tr>
+)}
+```
+
+---
+
+# 3. REMOVE DRAWER SYSTEM COMPLETELY
+
+Delete ALL of the following:
+
+* `<Sheet>`
+* `<SheetContent>`
+* `<SheetHeader>`
+* `<SheetTitle>`
+
+Also remove:
+
+* selectedId state
+* drawerMode state
+* any logic related to drawer open/close
+
+---
+
+# 4. BILL BREAKDOWN (UPDATED STRUCTURE)
+
+Inside expanded row, show ONLY:
+
+* Tiền thuê
+* Điện
+* Nước
+* Wifi
+* Vệ sinh
+* Tổng cộng
+
+---
+
+## DO NOT INCLUDE:
+
+* Đã thanh toán
+* Còn lại
+
+---
+
+# 5. PAYMENT SECTION (SEPARATE BLOCK)
+
+Below the breakdown, render a separate payment section:
+
+Include:
+
+* Còn thiếu (remaining amount)
+* Input: Số tiền thu
+* Payment method (cash / transfer)
+* Note
+* Button: Thu tiền
+
+---
+
+## UI STRUCTURE
+
+Room row
+→ Expanded:
+
+[ Bill Breakdown ]
+
+* Tiền thuê
+* Điện
+* Nước
+* Wifi
+* Vệ sinh
+* Tổng cộng
+
+---
+
+[ Payment Section ]
+
+* Còn thiếu
+* Input số tiền
+* Method
+* Note
+* Thu tiền button
+
+---
+
+# 6. KEEP BUSINESS LOGIC INTACT
+
+Do NOT change:
+
+* Supabase API calls
+* confirm logic
+* payment logic (handlePay)
+* data flow (API is source of truth)
+
+Only move UI
+
+---
+
+# 7. CODE QUALITY
+
+* Remove all unused imports
+* Remove dead code
+* Ensure no runtime errors
+* Keep Tailwind (or existing styles)
+* Clean readable JSX
+
+---
+
+# 8. OUTPUT
+
+* Full updated component code
+* Clean expandable row implementation
+* No drawer code remaining
+* No duplicate UI
