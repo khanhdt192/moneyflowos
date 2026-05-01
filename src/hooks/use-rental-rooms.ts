@@ -8,9 +8,6 @@ type RentalRoomOverviewRow = {
   name: string;
   tenant: string | null;
   floor: number | null;
-  start_index: number | null;
-  end_index: number | null;
-  water_m3: number | null;
   bill_id: string | null;
   bill_status: RentalBillStatus | null;
   total_amount: number | null;
@@ -40,11 +37,6 @@ export type RentalRoomUiModel = {
   bill_id: string | null;
   bill_status: RentalBillStatus | null;
   total_amount: number | null;
-  reading: {
-    start: number | null;
-    end: number | null;
-    water: number | null;
-  };
   bill: RentalBillUi | null;
   ui: {
     status: "missing" | "ready" | "confirmed" | "partial" | "paid";
@@ -127,19 +119,12 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
     bill_id: row.bill_id,
     bill_status: row.bill_status,
     total_amount: row.total_amount,
-    reading: {
-      start: row.start_index,
-      end: row.end_index,
-      water: row.water_m3,
-    },
     bill,
     ui: {
       status: mapStatus(row),
       ...getActions(row),
     },
   };
-
-  console.log("MAPPED ROW:", mappedRow);
 
   return mappedRow;
 }
