@@ -18,7 +18,7 @@ import {
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
-import { formatVND } from "@/lib/format";
+import { formatMoney } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { exportSingleInvoice, exportAllInvoices } from "@/lib/rental-pdf";
 import { useRentalRooms, type RentalRoomUiModel } from "@/hooks/use-rental-rooms";
@@ -259,7 +259,7 @@ export function ChotThang() {
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = selectedBill.totalAmount - selectedBill.paidAmount;
     if (amount > remaining + 0.5) {
-      toast.error(`Vượt quá số tiền cần thu (${formatVND(remaining)})`);
+      toast.error(`Vượt quá số tiền cần thu (${formatMoney(remaining)})`);
       return;
     }
     try {
@@ -366,9 +366,9 @@ export function ChotThang() {
       {/* ── KPI summary ── */}
       {allApiBills.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard label="Tổng hóa đơn" value={formatVND(totalBilled)} />
-          <SummaryCard label="Đã thu" value={formatVND(totalPaid)} accent="emerald" />
-          <SummaryCard label="Còn lại" value={formatVND(Math.max(0, totalBilled - totalPaid))} accent="rose" />
+          <SummaryCard label="Tổng hóa đơn" value={formatMoney(totalBilled)} />
+          <SummaryCard label="Đã thu" value={formatMoney(totalPaid)} accent="emerald" />
+          <SummaryCard label="Còn lại" value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
           <SummaryCard label="Đã chốt / Đã thu" value={`${confirmedCount} / ${paidCount} phòng`} />
         </div>
       )}
@@ -479,7 +479,7 @@ export function ChotThang() {
                     {liveTotal != null ? (
                       <div className="inline-flex flex-col items-end gap-0.5">
                         <span className={`font-semibold ${!hasBill ? "text-muted-foreground" : ""}`}>
-                          {formatVND(liveTotal)}
+                          {formatMoney(liveTotal)}
                         </span>
                         {!hasBill && (
                           <span className="text-[10px] text-muted-foreground/60">ước tính</span>
@@ -608,7 +608,7 @@ export function ChotThang() {
                                 </span>
                                 {p.note && <span className="text-muted-foreground">· {p.note}</span>}
                               </div>
-                              <span className="font-medium text-emerald-600">+{formatVND(p.amount)}</span>
+                              <span className="font-medium text-emerald-600">+{formatMoney(p.amount)}</span>
                             </div>
                           ))}
                       </div>
@@ -622,7 +622,7 @@ export function ChotThang() {
                       <div className="text-sm text-muted-foreground flex justify-between">
                         <span>Còn thiếu</span>
                         <span className="font-semibold text-rose-600">
-                          {formatVND(Math.max(0, selectedBill.totalAmount - selectedBill.paidAmount))}
+                          {formatMoney(Math.max(0, selectedBill.totalAmount - selectedBill.paidAmount))}
                         </span>
                       </div>
                       <input
@@ -771,23 +771,23 @@ function BillBreakdown({
           {rows.map((r) => (
             <tr key={r.label} className="border-b border-border last:border-0">
               <td className="px-4 py-2 text-muted-foreground">{r.label}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatVND(r.amount)}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatMoney(r.amount)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-border bg-muted/30">
             <td className="px-4 py-2.5 font-semibold">Tổng cộng</td>
-            <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatVND(bill.totalAmount)}</td>
+            <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatMoney(bill.totalAmount)}</td>
           </tr>
           <tr className="border-t border-border">
             <td className="px-4 py-2 text-emerald-600">Đã thanh toán</td>
-            <td className="px-4 py-2 text-right text-emerald-600 tabular-nums">{formatVND(bill.paidAmount)}</td>
+            <td className="px-4 py-2 text-right text-emerald-600 tabular-nums">{formatMoney(bill.paidAmount)}</td>
           </tr>
           <tr className="border-t border-border">
             <td className="px-4 py-2 font-semibold text-rose-600">Còn lại</td>
             <td className="px-4 py-2 text-right font-semibold text-rose-600 tabular-nums">
-              {formatVND(Math.max(0, bill.totalAmount - bill.paidAmount))}
+              {formatMoney(Math.max(0, bill.totalAmount - bill.paidAmount))}
             </td>
           </tr>
         </tfoot>
