@@ -259,6 +259,15 @@ function InvoiceModal({
   if (!bill) return null;
   const remaining = Math.max(bill.totalAmount - bill.paidAmount, 0);
   const [m, y] = cycleId.split("-");
+  const otherFees = (bill as RentalRoomBill & { other_fees?: Record<string, number | string | null> }).other_fees ?? {};
+  const feeAmount = (keys: string[]) => {
+    for (const key of keys) {
+      const raw = otherFees[key];
+      const value = typeof raw === "number" ? raw : Number(raw);
+      if (Number.isFinite(value)) return value;
+    }
+    return 0;
+  };
 
   return (
     <Dialog open={!!bill} onOpenChange={(open) => !open && onClose()}>
@@ -271,9 +280,9 @@ function InvoiceModal({
           <Row label="Tiền thuê" value={formatMoney(bill.rentAmount)} />
           <Row label="Tiền điện" value={formatMoney(bill.electricityAmount)} />
           <Row label="Tiền nước" value={formatMoney(bill.waterAmount)} />
-          <Row label="Wifi" value={formatMoney(bill.wifiAmount)} />
-          <Row label="Vệ sinh" value={formatMoney(bill.cleaningAmount)} />
-          {bill.otherAmount > 0 && <Row label="Phụ phí khác" value={formatMoney(bill.otherAmount)} />}
+          <Row label="Wifi" value={formatMoney(feeAmount(["wifi", "wifiAmount"]))} />
+          <Row label="Rác / vệ sinh" value={formatMoney(feeAmount(["cleaning", "cleaningAmount", "rac_ve_sinh"]))} />
+          <Row label="Phụ phí khác" value={formatMoney(feeAmount(["other", "otherAmount", "phu_phi_khac"]))} />
           <div className="border-t border-border pt-2">
             <Row label="Tổng cộng" value={formatMoney(bill.totalAmount)} bold />
           </div>
