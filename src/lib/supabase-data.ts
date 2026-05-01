@@ -244,6 +244,25 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
 /* ─── mutations ───────────────────────────────────────────── */
 
 export const cloud = {
+  async getCycleId(userId: string, month: number, year: number): Promise<string | null> {
+    const { data, error } = await supabase
+      .from("rental_billing_cycles")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("month", month)
+      .eq("year", year)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.id ?? null;
+  },
+
+  async resolveCycleId(userId: string, cycleIdOrMonthKey: string): Promise<string | null> {
+    if (/^\d{4}-\d{2}$/.test(cycleIdOrMonthKey)) {
+      const [year, month] = cycleIdOrMonthKey.split("-").map(Number);
+      return this.getCycleId(userId, month, year);
+    }
+    return cycleIdOrMonthKey || null;
+  },
   /* profile */
   async updateProfile(userId: string, patch: { full_name?: string; currency?: string; active_month?: string }) {
     return supabase.from("profiles").upsert({ id: userId, ...patch }).select().single();
@@ -469,12 +488,17 @@ export const cloud = {
   },
 
   async confirmBill(roomId: string, cycleId: string) {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (!userId) throw new Error("Not logged in");
+    const resolvedCycleId = await this.resolveCycleId(userId, cycleId);
+    if (!resolvedCycleId) throw new Error("Cycle not found");
     const now = new Date().toISOString();
     const { error } = await supabase
       .from("rental_room_bills")
       .update({ status: "confirmed", confirmed_at: now })
       .eq("room_id", roomId)
-      .eq("cycle_id", cycleId)
+      .eq("cycle_id", resolvedCycleId)
       .eq("status", "draft"); // only confirm drafts, safety guard
     if (error) throw error;
   },
@@ -553,11 +577,16 @@ export const cloud = {
   },
 
   async payBill(roomId: string, cycleId: string, amount: number, method = "cash", note?: string) {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (!userId) throw new Error("Not logged in");
+    const resolvedCycleId = await this.resolveCycleId(userId, cycleId);
+    if (!resolvedCycleId) throw new Error("Cycle not found");
     const { data: bill, error: billErr } = await supabase
       .from("rental_room_bills")
       .select("*")
       .eq("room_id", roomId)
-      .eq("cycle_id", cycleId)
+      .eq("cycle_id", resolvedCycleId)
       .single();
     if (billErr || !bill) throw new Error("Bill not found");
     if (!["confirmed", "partial_paid"].includes(bill.status)) throw new Error("Bill is not payable");
@@ -569,11 +598,16 @@ export const cloud = {
   },
 
   async resetBillToDraft(roomId: string, cycleId: string) {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (!userId) throw new Error("Not logged in");
+    const resolvedCycleId = await this.resolveCycleId(userId, cycleId);
+    if (!resolvedCycleId) throw new Error("Cycle not found");
     const { error } = await supabase
       .from("rental_room_bills")
       .update({ status: "draft", paid_amount: 0, paid_at: null, confirmed_at: null })
       .eq("room_id", roomId)
-      .eq("cycle_id", cycleId)
+      .eq("cycle_id", resolvedCycleId)
       .eq("status", "confirmed");
     if (error) throw error;
   },
