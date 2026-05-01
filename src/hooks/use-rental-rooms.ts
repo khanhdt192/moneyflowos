@@ -119,7 +119,7 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
       }
     : null;
 
-  return {
+  const mappedRow: RentalRoomUiModel = {
     room_id: row.room_id,
     name: row.name,
     tenant: row.tenant,
@@ -138,6 +138,10 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
       ...getActions(row),
     },
   };
+
+  console.log("MAPPED ROW:", mappedRow);
+
+  return mappedRow;
 }
 
 export function useRentalRooms(currentCycleId: string | null | undefined) {
