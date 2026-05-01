@@ -398,7 +398,7 @@ export function ChotThang() {
                     {/* Số đầu */}
                     <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       {ground ? (
-                        <span className="text-xs text-muted-foreground italic">T1 — tổng</span>
+                        <span className="text-xs text-muted-foreground italic">—</span>
                       ) : (
                         <input
                           type="number"
