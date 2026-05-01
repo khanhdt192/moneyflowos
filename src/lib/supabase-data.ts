@@ -429,6 +429,7 @@ export const cloud = {
       otherAmount: number;
       totalAmount: number;
     },
+    status: RentalBillStatus = "draft",
   ) {
     const { data, error } = await supabase
       .from("rental_room_bills")
@@ -445,7 +446,7 @@ export const cloud = {
           other_amount: amounts.otherAmount,
           total_amount: amounts.totalAmount,
           paid_amount: 0,
-          status: "draft",
+          status,
         },
         { onConflict: "room_id,cycle_id", ignoreDuplicates: false },
       )
@@ -536,6 +537,20 @@ export const cloud = {
       .eq("id", billId);
     if (error) throw error;
     return status;
+  },
+
+  async resetBillToDraft(billId: string) {
+    const { error } = await supabase
+      .from("rental_room_bills")
+      .update({ status: "draft", paid_amount: 0, paid_at: null, confirmed_at: null })
+      .eq("id", billId)
+      .in("status", ["confirmed", "partial_paid"]);
+    if (error) throw error;
+  },
+
+  async deletePaymentsByBill(billId: string) {
+    const { error } = await supabase.from("rental_payments").delete().eq("bill_id", billId);
+    if (error) throw error;
   },
 
   /* full reset */

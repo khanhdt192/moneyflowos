@@ -394,10 +394,27 @@ class FinanceStore {
       this.mutateRental({
         electricityReadings: this.state.rental.electricityReadings.map((r) => (r.id === nextReading.id ? final : r)),
       }, false);
+      await this.upsertDraftBillFromReading(roomId, cycleId, dbCycleId);
     } catch (err) {
       console.error("[store] upsertReading failed", err);
       toast.error("Không lưu được số đo");
     }
+  }
+
+  private async upsertDraftBillFromReading(roomId: string, cycleId: string, dbCycleId?: string) {
+    if (!this.userId) return;
+    const room = this.state.rental.rooms.find((r) => r.id === roomId);
+    if (!room || !room.occupied) return;
+    const existingBill = this.state.rental.roomBills.find((b) => b.roomId === roomId && b.cycleId === cycleId);
+    if (existingBill && ["confirmed", "partial_paid", "paid"].includes(existingBill.status)) return;
+    const reading = this.state.rental.electricityReadings.find((r) => r.roomId === roomId && r.cycleId === cycleId);
+    const amounts = calcBillAmounts(room, this.state.rental.settings, reading);
+    const isReady = !!reading && reading.endIndex > 0 && reading.waterM3 > 0 && amounts.rentAmount > 0;
+    const status: RentalBillStatus = isReady ? "ready" : "draft";
+    const [year, month] = cycleId.split("-").map(Number);
+    const targetCycleId = dbCycleId ?? await cloud.upsertCycle(this.userId, month, year);
+    await cloud.upsertBill(this.userId, roomId, targetCycleId, amounts, status);
+    await this.refetch();
   }
 
   /* ─── billing: draft creation ───────────────────────────── */
@@ -436,7 +453,7 @@ class FinanceStore {
         await cloud.updateBillAmounts(existingBill.id, amounts);
       } else {
         // Create new draft
-        await cloud.upsertBill(this.userId!, room.id, dbCycleId, amounts);
+        await cloud.upsertBill(this.userId!, room.id, dbCycleId, amounts, "draft");
         created++;
       }
     }
@@ -469,7 +486,7 @@ class FinanceStore {
   async confirmSingleBill(billId: string): Promise<void> {
     if (!this.userId) return;
     const bill = this.state.rental.roomBills.find((b) => b.id === billId);
-    if (!bill || bill.status !== "draft") return;
+    if (!bill || bill.status !== "ready") return;
 
     // Optimistic update
     this.mutateRental({
@@ -519,6 +536,24 @@ class FinanceStore {
     } catch (err) {
       console.error("[store] recordPayment failed", err);
       toast.error("Không lưu được thanh toán");
+      this.refetchSilent();
+    }
+  }
+
+  async rollbackBill(billId: string): Promise<void> {
+    if (!this.userId) return;
+    const bill = this.state.rental.roomBills.find((b) => b.id === billId);
+    if (!bill || bill.status === "paid" || bill.status === "draft") return;
+    this.mutateRental({
+      roomBills: this.state.rental.roomBills.map((b) => b.id === billId ? { ...b, status: "draft", paidAmount: 0, paidAt: undefined, confirmedAt: undefined } : b),
+      payments: this.state.rental.payments.filter((p) => p.billId !== billId),
+    });
+    try {
+      await cloud.resetBillToDraft(billId);
+      await cloud.deletePaymentsByBill(billId);
+      await this.refetch();
+    } catch {
+      toast.error("Không hoàn tác được hóa đơn");
       this.refetchSilent();
     }
   }
