@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,10 +23,10 @@ import { useRentalRooms } from "@/hooks/use-rental-rooms";
 
 type BillStatus = "missing" | "ready" | "confirmed" | "partial" | "paid";
 
-function getStatus(row: { bill_id: string | null; bill_status: string | null } | undefined): BillStatus {
-  if (!row?.bill_id) return "missing";
+function mapStatus(bill: { status: string } | null | undefined): BillStatus {
+  if (!bill) return "missing";
 
-  switch (row.bill_status) {
+  switch (bill.status) {
     case "draft":
       return "ready";
     case "confirmed":
@@ -66,7 +66,7 @@ export function ChotThang() {
   const [year, setYear]   = useState(now.getFullYear());
   const cycleId   = `${year}-${String(month).padStart(2, "0")}`;
   const settings  = state.rental.settings;
-  const { rooms: apiRooms, refetch: fetchRooms } = useRentalRooms(cycleId);
+  const { rooms: apiRooms } = useRentalRooms(cycleId);
 
   /* local editing rows (controlled inputs) */
   const [rows, setRows]           = useState<Record<string, RowData>>({});
@@ -95,7 +95,7 @@ export function ChotThang() {
   const billMap = Object.fromEntries(
     state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
   );
-  const apiRoomMap = Object.fromEntries(apiRooms.map((r) => [r.room_id, r]));
+  const apiBillMap = useMemo(() => Object.fromEntries(apiRooms.map((r) => [r.room_id, r.bill])), [apiRooms]);
   const readingMap = Object.fromEntries(
     state.rental.electricityReadings
       .filter((r) => r.cycleId === cycleId)
@@ -280,9 +280,8 @@ export function ChotThang() {
               const ground  = isT1(room);
               const ss      = saveStates[room.id] ?? "idle";
 
-              const apiRow = apiRoomMap[room.id];
-              console.log("ROW DATA:", apiRow);
-              const displayStatus = getStatus(apiRow);
+              const apiBill = apiBillMap[room.id] ?? null;
+              const displayStatus = mapStatus(apiBill);
               const cfg = STATUS_CFG[displayStatus];
 
               const liveTotal = bill?.totalAmount ?? null;
