@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Zap,
-  CheckCircle,
   CheckCircle2,
   AlertTriangle,
   DollarSign,
@@ -17,9 +15,9 @@ import {
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
-import { formatMoney } from "@/utils/format";
+import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { exportSingleInvoice, exportAllInvoices } from "@/lib/rental-pdf";
+import { exportSingleInvoice } from "@/lib/rental-pdf";
 
 /* ─── types ───────────────────────────────────────────────── */
 
@@ -28,6 +26,7 @@ type BillStatus =
   | "no_reading"
   | "has_reading"
   | "draft"
+  | "ready"
   | "confirmed"
   | "partial_paid"
   | "paid"
@@ -46,6 +45,7 @@ function getDisplayStatus(
   if (!bill) return hasReading ? "has_reading" : "no_reading";
   if (bill.status === "paid") return "paid";
   if (bill.status === "partial_paid") return "partial_paid";
+  if (bill.status === "ready") return "ready";
   if (bill.status === "confirmed") {
     const [y, m] = cycleId.split("-").map(Number);
     const now = new Date();
@@ -61,7 +61,8 @@ const STATUS_CFG: Record<BillStatus, { label: string; cls: string }> = {
   empty:        { label: "Trống",        cls: "bg-slate-100 text-slate-500 border-slate-200" },
   no_reading:   { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   has_reading:  { label: "Đã nhập số",   cls: "bg-sky-50 text-sky-700 border-sky-200" },
-  draft:        { label: "Nháp",         cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  draft:        { label: "Chưa đủ dữ liệu", cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  ready:        { label: "Sẵn sàng chốt", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   confirmed:    { label: "Đã chốt",      cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   partial_paid: { label: "Thu một phần", cls: "bg-violet-50 text-violet-700 border-violet-200" },
   paid:         { label: "Đã thu",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -114,8 +115,6 @@ export function ChotThang() {
   const [payNote, setPayNote]     = useState("");
 
   /* toolbar async state */
-  const [drafting,   setDrafting]   = useState(false);
-  const [confirming, setConfirming] = useState(false);
 
   /* clear local rows when month changes */
   useEffect(() => {
@@ -139,7 +138,6 @@ export function ChotThang() {
   const selectedRoom  = selectedId ? roomMap[selectedId] : null;
   const selectedBill  = selectedId ? billMap[selectedId] : undefined;
 
-  const draftCount     = Object.values(billMap).filter((b) => b.status === "draft").length;
   const confirmedCount = Object.values(billMap).filter((b) =>
     ["confirmed", "partial_paid", "paid"].includes(b.status)).length;
   const paidCount      = Object.values(billMap).filter((b) => b.status === "paid").length;
@@ -186,39 +184,10 @@ export function ChotThang() {
 
   /* ─── toolbar handlers ──────────────────────────────────── */
 
-  async function handleCreateDrafts() {
-    setDrafting(true);
-    try {
-      const { created, skipped } = await actions.createDraftBills(month, year);
-      if (created === 0 && skipped === 0) toast.info("Không có phòng đang thuê");
-      else if (created === 0) toast.info(`Tất cả ${skipped} phòng đã có hóa đơn (không ghi đè)`);
-      else toast.success(`Đã tạo ${created} hóa đơn nháp${skipped > 0 ? `, bỏ qua ${skipped} đã chốt` : ""}`);
-    } catch (err) {
-      console.error(err);
-      toast.error("Không tạo được hóa đơn");
-    } finally {
-      setDrafting(false);
-    }
-  }
-
-  async function handleConfirmAll() {
-    setConfirming(true);
-    try {
-      const { confirmed, alreadyDone } = await actions.confirmBills(month, year);
-      if (confirmed === 0 && alreadyDone === 0) toast.info("Chưa có hóa đơn nháp nào để chốt");
-      else if (confirmed === 0) toast.info("Hóa đơn tháng này đã được chốt.");
-      else toast.success(`Đã chốt ${confirmed} hóa đơn.`);
-    } catch (err) {
-      console.error(err);
-      toast.error("Không chốt được hóa đơn");
-    } finally {
-      setConfirming(false);
-    }
-  }
 
   async function handleConfirmSingle(roomId: string) {
     const bill = billMap[roomId];
-    if (!bill || bill.status !== "draft") return;
+    if (!bill || bill.status !== "ready") return;
     try {
       await actions.confirmSingleBill(bill.id);
       toast.success(`Đã chốt ${roomMap[roomId]?.name}`);
@@ -229,7 +198,7 @@ export function ChotThang() {
 
   async function handlePay() {
     if (!selectedBill) return;
-    const amount = parseFloat(payInput.replace(/[^\d.]/g, ""));
+    const amount = parseNumber(payInput);
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = selectedBill.totalAmount - selectedBill.paidAmount;
     if (amount > remaining + 0.5) {
@@ -254,14 +223,6 @@ export function ChotThang() {
     toast.success(`Đang xuất hóa đơn ${room.name}…`);
   }
 
-  function handleExportAll() {
-    const inputs = occupiedRooms
-      .filter((r) => billMap[r.id])
-      .map((r) => ({ room: r, bill: billMap[r.id]!, month, year, settings, invoiceSettings: state.rental.invoiceSettings }));
-    if (inputs.length === 0) { toast.error("Chưa có hóa đơn nào để xuất"); return; }
-    exportAllInvoices(inputs);
-    toast.success(`Đang xuất ${inputs.length} hóa đơn…`);
-  }
 
   /* ─── month nav ─────────────────────────────────────────── */
 
@@ -306,24 +267,9 @@ export function ChotThang() {
         </div>
 
         {/* Toolbar — 3 actions (save button removed) */}
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={handleCreateDrafts} disabled={drafting}
-            className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50">
-            {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-            Tạo hóa đơn nháp
-          </button>
-          <button type="button" onClick={handleConfirmAll} disabled={confirming || draftCount === 0}
-            className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90 transition-colors disabled:opacity-50">
-            {confirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-            Chốt tất cả {draftCount > 0 && `(${draftCount})`}
-          </button>
-          <button type="button" onClick={handleExportAll}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors">
-            <Download className="h-3.5 w-3.5" />
-            Xuất tất cả PDF
-          </button>
-        </div>
+        <div />
       </div>
+
 
       {/* ── KPI summary ── */}
       {Object.keys(billMap).length > 0 && (
@@ -378,7 +324,7 @@ export function ChotThang() {
 
               return (
                 <tr key={room.id}
-                  className={`bg-card transition-colors ${room.occupied ? "hover:bg-muted/10" : "opacity-50"}`}>
+                  className={`bg-card transition-colors ${displayStatus === "ready" ? "bg-amber-50/30" : ""} ${room.occupied ? "hover:bg-muted/10" : "opacity-50"}`}>
                   <td className="px-4 py-3 font-medium">{room.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {room.tenant || <span className="italic opacity-50">Trống</span>}
@@ -471,7 +417,7 @@ export function ChotThang() {
                           label="Chốt"
                           onClick={() => handleConfirmSingle(room.id)}
                           color="indigo"
-                          disabled={bill.status !== "draft"}
+                          disabled={bill.status !== "ready"}
                         />
                         <RowBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
@@ -497,6 +443,13 @@ export function ChotThang() {
                           onClick={() => handleExportSingle(room.id)}
                           color="rose"
                         />
+                        <RowBtn
+                          icon={<X className="h-3.5 w-3.5" />}
+                          label="Hoàn tác"
+                          onClick={() => void actions.rollbackBill(bill.id)}
+                          color="slate"
+                          disabled={!(bill.status === "confirmed" || bill.status === "partial_paid")}
+                        />
                       </div>
                     ) : null}
                   </td>
@@ -510,8 +463,8 @@ export function ChotThang() {
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
         <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu/cuối — tự động lưu sau 0.6s" />
-        <WorkflowStep n={2} title="Tạo hóa đơn nháp" desc="Bấm Tạo hóa đơn nháp để khóa chi phí" />
-        <WorkflowStep n={3} title="Chốt hóa đơn" desc='Kiểm tra xong bấm "Chốt tất cả"' />
+        <WorkflowStep n={2} title="Tự tạo hóa đơn" desc="Hệ thống tự tạo/cập nhật hóa đơn nháp" />
+        <WorkflowStep n={3} title="Chốt theo phòng" desc="Chỉ chốt khi trạng thái Sẵn sàng chốt" />
         <WorkflowStep n={4} title="Thu tiền" desc='Bấm "Thu tiền" khi khách thanh toán' />
       </div>
 
@@ -581,9 +534,9 @@ export function ChotThang() {
                         </span>
                       </div>
                       <input
-                        type="number"
+                        type="text"
                         value={payInput}
-                        onChange={(e) => setPayInput(e.target.value)}
+                        onChange={(e) => setPayInput(formatNumber(parseNumber(e.target.value.replace(/[^\d,]/g, ""))))}
                         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         placeholder="Số tiền thu"
                         autoFocus={drawerMode === "pay"}
@@ -651,7 +604,7 @@ export function ChotThang() {
                   <AlertTriangle className="h-8 w-8 text-amber-400" />
                   <p className="text-sm text-muted-foreground">
                     Chưa có hóa đơn cho phòng này tháng {month}/{year}.
-                    <br />Nhập chỉ số rồi bấm <strong>Tạo hóa đơn nháp</strong>.
+                    <br />Nhập chỉ số điện và nước để hệ thống tự tạo hóa đơn.
                   </p>
                 </div>
               )}

@@ -97,7 +97,7 @@ export interface RentalBillingCycle {
   closedAt?: string;
 }
 
-export type RentalBillStatus = "draft" | "confirmed" | "partial_paid" | "paid" | "cancelled";
+export type RentalBillStatus = "draft" | "ready" | "confirmed" | "partial_paid" | "paid" | "cancelled";
 
 export interface RentalRoomBill {
   id: string;
