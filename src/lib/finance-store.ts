@@ -444,7 +444,7 @@ class FinanceStore {
     const doneBills = this.state.rental.roomBills.filter((b) => b.cycleId === cycleId && b.status !== "draft" && b.status !== "cancelled");
 
     for (const bill of draftBills) {
-      await cloud.confirmBill(bill.id);
+      await cloud.confirmBill(bill.roomId, bill.cycleId);
     }
 
     if (draftBills.length > 0) await this.refetch();
@@ -457,7 +457,7 @@ class FinanceStore {
   async confirmSingleBill(billId: string): Promise<void> {
     if (!this.userId) return;
     const bill = this.state.rental.roomBills.find((b) => b.id === billId);
-    if (!bill || bill.status !== "ready") return;
+    if (!bill || bill.status !== "draft") return;
 
     // Optimistic update
     this.mutateRental({
@@ -467,7 +467,7 @@ class FinanceStore {
     });
 
     try {
-      await cloud.confirmBill(billId);
+      await cloud.confirmBill(bill.roomId, bill.cycleId);
     } catch {
       toast.error("Không chốt được hóa đơn");
       this.refetchSilent();
@@ -483,7 +483,8 @@ class FinanceStore {
   async recordPayment(billId: string, amount: number, method = "cash", note?: string): Promise<void> {
     if (!this.userId) return;
     const bill = this.state.rental.roomBills.find((b) => b.id === billId);
-    if (!bill) return;
+    if (!bill) throw new Error("No bill");
+    if (!["confirmed", "partial_paid"].includes(bill.status)) throw new Error("Bill is not payable");
 
     const newPaid = Math.min(bill.paidAmount + amount, bill.totalAmount);
     const remaining = bill.totalAmount - newPaid;
@@ -501,8 +502,7 @@ class FinanceStore {
     });
 
     try {
-      await cloud.insertPayment(this.userId, billId, bill.roomId, amount, method, note);
-      await cloud.updateBillPayment(billId, newPaid, bill.totalAmount);
+      await cloud.payBill(bill.roomId, bill.cycleId, amount, method, note);
       await this.refetch();
     } catch (err) {
       console.error("[store] recordPayment failed", err);
@@ -520,7 +520,7 @@ class FinanceStore {
       payments: this.state.rental.payments.filter((p) => p.billId !== billId),
     });
     try {
-      await cloud.resetBillToDraft(billId);
+      await cloud.resetBillToDraft(bill.roomId, bill.cycleId);
       await cloud.deletePaymentsByBill(billId);
       await this.refetch();
     } catch {

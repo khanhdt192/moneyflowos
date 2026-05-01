@@ -468,12 +468,13 @@ export const cloud = {
     return data;
   },
 
-  async confirmBill(billId: string) {
+  async confirmBill(roomId: string, cycleId: string) {
     const now = new Date().toISOString();
     const { error } = await supabase
       .from("rental_room_bills")
       .update({ status: "confirmed", confirmed_at: now })
-      .eq("id", billId)
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
       .eq("status", "draft"); // only confirm drafts, safety guard
     if (error) throw error;
   },
@@ -551,12 +552,29 @@ export const cloud = {
     return status;
   },
 
-  async resetBillToDraft(billId: string) {
+  async payBill(roomId: string, cycleId: string, amount: number, method = "cash", note?: string) {
+    const { data: bill, error: billErr } = await supabase
+      .from("rental_room_bills")
+      .select("*")
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
+      .single();
+    if (billErr || !bill) throw new Error("Bill not found");
+    if (!["confirmed", "partial_paid"].includes(bill.status)) throw new Error("Bill is not payable");
+
+    const nextPaidAmount = Math.min(num(bill.paid_amount) + amount, num(bill.total_amount));
+    const status = await this.updateBillPayment(bill.id, nextPaidAmount, num(bill.total_amount));
+    const payment = await this.insertPayment(bill.user_id, bill.id, roomId, amount, method, note);
+    return { status, payment };
+  },
+
+  async resetBillToDraft(roomId: string, cycleId: string) {
     const { error } = await supabase
       .from("rental_room_bills")
       .update({ status: "draft", paid_amount: 0, paid_at: null, confirmed_at: null })
-      .eq("id", billId)
-      .in("status", ["confirmed", "partial_paid"]);
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
+      .eq("status", "confirmed");
     if (error) throw error;
   },
 
