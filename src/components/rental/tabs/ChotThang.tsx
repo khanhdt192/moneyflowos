@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   DollarSign,
-  FileText,
   Download,
   Loader2,
   Clock,
@@ -18,60 +17,41 @@ import type { RentalRoom, RentalRoomBill } from "@/lib/finance-types";
 import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { exportSingleInvoice } from "@/lib/rental-pdf";
+import { useRentalRooms } from "@/hooks/use-rental-rooms";
 
 /* ─── types ───────────────────────────────────────────────── */
 
-type BillStatus =
-  | "empty"
-  | "no_reading"
-  | "has_reading"
-  | "draft"
-  | "ready"
-  | "confirmed"
-  | "partial_paid"
-  | "paid"
-  | "overdue"
-  | "cancelled";
+type BillStatus = "missing" | "ready" | "confirmed" | "partial" | "paid";
+
+function getStatus(row: { bill_id: string | null; bill_status: string | null } | undefined): BillStatus {
+  if (!row?.bill_id) return "missing";
+
+  switch (row.bill_status) {
+    case "draft":
+      return "ready";
+    case "confirmed":
+      return "confirmed";
+    case "partial_paid":
+      return "partial";
+    case "paid":
+      return "paid";
+    default:
+      return "missing";
+  }
+}
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-function getDisplayStatus(
-  room: RentalRoom,
-  bill: RentalRoomBill | undefined,
-  hasReading: boolean,
-  cycleId: string,
-): BillStatus {
-  if (!room.occupied) return "empty";
-  if (!bill) return hasReading ? "has_reading" : "no_reading";
-  if (bill.status === "paid") return "paid";
-  if (bill.status === "partial_paid") return "partial_paid";
-  if (bill.status === "ready") return "ready";
-  if (bill.status === "confirmed") {
-    const [y, m] = cycleId.split("-").map(Number);
-    const now = new Date();
-    if (y < now.getFullYear() || (y === now.getFullYear() && m < now.getMonth() + 1))
-      return "overdue";
-    return "confirmed";
-  }
-  if (bill.status === "cancelled") return "cancelled";
-  return "draft";
-}
-
 const STATUS_CFG: Record<BillStatus, { label: string; cls: string }> = {
-  empty:        { label: "Trống",        cls: "bg-slate-100 text-slate-500 border-slate-200" },
-  no_reading:   { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  has_reading:  { label: "Đã nhập số",   cls: "bg-sky-50 text-sky-700 border-sky-200" },
-  draft:        { label: "Chưa đủ dữ liệu", cls: "bg-slate-100 text-slate-500 border-slate-200" },
-  ready:        { label: "Sẵn sàng chốt", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  confirmed:    { label: "Đã chốt",      cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  partial_paid: { label: "Thu một phần", cls: "bg-violet-50 text-violet-700 border-violet-200" },
-  paid:         { label: "Đã thu",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  overdue:      { label: "Quá hạn",      cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  cancelled:    { label: "Đã huỷ",       cls: "bg-slate-100 text-slate-400 border-slate-200" },
+  missing:   { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  ready:     { label: "Chờ chốt", cls: "bg-sky-50 text-sky-700 border-sky-200" },
+  confirmed: { label: "Đã chốt", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  partial:   { label: "Thanh toán một phần", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  paid:      { label: "Đã thanh toán", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
 
 function isT1(room: RentalRoom) {
-  return room.floor === 1 || /t[aâ]ng\s*1/i.test(room.name);
+  return room.floor === 1;
 }
 
 type RowData = { start: string; end: string; water: string };
@@ -86,6 +66,7 @@ export function ChotThang() {
   const [year, setYear]   = useState(now.getFullYear());
   const cycleId   = `${year}-${String(month).padStart(2, "0")}`;
   const settings  = state.rental.settings;
+  const { rooms: apiRooms, refetch: fetchRooms } = useRentalRooms(cycleId);
 
   /* local editing rows (controlled inputs) */
   const [rows, setRows]           = useState<Record<string, RowData>>({});
@@ -114,6 +95,7 @@ export function ChotThang() {
   const billMap = Object.fromEntries(
     state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
   );
+  const apiRoomMap = Object.fromEntries(apiRooms.map((r) => [r.room_id, r]));
   const readingMap = Object.fromEntries(
     state.rental.electricityReadings
       .filter((r) => r.cycleId === cycleId)
@@ -161,6 +143,7 @@ export function ChotThang() {
       setSaveState(roomId, "saving");
       try {
         await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
+        await fetchRooms();
         setSaveState(roomId, "saved");
         setTimeout(() => setSaveState(roomId, "idle"), 2500);
       } catch {
@@ -293,12 +276,13 @@ export function ChotThang() {
             )}
             {allRooms.map((room) => {
               const bill    = billMap[room.id];
-              const reading = readingMap[room.id];
               const row     = getRow(room.id);
               const ground  = isT1(room);
               const ss      = saveStates[room.id] ?? "idle";
 
-              const displayStatus = getDisplayStatus(room, bill, !!reading, cycleId);
+              const apiRow = apiRoomMap[room.id];
+              console.log("ROW DATA:", apiRow);
+              const displayStatus = getStatus(apiRow);
               const cfg = STATUS_CFG[displayStatus];
 
               const liveTotal = bill?.totalAmount ?? null;
@@ -313,34 +297,26 @@ export function ChotThang() {
 
                   {/* Số đầu */}
                   <td className="px-4 py-2 text-center">
-                    {ground ? (
-                      <span className="text-xs text-muted-foreground italic">T1 — tổng</span>
-                    ) : (
-                      <input
+                    <input
                         type="number"
                         value={row.start}
                         onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
-                        disabled={!room.occupied}
+                        disabled={!room.occupied || ground}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                        placeholder="0"
+                        placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
                       />
-                    )}
                   </td>
 
                   {/* Số cuối */}
                   <td className="px-4 py-2 text-center">
-                    {ground ? (
-                      <span className="text-xs text-muted-foreground italic">—</span>
-                    ) : (
-                      <input
+                    <input
                         type="number"
                         value={row.end}
                         onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
-                        disabled={!room.occupied}
+                        disabled={!room.occupied || ground}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                        placeholder="0"
+                        placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
                       />
-                    )}
                   </td>
 
                   {/* Nước */}
@@ -402,7 +378,7 @@ export function ChotThang() {
                         />
                         <RowBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
-                          label="Thu tiền"
+                          label="Thanh toán"
                           onClick={() => {
                             setDrawerMode("pay");
                             setSelectedId(room.id);
@@ -410,13 +386,7 @@ export function ChotThang() {
                             setPayNote("");
                           }}
                           color="emerald"
-                          disabled={bill.status === "paid"}
-                        />
-                        <RowBtn
-                          icon={<FileText className="h-3.5 w-3.5" />}
-                          label="Chi tiết"
-                          onClick={() => { setDrawerMode("detail"); setSelectedId(room.id); }}
-                          color="slate"
+                          disabled={bill.status === "draft" || bill.status === "paid"}
                         />
                         <RowBtn
                           icon={<Download className="h-3.5 w-3.5" />}
@@ -429,7 +399,7 @@ export function ChotThang() {
                           label="Hoàn tác"
                           onClick={() => void actions.rollbackBill(bill.id)}
                           color="slate"
-                          disabled={!(bill.status === "confirmed" || bill.status === "partial_paid")}
+                          disabled={bill.status !== "confirmed"}
                         />
                       </div>
                     ) : null}

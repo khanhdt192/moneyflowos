@@ -7,6 +7,7 @@ type RentalRoomOverviewRow = {
   room_id: string;
   name: string;
   tenant: string | null;
+  floor: number | null;
   start_index: number | null;
   end_index: number | null;
   water_m3: number | null;
@@ -35,6 +36,9 @@ export type RentalRoomUiModel = {
   room_id: string;
   name: string;
   tenant: string | null;
+  floor: number | null;
+  bill_id: string | null;
+  bill_status: RentalBillStatus | null;
   reading: {
     start: number | null;
     end: number | null;
@@ -48,10 +52,10 @@ export type RentalRoomUiModel = {
   };
 };
 
-function mapStatus(bill: RentalBillUi | null): RentalRoomUiModel["ui"]["status"] {
-  if (!bill) return "missing";
+function mapStatus(row: Pick<RentalRoomOverviewRow, "bill_id" | "bill_status">): RentalRoomUiModel["ui"]["status"] {
+  if (!row.bill_id) return "missing";
 
-  switch (bill.status) {
+  switch (row.bill_status) {
     case "draft":
       return "ready";
     case "confirmed":
@@ -65,29 +69,29 @@ function mapStatus(bill: RentalBillUi | null): RentalRoomUiModel["ui"]["status"]
   }
 }
 
-function getActions(bill: RentalBillUi | null) {
-  if (!bill) {
+function getActions(row: Pick<RentalRoomOverviewRow, "bill_id" | "bill_status">) {
+  if (!row.bill_id) {
     return {
       can_confirm: false,
       can_pay: false,
     };
   }
 
-  if (bill.status === "draft") {
+  if (row.bill_status === "draft") {
     return {
       can_confirm: true,
       can_pay: false,
     };
   }
 
-  if (bill.status === "confirmed") {
+  if (row.bill_status === "confirmed") {
     return {
       can_confirm: false,
       can_pay: true,
     };
   }
 
-  if (bill.status === "paid") {
+  if (row.bill_status === "paid") {
     return {
       can_confirm: false,
       can_pay: false,
@@ -118,6 +122,9 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
     room_id: row.room_id,
     name: row.name,
     tenant: row.tenant,
+    floor: row.floor,
+    bill_id: row.bill_id,
+    bill_status: row.bill_status,
     reading: {
       start: row.start_index,
       end: row.end_index,
@@ -125,8 +132,8 @@ export function mapRoom(row: RentalRoomOverviewRow): RentalRoomUiModel {
     },
     bill,
     ui: {
-      status: mapStatus(bill),
-      ...getActions(bill),
+      status: mapStatus(row),
+      ...getActions(row),
     },
   };
 }
@@ -136,47 +143,40 @@ export function useRentalRooms(currentCycleId: string | null | undefined) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  async function fetchRooms() {
+    if (!currentCycleId) {
+      setRooms([]);
+      return;
+    }
 
-    async function run() {
-      if (!currentCycleId) {
-        setRooms([]);
-        return;
-      }
+    setLoading(true);
+    setError(null);
 
-      setLoading(true);
-      setError(null);
-
-      const { data, error: fetchError } = await supabase
+    const { data, error: fetchError } = await supabase
         .from("rental_room_overview")
         .select("*")
         .eq("cycle_id", currentCycleId);
 
-      if (!active) return;
-
-      if (fetchError) {
+    if (fetchError) {
         setError(fetchError.message);
         setRooms([]);
         setLoading(false);
-        return;
-      }
-
-      const mapped = (data ?? []).map((row) => mapRoom(row as RentalRoomOverviewRow));
-      setRooms(mapped);
-      setLoading(false);
+      return;
     }
 
-    void run();
+    const mapped = (data ?? []).map((row) => mapRoom(row as RentalRoomOverviewRow));
+    setRooms(mapped);
+    setLoading(false);
+  }
 
-    return () => {
-      active = false;
-    };
+  useEffect(() => {
+    void fetchRooms();
   }, [currentCycleId]);
 
   return {
     rooms,
     loading,
     error,
+    refetch: fetchRooms,
   };
 }
