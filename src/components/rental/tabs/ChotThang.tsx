@@ -130,6 +130,8 @@ export function ChotThang() {
   }
 
   function onReadingChange(roomId: string, field: keyof RowData, value: string) {
+    const apiRow = apiRoomMap[roomId];
+    if (apiRow?.bill_status && apiRow.bill_status !== "draft") return;
     const newRow = { ...getRow(roomId), [field]: value };
     setRows((p) => ({ ...p, [roomId]: newRow }));
 
@@ -302,7 +304,7 @@ export function ChotThang() {
                         type="number"
                         value={row.start}
                         onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
-                        disabled={!room.occupied || ground}
+                        disabled={!room.occupied || ground || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
                       />
@@ -314,7 +316,7 @@ export function ChotThang() {
                         type="number"
                         value={row.end}
                         onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
-                        disabled={!room.occupied || ground}
+                        disabled={!room.occupied || ground || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
                       />
@@ -326,7 +328,7 @@ export function ChotThang() {
                       type="number"
                       value={row.water}
                       onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
-                      disabled={!room.occupied}
+                      disabled={!room.occupied || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
                       className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                       placeholder="0"
                     />
@@ -377,7 +379,7 @@ export function ChotThang() {
                         />
                         <RowBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
-                          label="Thanh toán"
+                          label="Thu tiền"
                           onClick={() => {
                             setDrawerMode("pay");
                             setSelectedId(room.id);
@@ -385,7 +387,7 @@ export function ChotThang() {
                             setPayNote("");
                           }}
                           color="emerald"
-                          disabled={apiRow.bill_status === "draft" || apiRow.bill_status === "paid"}
+                          disabled={apiRow.bill_status !== "confirmed" && apiRow.bill_status !== "partial_paid"}
                         />
                         <RowBtn
                           icon={<Download className="h-3.5 w-3.5" />}
