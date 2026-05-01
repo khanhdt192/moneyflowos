@@ -60,14 +60,14 @@ function getActions(row: Pick<RentalRoomOverviewRow, "bill_id" | "bill_status">)
     };
   }
 
-  if (row.bill_status === "confirmed") {
+  if (row.bill_status === "confirmed" || row.bill_status === "partial_paid") {
     return {
       can_confirm: false,
       can_pay: true,
     };
   }
 
-  if (row.bill_status === "paid") {
+  if (row.bill_status === "paid" || row.bill_status === "cancelled") {
     return {
       can_confirm: false,
       can_pay: false,
@@ -157,6 +157,12 @@ export function useRentalRooms(currentCycleId: string | null | undefined) {
         .eq("month", month)
         .single();
       if (cycleError) {
+        // PGRST116 = no rows — cycle not yet created; treat as empty, not an error
+        if (cycleError.code === "PGRST116") {
+          setRooms([]);
+          setLoading(false);
+          return;
+        }
         setError(cycleError.message);
         setRooms([]);
         setLoading(false);

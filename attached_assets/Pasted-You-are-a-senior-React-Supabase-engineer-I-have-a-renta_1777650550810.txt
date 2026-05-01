@@ -1,0 +1,138 @@
+You are a senior React + Supabase engineer.
+
+I have a rental management app (MoneyFlowOS) with the following architecture:
+
+* Frontend: React (hooks-based)
+* Backend: Supabase
+* Data source: Postgres view `rental_room_overview`
+* Billing cycle is UUID-based (NOT string like "2026-05")
+* There is an RPC: `get_or_create_cycle(user_id, month, year)` that returns a cycle_id (UUID)
+
+---
+
+## CURRENT PROBLEM
+
+UI becomes stale after mutation:
+
+* User clicks "Confirm bill"
+* Database updates correctly
+* UI does NOT update immediately
+* Only updates after full page reload
+
+---
+
+## ROOT CAUSE (IMPORTANT)
+
+The UI is currently mixing 2 data sources:
+
+1. API data from Supabase (`useRentalRooms`)
+2. Local store (`useFinance` / `finance-store`)
+
+After mutation:
+
+* Local store is updated
+* API data is NOT refetched
+  → UI reads stale API data → incorrect status
+
+---
+
+## GOAL
+
+Refactor the system so that:
+
+👉 Supabase API becomes the SINGLE source of truth
+👉 Remove dependency on local store for bill status
+👉 UI always reflects latest DB state
+
+---
+
+## REQUIRED CHANGES
+
+### 1. Fix mutation flow
+
+After ANY mutation (confirm, payment, rollback, etc):
+
+* MUST trigger refetch from Supabase
+* DO NOT rely on local store updates
+
+Example expected pattern:
+
+```ts
+await confirmBill(billId);
+await refetch(); // required
+```
+
+---
+
+### 2. Refactor UI to use ONLY API data
+
+* Replace all usages of:
+
+  * `state.rental.roomBills`
+  * `billMap`
+* Use ONLY data from:
+
+  * `useRentalRooms(cycleId)`
+
+Status, total, actions → derive from API response
+
+---
+
+### 3. Ensure hook correctness
+
+In `useRentalRooms`:
+
+* Ensure it refetches when `cycleId` changes
+* Always set new state reference:
+
+```ts
+setRooms([...mapped]);
+```
+
+---
+
+### 4. Remove stale logic
+
+* Remove any logic where UI depends on outdated store
+* Avoid mixing API + local state for the same entity
+
+---
+
+### 5. (Optional but recommended)
+
+Implement optimistic UI:
+
+* Update UI immediately after action
+* Then refetch to sync
+
+---
+
+## EXPECTED RESULT
+
+* Clicking "Confirm" updates UI instantly (or after refetch)
+* No need to reload page
+* No stale state
+* Clean data flow:
+
+  Supabase → React → UI
+
+---
+
+## OUTPUT
+
+* Provide refactored code for:
+
+  1. `handleConfirmSingle`
+  2. Any affected UI logic
+  3. `useRentalRooms` improvements (if needed)
+
+* Explain briefly what was changed and why
+
+---
+
+IMPORTANT:
+
+* Do NOT introduce new global state
+* Do NOT use month string as identifier
+* ALWAYS use cycle_id (UUID)
+* Keep code clean and production-ready

@@ -468,6 +468,7 @@ class FinanceStore {
 
     try {
       await cloud.confirmBill(bill.roomId, bill.cycleId);
+      await this.refetch();
     } catch {
       toast.error("Không chốt được hóa đơn");
       this.refetchSilent();

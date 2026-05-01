@@ -2,60 +2,99 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  Zap,
+  CheckCircle,
   CheckCircle2,
   AlertTriangle,
   DollarSign,
+  FileText,
   Download,
   Loader2,
   Clock,
   Check,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
-import type { RentalRoom, RentalRoomBill } from "@/lib/finance-types";
-import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
+import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
+import { formatVND } from "@/lib/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { exportSingleInvoice } from "@/lib/rental-pdf";
-import { useRentalRooms } from "@/hooks/use-rental-rooms";
-import { supabase } from "@/integrations/supabase/client";
+import { exportSingleInvoice, exportAllInvoices } from "@/lib/rental-pdf";
+import { useRentalRooms, type RentalRoomUiModel } from "@/hooks/use-rental-rooms";
 
 /* ─── types ───────────────────────────────────────────────── */
 
-type BillStatus = "missing" | "ready" | "confirmed" | "partial" | "paid";
-
-function getStatus(row: { bill_id: string | null; bill_status: string | null } | undefined): BillStatus {
-  if (!row?.bill_id) return "missing";
-
-  switch (row.bill_status) {
-    case "draft":
-      return "ready";
-    case "confirmed":
-      return "confirmed";
-    case "partial_paid":
-      return "partial";
-    case "paid":
-      return "paid";
-    default:
-      return "missing";
-  }
-}
+type BillStatus =
+  | "empty"
+  | "no_reading"
+  | "has_reading"
+  | "draft"
+  | "confirmed"
+  | "partial_paid"
+  | "paid"
+  | "overdue"
+  | "cancelled";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 const STATUS_CFG: Record<BillStatus, { label: string; cls: string }> = {
-  missing:   { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  ready:     { label: "Chờ chốt", cls: "bg-sky-50 text-sky-700 border-sky-200" },
-  confirmed: { label: "Đã chốt", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  partial:   { label: "Thanh toán một phần", cls: "bg-violet-50 text-violet-700 border-violet-200" },
-  paid:      { label: "Đã thanh toán", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  empty:        { label: "Trống",        cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  no_reading:   { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  has_reading:  { label: "Đã nhập số",   cls: "bg-sky-50 text-sky-700 border-sky-200" },
+  draft:        { label: "Nháp",         cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  confirmed:    { label: "Đã chốt",      cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  partial_paid: { label: "Thu một phần", cls: "bg-violet-50 text-violet-700 border-violet-200" },
+  paid:         { label: "Đã thu",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  overdue:      { label: "Quá hạn",      cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  cancelled:    { label: "Đã huỷ",       cls: "bg-slate-100 text-slate-400 border-slate-200" },
 };
 
 function isT1(room: RentalRoom) {
-  return room.floor === 1;
+  return room.floor === 1 || /t[aâ]ng\s*1/i.test(room.name);
 }
 
 type RowData = { start: string; end: string; water: string };
+
+/**
+ * Derive display status from:
+ * - API bill status (from rental_room_overview — always fresh from DB)
+ * - whether a reading exists (from local store)
+ * - whether the room is occupied (from local store)
+ */
+function getDisplayStatus(
+  room: RentalRoom,
+  apiBillStatus: string | null,
+  hasReading: boolean,
+  cycleId: string,
+): BillStatus {
+  if (!room.occupied) return "empty";
+  if (!apiBillStatus) return hasReading ? "has_reading" : "no_reading";
+  if (apiBillStatus === "paid") return "paid";
+  if (apiBillStatus === "partial_paid") return "partial_paid";
+  if (apiBillStatus === "confirmed") {
+    const [y, m] = cycleId.split("-").map(Number);
+    const now = new Date();
+    if (y < now.getFullYear() || (y === now.getFullYear() && m < now.getMonth() + 1))
+      return "overdue";
+    return "confirmed";
+  }
+  if (apiBillStatus === "cancelled") return "cancelled";
+  return "draft";
+}
+
+/** Pure live-total calculator — mirrors calcBillAmounts in finance-store */
+function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
+  const ground = isT1(room);
+  const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
+  const water = parseFloat(row.water) || 0;
+  const elec = ground ? settings.t1ElectricityBill : kwh * settings.defaultElectricityRate;
+  const waterAmt = water * settings.waterRatePerM3;
+  const wifi = ground ? (settings.t1HasWifi ? settings.t1WifiPerRoom : 0) : settings.wifiPerRoom;
+  const cleaning = ground ? settings.t1Cleaning : settings.cleaningPerRoom;
+  const other = ground ? settings.t1OtherPerRoom : settings.otherPerRoom;
+  return room.rent + elec + waterAmt + wifi + cleaning + other;
+}
 
 /* ─── component ───────────────────────────────────────────── */
 
@@ -63,78 +102,72 @@ export function ChotThang() {
   const state   = useFinance();
   const actions = useFinanceActions();
   const now     = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
-  const [selectedYear, setSelectedYear]   = useState(now.getFullYear());
-  const [cycleId, setCycleId] = useState<string | null>(null);
-  const cycleKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear]   = useState(now.getFullYear());
+  const cycleId   = `${year}-${String(month).padStart(2, "0")}`;
   const settings  = state.rental.settings;
-  const { rooms: apiRooms, refetch: fetchRooms } = useRentalRooms(cycleId);
+
+  /* ── Supabase view: single source of truth for bill status ── */
+  const {
+    rooms: apiRooms,
+    loading: apiLoading,
+    refetch: apiRefetch,
+  } = useRentalRooms(cycleId);
+
+  const apiBillMap = Object.fromEntries(
+    apiRooms.map((r) => [r.room_id, r]),
+  ) as Record<string, RentalRoomUiModel>;
 
   /* local editing rows (controlled inputs) */
-  const [rows, setRows]           = useState<Record<string, RowData>>({});
-  /* per-room save status */
+  const [rows, setRows]             = useState<Record<string, RowData>>({});
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
-  /* debounce timers per room */
-  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const debounceTimers              = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   /* detail drawer */
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerMode, setDrawerMode] = useState<"detail" | "pay">("detail");
-  const [payInput, setPayInput]   = useState("");
-  const [payMethod, setPayMethod] = useState("cash");
-  const [payNote, setPayNote]     = useState("");
+  const [payInput, setPayInput]     = useState("");
+  const [payMethod, setPayMethod]   = useState("cash");
+  const [payNote, setPayNote]       = useState("");
 
   /* toolbar async state */
+  const [drafting,   setDrafting]   = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   /* clear local rows when month changes */
   useEffect(() => {
     setRows({});
     setSaveStates({});
-  }, [selectedMonth, selectedYear]);
+  }, [month, year]);
 
-  useEffect(() => {
-    const loadCycle = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
-      if (!userId) return;
-      const { data, error } = await supabase.rpc("get_or_create_cycle", {
-        p_user_id: userId,
-        p_month: selectedMonth,
-        p_year: selectedYear,
-      });
-      if (error || !data) {
-        console.warn("Missing cycleId, skip request");
-        setCycleId(null);
-        return;
-      }
-      setCycleId(data);
-      console.log("Cycle UUID:", data);
-    };
-    void loadCycle();
-  }, [selectedMonth, selectedYear]);
-
-  /* ─── derived maps ──────────────────────────────────────── */
+  /* ─── local store maps (for readings + drawer detail) ─────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
-  const billMap = Object.fromEntries(
-    state.rental.roomBills.filter((b) => b.cycleId === cycleKey).map((b) => [b.roomId, b]),
+
+  /** billMap from local store — used ONLY for drawer detail (rent/paid amounts) */
+  const storeBillMap = Object.fromEntries(
+    state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
   );
-  const apiRoomMap = Object.fromEntries(apiRooms.map((r) => [r.room_id, r]));
+
   const readingMap = Object.fromEntries(
     state.rental.electricityReadings
-      .filter((r) => r.cycleId === cycleKey)
+      .filter((r) => r.cycleId === cycleId)
       .map((r) => [r.roomId, r]),
   );
 
   const allRooms      = state.rental.rooms;
   const occupiedRooms = allRooms.filter((r) => r.occupied);
   const selectedRoom  = selectedId ? roomMap[selectedId] : null;
-  const selectedBill  = selectedId ? billMap[selectedId] : undefined;
+  /** Drawer always reads from local store — refetch() syncs it */
+  const selectedBill: RentalRoomBill | undefined = selectedId ? storeBillMap[selectedId] : undefined;
 
-  const confirmedCount = Object.values(billMap).filter((b) =>
-    ["confirmed", "partial_paid", "paid"].includes(b.status)).length;
-  const paidCount      = Object.values(billMap).filter((b) => b.status === "paid").length;
-  const totalBilled    = Object.values(billMap).reduce((s, b) => s + b.totalAmount, 0);
-  const totalPaid      = Object.values(billMap).reduce((s, b) => s + b.paidAmount, 0);
+  /* KPI from API data (fresh) */
+  const allApiBills = Object.values(apiBillMap).filter((r) => r.bill_id);
+  const draftCount     = allApiBills.filter((r) => r.bill_status === "draft").length;
+  const confirmedCount = allApiBills.filter((r) =>
+    r.bill_status && ["confirmed", "partial_paid", "paid"].includes(r.bill_status)).length;
+  const paidCount      = allApiBills.filter((r) => r.bill_status === "paid").length;
+  const totalBilled    = allApiBills.reduce((s, r) => s + (r.total_amount ?? 0), 0);
+  const totalPaid      = allApiBills.reduce((s, r) => s + (storeBillMap[r.room_id]?.paidAmount ?? 0), 0);
 
   /* ─── row helpers ───────────────────────────────────────── */
 
@@ -148,27 +181,23 @@ export function ChotThang() {
     };
   }
 
-  function setSaveState(roomId: string, state: SaveState) {
-    setSaveStates((s) => ({ ...s, [roomId]: state }));
+  function setSaveState(roomId: string, s: SaveState) {
+    setSaveStates((prev) => ({ ...prev, [roomId]: s }));
   }
 
   function onReadingChange(roomId: string, field: keyof RowData, value: string) {
-    const apiRow = apiRoomMap[roomId];
-    if (apiRow?.bill_status && apiRow.bill_status !== "draft") return;
     const newRow = { ...getRow(roomId), [field]: value };
     setRows((p) => ({ ...p, [roomId]: newRow }));
 
-    /* debounce auto-save */
     clearTimeout(debounceTimers.current[roomId]);
     debounceTimers.current[roomId] = setTimeout(async () => {
       const start = parseFloat(newRow.start) || 0;
       const end   = parseFloat(newRow.end)   || 0;
       const water = parseFloat(newRow.water) || 0;
-      if (end < start) return; // silently skip invalid range
+      if (end < start) return;
       setSaveState(roomId, "saving");
       try {
-        await actions.upsertElectricityReading(roomId, cycleKey, start, end, water);
-        await fetchRooms();
+        await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
         setSaveState(roomId, "saved");
         setTimeout(() => setSaveState(roomId, "idle"), 2500);
       } catch {
@@ -179,27 +208,58 @@ export function ChotThang() {
 
   /* ─── toolbar handlers ──────────────────────────────────── */
 
+  async function handleCreateDrafts() {
+    setDrafting(true);
+    try {
+      const { created, skipped } = await actions.createDraftBills(month, year);
+      if (created === 0 && skipped === 0) toast.info("Không có phòng đang thuê");
+      else if (created === 0) toast.info(`Tất cả ${skipped} phòng đã có hóa đơn (không ghi đè)`);
+      else toast.success(`Đã tạo ${created} hóa đơn nháp${skipped > 0 ? `, bỏ qua ${skipped} đã chốt` : ""}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Không tạo được hóa đơn");
+    } finally {
+      setDrafting(false);
+      await apiRefetch(); /* sync view immediately */
+    }
+  }
+
+  async function handleConfirmAll() {
+    setConfirming(true);
+    try {
+      const { confirmed, alreadyDone } = await actions.confirmBills(month, year);
+      if (confirmed === 0 && alreadyDone === 0) toast.info("Chưa có hóa đơn nháp nào để chốt");
+      else if (confirmed === 0) toast.info("Hóa đơn tháng này đã được chốt.");
+      else toast.success(`Đã chốt ${confirmed} hóa đơn.`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Không chốt được hóa đơn");
+    } finally {
+      setConfirming(false);
+      await apiRefetch(); /* sync view immediately */
+    }
+  }
 
   async function handleConfirmSingle(roomId: string) {
-    const bill = billMap[roomId];
-    const apiRow = apiRoomMap[roomId];
-    if (!apiRow?.bill_id || apiRow.bill_status !== "draft") return;
-    if (!bill) return;
+    const storeBill = storeBillMap[roomId];
+    if (!storeBill || storeBill.status !== "draft") return;
     try {
-      await actions.confirmSingleBill(bill.id);
+      await actions.confirmSingleBill(storeBill.id);
       toast.success(`Đã chốt ${roomMap[roomId]?.name}`);
     } catch {
       toast.error("Không chốt được hóa đơn");
+    } finally {
+      await apiRefetch(); /* view is single source of truth — force sync */
     }
   }
 
   async function handlePay() {
     if (!selectedBill) return;
-    const amount = parseNumber(payInput);
+    const amount = parseFloat(payInput.replace(/[^\d.]/g, ""));
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = selectedBill.totalAmount - selectedBill.paidAmount;
     if (amount > remaining + 0.5) {
-      toast.error(`Vượt quá số tiền cần thu (${formatMoney(remaining)})`);
+      toast.error(`Vượt quá số tiền cần thu (${formatVND(remaining)})`);
       return;
     }
     try {
@@ -209,33 +269,50 @@ export function ChotThang() {
       setSelectedId(null);
     } catch {
       toast.error("Không ghi nhận được thanh toán");
+    } finally {
+      await apiRefetch();
     }
   }
 
   function handleExportSingle(roomId: string) {
-    const room = roomMap[roomId];
-    const bill = billMap[roomId];
+    const room     = roomMap[roomId];
+    const bill     = storeBillMap[roomId];
     if (!room || !bill) { toast.error("Chưa có hóa đơn cho phòng này"); return; }
-    exportSingleInvoice({ room, bill, month: selectedMonth, year: selectedYear, settings, invoiceSettings: state.rental.invoiceSettings });
+    exportSingleInvoice({ room, bill, month, year, settings, invoiceSettings: state.rental.invoiceSettings });
     toast.success(`Đang xuất hóa đơn ${room.name}…`);
   }
 
+  function handleExportAll() {
+    const inputs = occupiedRooms
+      .filter((r) => storeBillMap[r.id])
+      .map((r) => ({
+        room: r,
+        bill: storeBillMap[r.id]!,
+        month,
+        year,
+        settings,
+        invoiceSettings: state.rental.invoiceSettings,
+      }));
+    if (inputs.length === 0) { toast.error("Chưa có hóa đơn nào để xuất"); return; }
+    exportAllInvoices(inputs);
+    toast.success(`Đang xuất ${inputs.length} hóa đơn…`);
+  }
 
   /* ─── month nav ─────────────────────────────────────────── */
 
   function prevMonth() {
-    if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear((y) => y - 1); }
-    else setSelectedMonth((m) => m - 1);
+    if (month === 1) { setMonth(12); setYear((y) => y - 1); }
+    else setMonth((m) => m - 1);
   }
   function nextMonth() {
-    const nm = selectedMonth === 12 ? 1 : selectedMonth + 1;
-    const ny = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
+    const nm = month === 12 ? 1 : month + 1;
+    const ny = month === 12 ? year + 1 : year;
     const cur = new Date();
     if (ny > cur.getFullYear() || (ny === cur.getFullYear() && nm > cur.getMonth() + 1)) return;
-    setSelectedMonth(nm); setSelectedYear(ny);
+    setMonth(nm); setYear(ny);
   }
 
-  const isCurrentMonth = selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear();
+  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
   /* ─── render ────────────────────────────────────────────── */
 
@@ -250,7 +327,7 @@ export function ChotThang() {
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="min-w-32 text-center text-base font-semibold">
-            Tháng {String(selectedMonth).padStart(2, "0")}/{selectedYear}
+            Tháng {String(month).padStart(2, "0")}/{year}
             {isCurrentMonth && (
               <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-normal text-blue-700">
                 Hiện tại
@@ -261,26 +338,44 @@ export function ChotThang() {
             className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors disabled:opacity-40">
             <ChevronRight className="h-4 w-4" />
           </button>
+          {apiLoading && (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          )}
         </div>
 
-        {/* Toolbar — 3 actions (save button removed) */}
-        <div />
+        {/* Toolbar */}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={handleCreateDrafts} disabled={drafting}
+            className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50">
+            {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+            Tạo hóa đơn nháp
+          </button>
+          <button type="button" onClick={handleConfirmAll} disabled={confirming || draftCount === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90 transition-colors disabled:opacity-50">
+            {confirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+            Chốt tất cả {draftCount > 0 && `(${draftCount})`}
+          </button>
+          <button type="button" onClick={handleExportAll}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/40 transition-colors">
+            <Download className="h-3.5 w-3.5" />
+            Xuất tất cả PDF
+          </button>
+        </div>
       </div>
 
-
       {/* ── KPI summary ── */}
-      {Object.keys(billMap).length > 0 && (
+      {allApiBills.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard label="Tổng hóa đơn" value={formatMoney(totalBilled)} />
-          <SummaryCard label="Đã thu" value={formatMoney(totalPaid)} accent="emerald" />
-          <SummaryCard label="Còn lại" value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
+          <SummaryCard label="Tổng hóa đơn" value={formatVND(totalBilled)} />
+          <SummaryCard label="Đã thu" value={formatVND(totalPaid)} accent="emerald" />
+          <SummaryCard label="Còn lại" value={formatVND(Math.max(0, totalBilled - totalPaid))} accent="rose" />
           <SummaryCard label="Đã chốt / Đã thu" value={`${confirmedCount} / ${paidCount} phòng`} />
         </div>
       )}
 
       {/* ── Main table ── */}
       <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-        <table key={apiRooms.length} className="w-full text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
@@ -302,20 +397,34 @@ export function ChotThang() {
               </tr>
             )}
             {allRooms.map((room) => {
-              const row     = getRow(room.id);
-              const ground  = isT1(room);
-              const ss      = saveStates[room.id] ?? "idle";
+              /** API row — authoritative for bill status & amounts */
+              const apiRow   = apiBillMap[room.id];
+              const reading  = readingMap[room.id];
+              const row      = getRow(room.id);
+              const ground   = isT1(room);
+              const ss       = saveStates[room.id] ?? "idle";
+              const hasLocalEdit = !!rows[room.id];
 
-              const apiRow = apiRoomMap[room.id];
-              console.log("ROW:", apiRow);
-              const displayStatus = getStatus(apiRow);
+              /* Status from the Supabase view (never stale after apiRefetch) */
+              const apiBillStatus = apiRow?.bill_status ?? null;
+              const displayStatus = getDisplayStatus(room, apiBillStatus, !!reading, cycleId);
               const cfg = STATUS_CFG[displayStatus];
 
-              const total = apiRow?.total_amount ?? 0;
+              /* can_confirm / can_pay driven by the view */
+              const canConfirm = apiRow?.ui?.can_confirm ?? false;
+              const canPay     = apiRow?.ui?.can_pay     ?? false;
+              const hasBill    = !!apiRow?.bill_id;
+
+              /* live total: use confirmed DB value when available, else estimate */
+              const liveTotal = apiRow?.total_amount != null
+                ? apiRow.total_amount
+                : room.occupied && (reading || hasLocalEdit)
+                  ? calcLiveTotal(room, settings, row)
+                  : null;
 
               return (
                 <tr key={room.id}
-                  className={`bg-card transition-colors ${displayStatus === "ready" ? "bg-amber-50/30" : ""} ${room.occupied ? "hover:bg-muted/10" : "opacity-50"}`}>
+                  className={`bg-card transition-colors ${room.occupied ? "hover:bg-muted/10" : "opacity-50"}`}>
                   <td className="px-4 py-3 font-medium">{room.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {room.tenant || <span className="italic opacity-50">Trống</span>}
@@ -323,26 +432,34 @@ export function ChotThang() {
 
                   {/* Số đầu */}
                   <td className="px-4 py-2 text-center">
-                    <input
+                    {ground ? (
+                      <span className="text-xs text-muted-foreground italic">T1 — tổng</span>
+                    ) : (
+                      <input
                         type="number"
                         value={row.start}
                         onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
-                        disabled={!room.occupied || ground || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
+                        disabled={!room.occupied}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                        placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
+                        placeholder="0"
                       />
+                    )}
                   </td>
 
                   {/* Số cuối */}
                   <td className="px-4 py-2 text-center">
-                    <input
+                    {ground ? (
+                      <span className="text-xs text-muted-foreground italic">—</span>
+                    ) : (
+                      <input
                         type="number"
                         value={row.end}
                         onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
-                        disabled={!room.occupied || ground || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
+                        disabled={!room.occupied}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                        placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
+                        placeholder="0"
                       />
+                    )}
                   </td>
 
                   {/* Nước */}
@@ -351,25 +468,26 @@ export function ChotThang() {
                       type="number"
                       value={row.water}
                       onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
-                      disabled={!room.occupied || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
+                      disabled={!room.occupied}
                       className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                       placeholder="0"
                     />
                   </td>
 
-                  {/* Tổng bill — auto-calc live */}
+                  {/* Tổng bill */}
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {total > 0 ? (
+                    {liveTotal != null ? (
                       <div className="inline-flex flex-col items-end gap-0.5">
-                        <span className="font-semibold">
-                          {formatMoney(total)}
+                        <span className={`font-semibold ${!hasBill ? "text-muted-foreground" : ""}`}>
+                          {formatVND(liveTotal)}
                         </span>
-                        
+                        {!hasBill && (
+                          <span className="text-[10px] text-muted-foreground/60">ước tính</span>
+                        )}
                       </div>
                     ) : (
                       <span className="opacity-40">—</span>
                     )}
-                    {/* per-row save indicator */}
                     {ss !== "idle" && (
                       <div className="mt-0.5 flex items-center justify-end gap-0.5">
                         {ss === "saving" && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
@@ -382,7 +500,7 @@ export function ChotThang() {
                     )}
                   </td>
 
-                  {/* Status badge */}
+                  {/* Status badge — from API */}
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}>
                       {cfg.label}
@@ -391,14 +509,14 @@ export function ChotThang() {
 
                   {/* Row actions */}
                   <td className="px-4 py-3">
-                    {room.occupied && apiRow?.bill_id ? (
+                    {room.occupied && hasBill ? (
                       <div className="flex items-center justify-center gap-1">
                         <RowBtn
                           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
                           label="Chốt"
                           onClick={() => handleConfirmSingle(room.id)}
                           color="indigo"
-                          disabled={apiRow.bill_status !== "draft"}
+                          disabled={!canConfirm}
                         />
                         <RowBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
@@ -410,20 +528,19 @@ export function ChotThang() {
                             setPayNote("");
                           }}
                           color="emerald"
-                          disabled={apiRow.bill_status !== "confirmed" && apiRow.bill_status !== "partial_paid"}
+                          disabled={!canPay}
+                        />
+                        <RowBtn
+                          icon={<FileText className="h-3.5 w-3.5" />}
+                          label="Chi tiết"
+                          onClick={() => { setDrawerMode("detail"); setSelectedId(room.id); }}
+                          color="slate"
                         />
                         <RowBtn
                           icon={<Download className="h-3.5 w-3.5" />}
                           label="PDF"
                           onClick={() => handleExportSingle(room.id)}
                           color="rose"
-                        />
-                        <RowBtn
-                          icon={<X className="h-3.5 w-3.5" />}
-                          label="Hoàn tác"
-                          onClick={() => void actions.rollbackBill(bill.id)}
-                          color="slate"
-                          disabled={apiRow.bill_status !== "confirmed"}
                         />
                       </div>
                     ) : null}
@@ -438,8 +555,8 @@ export function ChotThang() {
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
         <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu/cuối — tự động lưu sau 0.6s" />
-        <WorkflowStep n={2} title="Tự tạo hóa đơn" desc="Hệ thống tự tạo/cập nhật hóa đơn nháp" />
-        <WorkflowStep n={3} title="Chốt theo phòng" desc="Chỉ chốt khi trạng thái Sẵn sàng chốt" />
+        <WorkflowStep n={2} title="Tạo hóa đơn nháp" desc="Bấm Tạo hóa đơn nháp để khóa chi phí" />
+        <WorkflowStep n={3} title="Chốt hóa đơn" desc='Kiểm tra xong bấm "Chốt tất cả"' />
         <WorkflowStep n={4} title="Thu tiền" desc='Bấm "Thu tiền" khi khách thanh toán' />
       </div>
 
@@ -491,7 +608,7 @@ export function ChotThang() {
                                 </span>
                                 {p.note && <span className="text-muted-foreground">· {p.note}</span>}
                               </div>
-                              <span className="font-medium text-emerald-600">+{formatMoney(p.amount)}</span>
+                              <span className="font-medium text-emerald-600">+{formatVND(p.amount)}</span>
                             </div>
                           ))}
                       </div>
@@ -505,13 +622,13 @@ export function ChotThang() {
                       <div className="text-sm text-muted-foreground flex justify-between">
                         <span>Còn thiếu</span>
                         <span className="font-semibold text-rose-600">
-                          {formatMoney(Math.max(0, selectedBill.totalAmount - selectedBill.paidAmount))}
+                          {formatVND(Math.max(0, selectedBill.totalAmount - selectedBill.paidAmount))}
                         </span>
                       </div>
                       <input
-                        type="text"
+                        type="number"
                         value={payInput}
-                        onChange={(e) => setPayInput(formatNumber(parseNumber(e.target.value.replace(/[^\d,]/g, ""))))}
+                        onChange={(e) => setPayInput(e.target.value)}
                         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         placeholder="Số tiền thu"
                         autoFocus={drawerMode === "pay"}
@@ -558,8 +675,8 @@ export function ChotThang() {
                           Nội dung CK:{" "}
                           {settings.bankNoteTemplate
                             .replace("{room}", selectedRoom.name)
-                            .replace("{month}", String(selectedMonth).padStart(2, "0"))
-                            .replace("{year}", String(selectedYear))}
+                            .replace("{month}", String(month).padStart(2, "0"))
+                            .replace("{year}", String(year))}
                         </p>
                       )}
                       {settings.bankQrUrl && (
@@ -578,8 +695,8 @@ export function ChotThang() {
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <AlertTriangle className="h-8 w-8 text-amber-400" />
                   <p className="text-sm text-muted-foreground">
-                    Chưa có hóa đơn cho phòng này tháng {selectedMonth}/{selectedYear}.
-                    <br />Nhập chỉ số điện và nước để hệ thống tự tạo hóa đơn.
+                    Chưa có hóa đơn cho phòng này tháng {month}/{year}.
+                    <br />Nhập chỉ số rồi bấm <strong>Tạo hóa đơn nháp</strong>.
                   </p>
                 </div>
               )}
@@ -594,24 +711,16 @@ export function ChotThang() {
 /* ─── sub-components ──────────────────────────────────────── */
 
 const ROW_BTN_COLORS: Record<string, string> = {
-  indigo: "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm",
+  indigo:  "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm",
   emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shadow-sm",
-  slate: "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 shadow-sm",
-  rose: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm",
+  slate:   "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 shadow-sm",
+  rose:    "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm",
 };
 
 function RowBtn({
-  icon,
-  label,
-  onClick,
-  color,
-  disabled,
+  icon, label, onClick, color, disabled,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  color: string;
-  disabled?: boolean;
+  icon: React.ReactNode; label: string; onClick: () => void; color: string; disabled?: boolean;
 }) {
   return (
     <button
@@ -629,15 +738,7 @@ function RowBtn({
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: "emerald" | "rose";
-}) {
+function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: "emerald" | "rose" }) {
   const color =
     accent === "emerald" ? "text-emerald-600" : accent === "rose" ? "text-rose-600" : "text-foreground";
   return (
@@ -649,18 +750,17 @@ function SummaryCard({
 }
 
 function BillBreakdown({
-  bill,
-  settings,
+  bill, settings,
 }: {
   bill: RentalRoomBill;
   settings: ReturnType<typeof useFinance>["rental"]["settings"];
 }) {
   const rows = [
-    { label: "Tiền thuê", amount: bill.rentAmount },
-    { label: "Điện", amount: bill.electricityAmount },
-    { label: "Nước", amount: bill.waterAmount },
-    { label: "Wifi", amount: bill.wifiAmount },
-    { label: "Vệ sinh", amount: bill.cleaningAmount },
+    { label: "Tiền thuê",  amount: bill.rentAmount },
+    { label: "Điện",       amount: bill.electricityAmount },
+    { label: "Nước",       amount: bill.waterAmount },
+    { label: "Wifi",       amount: bill.wifiAmount },
+    { label: "Vệ sinh",    amount: bill.cleaningAmount },
     { label: settings.otherName || "Phụ phí", amount: bill.otherAmount },
   ].filter((r) => r.amount > 0);
 
@@ -671,23 +771,23 @@ function BillBreakdown({
           {rows.map((r) => (
             <tr key={r.label} className="border-b border-border last:border-0">
               <td className="px-4 py-2 text-muted-foreground">{r.label}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatMoney(r.amount)}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{formatVND(r.amount)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-border bg-muted/30">
             <td className="px-4 py-2.5 font-semibold">Tổng cộng</td>
-            <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatMoney(bill.totalAmount)}</td>
+            <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatVND(bill.totalAmount)}</td>
           </tr>
           <tr className="border-t border-border">
             <td className="px-4 py-2 text-emerald-600">Đã thanh toán</td>
-            <td className="px-4 py-2 text-right text-emerald-600 tabular-nums">{formatMoney(bill.paidAmount)}</td>
+            <td className="px-4 py-2 text-right text-emerald-600 tabular-nums">{formatVND(bill.paidAmount)}</td>
           </tr>
           <tr className="border-t border-border">
             <td className="px-4 py-2 font-semibold text-rose-600">Còn lại</td>
             <td className="px-4 py-2 text-right font-semibold text-rose-600 tabular-nums">
-              {formatMoney(Math.max(0, bill.totalAmount - bill.paidAmount))}
+              {formatVND(Math.max(0, bill.totalAmount - bill.paidAmount))}
             </td>
           </tr>
         </tfoot>
