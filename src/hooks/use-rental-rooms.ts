@@ -156,7 +156,7 @@ export function useRentalRooms(currentCycleId: string | null | undefined) {
     }
 
     const mapped = (data ?? []).map((row) => mapRoom(row as RentalRoomOverviewRow));
-    setRooms(mapped);
+    setRooms(data ? [...mapped] : []);
     setLoading(false);
   }
 

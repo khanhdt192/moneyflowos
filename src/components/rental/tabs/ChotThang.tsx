@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -255,7 +255,7 @@ export function ChotThang() {
 
       {/* ── Main table ── */}
       <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
-        <table className="w-full text-sm">
+        <table key={apiRooms.length} className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
@@ -283,7 +283,7 @@ export function ChotThang() {
               const ss      = saveStates[room.id] ?? "idle";
 
               const apiRow = apiRoomMap[room.id];
-              console.log("ROW:", apiRow);
+              console.log("RENDER ROW:", apiRow);
               const displayStatus = getStatus(apiRow);
               const cfg = STATUS_CFG[displayStatus];
 
