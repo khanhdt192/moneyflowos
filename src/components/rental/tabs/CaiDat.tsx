@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Save, Info, Copy, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
-import { formatVND } from "@/lib/format";
+import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
 
 type Section = "chiphi" | "phong" | "thanhtoan" | "hoadon";
 
@@ -132,7 +132,7 @@ function SectionChiPhi() {
             <div className="font-medium text-foreground mb-1">💧 Nước</div>
             <p className="text-muted-foreground">
               Dùng chung giá nước 201–305:{" "}
-              <span className="font-semibold text-foreground">{(Number(waterRate) || state.rental.settings.waterRatePerM3).toLocaleString("vi-VN")} đ/m³</span>
+              <span className="font-semibold text-foreground">{formatNumber(Number(waterRate) || state.rental.settings.waterRatePerM3)} đ/m³</span>
             </p>
           </div>
           <div className="space-y-2">
@@ -237,7 +237,7 @@ function SectionPhong() {
                 <tr key={room.id} className="bg-card">
                   <td className="px-4 py-3 font-semibold text-foreground">{room.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{room.tenant || <span className="italic opacity-50">—</span>}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">{formatVND(room.rent)}</td>
+                  <td className="px-4 py-3 text-right font-medium tabular-nums">{formatMoney(room.rent)}</td>
                   <td className="px-4 py-3 text-center">
                     <button type="button" onClick={() => startEdit(room.id, room.name, room.rent)}
                       className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted/40">Sửa</button>
@@ -446,7 +446,8 @@ function CField({ label, value, onChange, hint }: { label: string; value: string
   return (
     <div>
       <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      <input type="number" value={value} onChange={(e) => onChange(e.target.value)}
+      <input type="text" inputMode="numeric" value={value ? formatNumber(parseNumber(value)) : ""}
+        onChange={(e) => onChange(String(parseNumber(e.target.value.replace(/[^\d,]/g, ""))))}
         className="num mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-right outline-none focus:ring-2 focus:ring-ring/40" />
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
@@ -479,7 +480,7 @@ function SumRow({ label, v, bold }: { label: string; v: number; bold?: boolean }
   return (
     <div className={`flex items-center justify-between ${bold ? "font-semibold text-foreground" : ""}`}>
       <span>{label}</span>
-      <span className="tabular-nums">{v.toLocaleString("vi-VN")} đ</span>
+      <span className="tabular-nums">{formatMoney(v)}</span>
     </div>
   );
 }

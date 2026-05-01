@@ -4,7 +4,8 @@ import { Plus, X, Pencil, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { Goal } from "@/lib/finance-types";
-import { formatCompact, formatVND } from "@/lib/format";
+import { formatCompact } from "@/lib/format"
+import { formatMoney } from "@/utils/format";
 
 const COLORS = [
   "var(--income)",
@@ -290,7 +291,7 @@ function GoalCard({
       <div className="relative mt-4 flex items-center justify-between rounded-2xl border border-border bg-background/50 px-3 py-2">
         <span className="text-[11px] font-medium text-muted-foreground">Đóng góp / tháng</span>
         <span className="num text-sm font-bold tabular-nums text-foreground">
-          {formatVND(goal.monthlyContribution)}
+          {formatMoney(goal.monthlyContribution)}
         </span>
       </div>
     </motion.div>

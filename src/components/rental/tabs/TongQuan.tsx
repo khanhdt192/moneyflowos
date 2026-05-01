@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { Home, TrendingUp, CheckCircle2, AlertCircle, DoorOpen, Zap, FileText, ArrowRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useFinance } from "@/lib/finance-store";
-import { formatCompact, formatVND } from "@/lib/format";
+import { formatCompact } from "@/lib/format"
+import { formatMoney } from "@/utils/format";
 
 type Tab = "tongquan" | "phong" | "chotthang" | "baocao" | "caidat";
 
@@ -142,7 +143,7 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
                   width={40}
                 />
                 <Tooltip
-                  formatter={(v: number) => formatVND(v)}
+                  formatter={(v: number) => formatMoney(v)}
                   contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: 12 }}
                 />
                 <Area

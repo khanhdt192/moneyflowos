@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { Transaction, TxType } from "@/lib/finance-types";
-import { formatVND } from "@/lib/format";
+import { formatMoney } from "@/utils/format";
 
 type FilterType = "all" | TxType;
 type FilterRange = "current" | "all" | "last3";
@@ -198,7 +198,7 @@ export function TransactionList() {
                           className="num whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums"
                           style={{ color: meta.color }}
                         >
-                          {sign} {formatVND(t.amount)}
+                          {sign} {formatMoney(t.amount)}
                         </td>
                         <td className="px-4 py-3 text-[12px] text-muted-foreground">
                           {t.note || "—"}
@@ -236,7 +236,7 @@ function SummaryCell({ label, value, color }: { label: string; value: number; co
         </span>
       </div>
       <div className="num mt-2 text-lg font-bold tabular-nums" style={{ color }}>
-        {formatVND(value)}
+        {formatMoney(value)}
       </div>
     </div>
   );

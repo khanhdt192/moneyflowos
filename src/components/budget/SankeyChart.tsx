@@ -3,7 +3,8 @@ import { sankey, sankeyLinkHorizontal, sankeyJustify } from "d3-sankey";
 import { motion, AnimatePresence } from "framer-motion";
 import type { BudgetState, CategoryKey } from "./types";
 import { CATEGORY_META } from "./types";
-import { formatVND, formatCompact } from "@/lib/format";
+import { formatCompact } from "@/lib/format"
+import { formatMoney } from "@/utils/format";
 
 interface Props {
   data: BudgetState;
@@ -499,17 +500,17 @@ export function SankeyChart({ data }: Props) {
       <div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border border-border bg-background/60 p-2 backdrop-blur sm:grid-cols-4">
         <SummaryCell
           label="Thu nhập"
-          value={formatVND(totalIncome)}
+          value={formatMoney(totalIncome)}
           dot="var(--income)"
         />
         <SummaryCell
           label="Đã phân bổ"
-          value={formatVND(totalAllocated)}
+          value={formatMoney(totalAllocated)}
           dot="var(--needs)"
         />
         <SummaryCell
           label="Còn lại"
-          value={formatVND(remaining)}
+          value={formatMoney(remaining)}
           dot="var(--unallocated)"
           tone={remaining === 0 ? "muted" : "default"}
         />
@@ -588,7 +589,7 @@ function NodeTooltip({
         <span className="h-2 w-2 rounded-full" style={{ background: node.color }} />
         <div className="font-semibold text-foreground">{node.name}</div>
       </div>
-      <div className="mt-1.5 num text-sm font-bold text-foreground">{formatVND(node.value)}</div>
+      <div className="mt-1.5 num text-sm font-bold text-foreground">{formatMoney(node.value)}</div>
       <div className="text-[11px] text-muted-foreground">{pct}% tổng thu nhập</div>
       <div className="mt-2 flex items-center justify-between">
         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -639,7 +640,7 @@ function LinkTooltip({
         <span className="mx-1.5 text-muted-foreground">→</span>
         {target.name}
       </div>
-      <div className="mt-0.5 num text-foreground">{formatVND(value)}</div>
+      <div className="mt-0.5 num text-foreground">{formatMoney(value)}</div>
       <div className="text-muted-foreground">
         {((value / totalIncome) * 100).toFixed(1)}% tổng thu nhập
       </div>

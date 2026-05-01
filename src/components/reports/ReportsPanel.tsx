@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useFinance } from "@/lib/finance-store";
 import { formatMonthLabel } from "@/lib/finance-types";
 import { downloadFile, toCsv } from "@/lib/csv";
-import { formatVND } from "@/lib/format";
+import { formatMoney } from "@/utils/format";
 
 export function ReportsPanel() {
   const state = useFinance();
@@ -125,22 +125,22 @@ export function ReportsPanel() {
                     {formatMonthLabel(r.key)}
                   </td>
                   <td className="num px-5 py-3 text-right tabular-nums text-income">
-                    {formatVND(r.income)}
+                    {formatMoney(r.income)}
                   </td>
                   <td className="num px-5 py-3 text-right tabular-nums text-needs">
-                    {formatVND(r.needs)}
+                    {formatMoney(r.needs)}
                   </td>
                   <td className="num px-5 py-3 text-right tabular-nums text-wants">
-                    {formatVND(r.wants)}
+                    {formatMoney(r.wants)}
                   </td>
                   <td className="num px-5 py-3 text-right tabular-nums text-savings">
-                    {formatVND(r.savings)}
+                    {formatMoney(r.savings)}
                   </td>
                   <td
                     className="num px-5 py-3 text-right tabular-nums"
                     style={{ color: r.net >= 0 ? "var(--income)" : "var(--needs)" }}
                   >
-                    {formatVND(r.net)}
+                    {formatMoney(r.net)}
                   </td>
                   <td className="num px-5 py-3 text-right font-semibold tabular-nums text-foreground">
                     {r.rate.toFixed(1)}%

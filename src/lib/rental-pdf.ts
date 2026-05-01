@@ -1,7 +1,8 @@
 import type { RentalRoom, RentalRoomBill, RentalSettings, InvoiceSettings } from "./finance-types";
+import { formatMoney } from "@/utils/format";
 
 function fmt(n: number) {
-  return n.toLocaleString("vi-VN") + "đ";
+  return formatMoney(n);
 }
 
 function fmtDate(d = new Date()) {
