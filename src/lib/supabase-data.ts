@@ -415,6 +415,18 @@ export const cloud = {
     return data;
   },
 
+  async getRoomBillByRoomAndCycle(userId: string, roomId: string, cycleId: string) {
+    const { data, error } = await supabase
+      .from("rental_room_bills")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
   /* room bills */
   async upsertBill(
     userId: string,

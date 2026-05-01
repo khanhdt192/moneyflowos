@@ -10,6 +10,7 @@ import {
   type RentalBillStatus,
   type RentalRoom,
   type RentalSettings,
+  type RentalRoomBill,
   type Transaction,
   emptyMonth,
   monthKey,
@@ -74,21 +75,24 @@ function emptyState(): FinanceState {
 
 /* ─── helpers ─────────────────────────────────────────────── */
 
-function isT1(room: RentalRoom) {
-  return room.floor === 1 || /t[aâ]ng\s*1/i.test(room.name);
-}
-
-function calcBillAmounts(room: RentalRoom, settings: RentalSettings, cycleReadings: { consumptionKwh: number; waterM3: number } | undefined) {
-  const groundFloor = isT1(room);
-  const electricityAmount = groundFloor
-    ? settings.t1ElectricityBill
-    : (cycleReadings?.consumptionKwh ?? 0) * (room.electricityRateOverride ?? settings.defaultElectricityRate);
-  const waterAmount = (cycleReadings?.waterM3 ?? 0) * settings.waterRatePerM3;
-  const wifiAmount = groundFloor ? (settings.t1HasWifi ? settings.t1WifiPerRoom : 0) : settings.wifiPerRoom;
-  const cleaningAmount = groundFloor ? settings.t1Cleaning : settings.cleaningPerRoom;
-  const otherAmount = groundFloor ? settings.t1OtherPerRoom : settings.otherPerRoom;
-  const totalAmount = room.rent + electricityAmount + waterAmount + wifiAmount + cleaningAmount + otherAmount;
-  return { rentAmount: room.rent, electricityAmount, waterAmount, wifiAmount, cleaningAmount, otherAmount, totalAmount };
+function mapBillRowToState(b: any, cycleId: string): RentalRoomBill {
+  return {
+    id: b.id,
+    roomId: b.room_id,
+    cycleId,
+    rentAmount: Number(b.rent_amount ?? 0),
+    electricityAmount: Number(b.electricity_amount ?? 0),
+    waterAmount: Number(b.water_amount ?? 0),
+    wifiAmount: Number(b.wifi_amount ?? 0),
+    cleaningAmount: Number(b.cleaning_amount ?? 0),
+    otherAmount: Number(b.other_amount ?? 0),
+    totalAmount: Number(b.total_amount ?? 0),
+    paidAmount: Number(b.paid_amount ?? 0),
+    status: (b.status as RentalBillStatus) ?? "draft",
+    confirmedAt: b.confirmed_at ?? undefined,
+    paidAt: b.paid_at ?? undefined,
+    note: b.note ?? undefined,
+  };
 }
 
 /* ─── store ───────────────────────────────────────────────── */
@@ -375,6 +379,8 @@ class FinanceStore {
     if (!this.userId) return;
     const [year, month] = cycleId.split("-").map(Number);
     const consumptionKwh = Math.max(endIndex - startIndex, 0);
+    const prevReadings = this.state.rental.electricityReadings;
+    const prevBills = this.state.rental.roomBills;
 
     // Optimistic update
     const existing = this.state.rental.electricityReadings.find((r) => r.roomId === roomId && r.cycleId === cycleId);
@@ -388,33 +394,27 @@ class FinanceStore {
     try {
       // Ensure cycle exists
       const dbCycleId = await cloud.upsertCycle(this.userId, month, year);
-      const row = await cloud.upsertReading(this.userId, roomId, dbCycleId, startIndex, endIndex, waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0));
+      const row = await cloud.upsertReading(this.userId, roomId, dbCycleId, startIndex, endIndex, waterM3);
       // Update the reading id from temp to real; keep cycleId as formatted "YYYY-MM" string (not the UUID)
       const final = { ...nextReading, id: row.id, cycleId: cycleId, consumptionKwh: Math.max(row.end_index - row.start_index, 0), waterM3: row.water_m3 ?? 0 };
       this.mutateRental({
         electricityReadings: this.state.rental.electricityReadings.map((r) => (r.id === nextReading.id ? final : r)),
       }, false);
-      await this.upsertDraftBillFromReading(roomId, cycleId, dbCycleId);
+      const billRow = await cloud.getRoomBillByRoomAndCycle(this.userId, roomId, dbCycleId);
+      if (billRow) {
+        const nextBill = mapBillRowToState(billRow, cycleId);
+        const existingIdx = this.state.rental.roomBills.findIndex((b) => b.id === nextBill.id || (b.roomId === roomId && b.cycleId === cycleId));
+        const updatedBills = [...this.state.rental.roomBills];
+        if (existingIdx >= 0) updatedBills[existingIdx] = nextBill;
+        else updatedBills.push(nextBill);
+        this.mutateRental({ roomBills: updatedBills }, false);
+      }
     } catch (err) {
       console.error("[store] upsertReading failed", err);
       toast.error("Không lưu được số đo");
+      this.mutateRental({ electricityReadings: prevReadings, roomBills: prevBills }, false);
+      throw err;
     }
-  }
-
-  private async upsertDraftBillFromReading(roomId: string, cycleId: string, dbCycleId?: string) {
-    if (!this.userId) return;
-    const room = this.state.rental.rooms.find((r) => r.id === roomId);
-    if (!room || !room.occupied) return;
-    const existingBill = this.state.rental.roomBills.find((b) => b.roomId === roomId && b.cycleId === cycleId);
-    if (existingBill && ["confirmed", "partial_paid", "paid"].includes(existingBill.status)) return;
-    const reading = this.state.rental.electricityReadings.find((r) => r.roomId === roomId && r.cycleId === cycleId);
-    const amounts = calcBillAmounts(room, this.state.rental.settings, reading);
-    const isReady = !!reading && reading.endIndex > 0 && reading.waterM3 > 0 && amounts.rentAmount > 0;
-    const status: RentalBillStatus = isReady ? "ready" : "draft";
-    const [year, month] = cycleId.split("-").map(Number);
-    const targetCycleId = dbCycleId ?? await cloud.upsertCycle(this.userId, month, year);
-    await cloud.upsertBill(this.userId, roomId, targetCycleId, amounts, status);
-    await this.refetch();
   }
 
   /* ─── billing: draft creation ───────────────────────────── */
@@ -427,39 +427,9 @@ class FinanceStore {
    */
   async createDraftBills(month: number, year: number): Promise<{ created: number; skipped: number }> {
     if (!this.userId) throw new Error("Not logged in");
-    const cycleId = `${year}-${String(month).padStart(2, "0")}`;
-    const settings = this.state.rental.settings;
-    const occupied = this.state.rental.rooms.filter((r) => r.occupied);
-
-    // Get or create the cycle in DB
-    const dbCycleId = await cloud.upsertCycle(this.userId, month, year);
-
-    let created = 0;
-    let skipped = 0;
-
-    for (const room of occupied) {
-      const existingBill = this.state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
-      // Don't touch confirmed/paid/partial_paid bills
-      if (existingBill && existingBill.status !== "draft") {
-        skipped++;
-        continue;
-      }
-
-      const reading = this.state.rental.electricityReadings.find((r) => r.roomId === room.id && r.cycleId === cycleId);
-      const amounts = calcBillAmounts(room, settings, reading);
-
-      if (existingBill && existingBill.status === "draft") {
-        // Recalculate draft
-        await cloud.updateBillAmounts(existingBill.id, amounts);
-      } else {
-        // Create new draft
-        await cloud.upsertBill(this.userId!, room.id, dbCycleId, amounts, "draft");
-        created++;
-      }
-    }
-
+    await cloud.upsertCycle(this.userId, month, year);
     await this.refetch();
-    return { created, skipped };
+    return { created: 0, skipped: 0 };
   }
 
   /**
