@@ -277,13 +277,12 @@ export function ChotThang() {
               </tr>
             )}
             {allRooms.map((room) => {
-              const bill    = billMap[room.id];
               const row     = getRow(room.id);
               const ground  = isT1(room);
               const ss      = saveStates[room.id] ?? "idle";
 
               const apiRow = apiRoomMap[room.id];
-              console.log("RENDER ROW:", apiRow);
+              console.log("RENDER USING:", apiRow);
               const displayStatus = getStatus(apiRow);
               const cfg = STATUS_CFG[displayStatus];
 
@@ -337,7 +336,7 @@ export function ChotThang() {
                   <td className="px-4 py-3 text-right tabular-nums">
                     {total ? (
                       <div className="inline-flex flex-col items-end gap-0.5">
-                        <span className={`font-semibold ${!bill ? "text-muted-foreground" : ""}`}>
+                        <span className="font-semibold">
                           {formatMoney(total)}
                         </span>
                         
