@@ -143,6 +143,7 @@ export function ChotThang() {
       setSaveState(roomId, "saving");
       try {
         await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
+        await fetchRooms();
         setSaveState(roomId, "saved");
         setTimeout(() => setSaveState(roomId, "idle"), 2500);
       } catch {
