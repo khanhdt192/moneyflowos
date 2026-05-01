@@ -18,6 +18,7 @@ import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { exportSingleInvoice } from "@/lib/rental-pdf";
 import { useRentalRooms } from "@/hooks/use-rental-rooms";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ─── types ───────────────────────────────────────────────── */
 
@@ -62,9 +63,10 @@ export function ChotThang() {
   const state   = useFinance();
   const actions = useFinanceActions();
   const now     = new Date();
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear]   = useState(now.getFullYear());
-  const cycleId   = `${year}-${String(month).padStart(2, "0")}`;
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedYear, setSelectedYear]   = useState(now.getFullYear());
+  const [cycleId, setCycleId] = useState<string | null>(null);
+  const cycleKey = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
   const settings  = state.rental.settings;
   const { rooms: apiRooms, refetch: fetchRooms } = useRentalRooms(cycleId);
 
@@ -88,17 +90,38 @@ export function ChotThang() {
   useEffect(() => {
     setRows({});
     setSaveStates({});
-  }, [month, year]);
+  }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    const loadCycle = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) return;
+      const { data, error } = await supabase.rpc("get_or_create_cycle", {
+        p_user_id: userId,
+        p_month: selectedMonth,
+        p_year: selectedYear,
+      });
+      if (error || !data) {
+        console.warn("Missing cycleId, skip request");
+        setCycleId(null);
+        return;
+      }
+      setCycleId(data);
+      console.log("Cycle UUID:", data);
+    };
+    void loadCycle();
+  }, [selectedMonth, selectedYear]);
 
   /* ─── derived maps ──────────────────────────────────────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
   const billMap = Object.fromEntries(
-    state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
+    state.rental.roomBills.filter((b) => b.cycleId === cycleKey).map((b) => [b.roomId, b]),
   );
   const apiRoomMap = Object.fromEntries(apiRooms.map((r) => [r.room_id, r]));
   const readingMap = Object.fromEntries(
     state.rental.electricityReadings
-      .filter((r) => r.cycleId === cycleId)
+      .filter((r) => r.cycleId === cycleKey)
       .map((r) => [r.roomId, r]),
   );
 
@@ -130,6 +153,8 @@ export function ChotThang() {
   }
 
   function onReadingChange(roomId: string, field: keyof RowData, value: string) {
+    const apiRow = apiRoomMap[roomId];
+    if (apiRow?.bill_status && apiRow.bill_status !== "draft") return;
     const newRow = { ...getRow(roomId), [field]: value };
     setRows((p) => ({ ...p, [roomId]: newRow }));
 
@@ -142,7 +167,7 @@ export function ChotThang() {
       if (end < start) return; // silently skip invalid range
       setSaveState(roomId, "saving");
       try {
-        await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
+        await actions.upsertElectricityReading(roomId, cycleKey, start, end, water);
         await fetchRooms();
         setSaveState(roomId, "saved");
         setTimeout(() => setSaveState(roomId, "idle"), 2500);
@@ -191,7 +216,7 @@ export function ChotThang() {
     const room = roomMap[roomId];
     const bill = billMap[roomId];
     if (!room || !bill) { toast.error("Chưa có hóa đơn cho phòng này"); return; }
-    exportSingleInvoice({ room, bill, month, year, settings, invoiceSettings: state.rental.invoiceSettings });
+    exportSingleInvoice({ room, bill, month: selectedMonth, year: selectedYear, settings, invoiceSettings: state.rental.invoiceSettings });
     toast.success(`Đang xuất hóa đơn ${room.name}…`);
   }
 
@@ -199,18 +224,18 @@ export function ChotThang() {
   /* ─── month nav ─────────────────────────────────────────── */
 
   function prevMonth() {
-    if (month === 1) { setMonth(12); setYear((y) => y - 1); }
-    else setMonth((m) => m - 1);
+    if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear((y) => y - 1); }
+    else setSelectedMonth((m) => m - 1);
   }
   function nextMonth() {
-    const nm = month === 12 ? 1 : month + 1;
-    const ny = month === 12 ? year + 1 : year;
+    const nm = selectedMonth === 12 ? 1 : selectedMonth + 1;
+    const ny = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
     const cur = new Date();
     if (ny > cur.getFullYear() || (ny === cur.getFullYear() && nm > cur.getMonth() + 1)) return;
-    setMonth(nm); setYear(ny);
+    setSelectedMonth(nm); setSelectedYear(ny);
   }
 
-  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+  const isCurrentMonth = selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear();
 
   /* ─── render ────────────────────────────────────────────── */
 
@@ -225,7 +250,7 @@ export function ChotThang() {
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="min-w-32 text-center text-base font-semibold">
-            Tháng {String(month).padStart(2, "0")}/{year}
+            Tháng {String(selectedMonth).padStart(2, "0")}/{selectedYear}
             {isCurrentMonth && (
               <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-normal text-blue-700">
                 Hiện tại
@@ -302,7 +327,7 @@ export function ChotThang() {
                         type="number"
                         value={row.start}
                         onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
-                        disabled={!room.occupied || ground}
+                        disabled={!room.occupied || ground || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
                       />
@@ -314,7 +339,7 @@ export function ChotThang() {
                         type="number"
                         value={row.end}
                         onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
-                        disabled={!room.occupied || ground}
+                        disabled={!room.occupied || ground || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder={ground ? "Tính theo hoá đơn điện" : "0"}
                       />
@@ -326,7 +351,7 @@ export function ChotThang() {
                       type="number"
                       value={row.water}
                       onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
-                      disabled={!room.occupied}
+                      disabled={!room.occupied || (apiRow?.bill_status != null && apiRow.bill_status !== "draft")}
                       className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                       placeholder="0"
                     />
@@ -377,7 +402,7 @@ export function ChotThang() {
                         />
                         <RowBtn
                           icon={<DollarSign className="h-3.5 w-3.5" />}
-                          label="Thanh toán"
+                          label="Thu tiền"
                           onClick={() => {
                             setDrawerMode("pay");
                             setSelectedId(room.id);
@@ -385,7 +410,7 @@ export function ChotThang() {
                             setPayNote("");
                           }}
                           color="emerald"
-                          disabled={apiRow.bill_status === "draft" || apiRow.bill_status === "paid"}
+                          disabled={apiRow.bill_status !== "confirmed" && apiRow.bill_status !== "partial_paid"}
                         />
                         <RowBtn
                           icon={<Download className="h-3.5 w-3.5" />}
@@ -533,8 +558,8 @@ export function ChotThang() {
                           Nội dung CK:{" "}
                           {settings.bankNoteTemplate
                             .replace("{room}", selectedRoom.name)
-                            .replace("{month}", String(month).padStart(2, "0"))
-                            .replace("{year}", String(year))}
+                            .replace("{month}", String(selectedMonth).padStart(2, "0"))
+                            .replace("{year}", String(selectedYear))}
                         </p>
                       )}
                       {settings.bankQrUrl && (
@@ -553,7 +578,7 @@ export function ChotThang() {
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <AlertTriangle className="h-8 w-8 text-amber-400" />
                   <p className="text-sm text-muted-foreground">
-                    Chưa có hóa đơn cho phòng này tháng {month}/{year}.
+                    Chưa có hóa đơn cho phòng này tháng {selectedMonth}/{selectedYear}.
                     <br />Nhập chỉ số điện và nước để hệ thống tự tạo hóa đơn.
                   </p>
                 </div>

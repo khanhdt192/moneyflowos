@@ -139,29 +139,33 @@ export function useRentalRooms(currentCycleId: string | null | undefined) {
     setError(null);
 
     let cycleId = currentCycleId;
-
-    // UI passes cycle in YYYY-MM format, but DB cycle_id is UUID.
     if (/^\d{4}-\d{2}$/.test(currentCycleId)) {
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth.user?.id;
+      if (!userId) {
+        setError("Not logged in");
+        setRooms([]);
+        setLoading(false);
+        return;
+      }
       const [year, month] = currentCycleId.split("-").map(Number);
       const { data: cycleRow, error: cycleError } = await supabase
         .from("rental_billing_cycles")
         .select("id")
+        .eq("user_id", userId)
         .eq("year", year)
         .eq("month", month)
-        .maybeSingle();
-
+        .single();
       if (cycleError) {
         setError(cycleError.message);
         setRooms([]);
         setLoading(false);
         return;
       }
-
-      cycleId = cycleRow?.id ?? null;
+      cycleId = cycleRow.id;
     }
 
-    console.log("cycleId:", cycleId);
-    console.log("cycleId being used:", cycleId);
+    console.log("cycleId UUID:", cycleId);
 
     if (!cycleId) {
       setRooms([]);
