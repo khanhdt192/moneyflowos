@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Save, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
+import { formatMoney } from "@/utils/format";
 
 export function GhiSo() {
   const state = useFinance();
@@ -198,7 +199,7 @@ export function GhiSo() {
                       />
                       {waterM3 > 0 && (
                         <div className="mt-0.5 text-xs text-blue-600 tabular-nums">
-                          = {waterCost.toLocaleString("vi-VN")} đ
+                          = {formatMoney(waterCost)}
                         </div>
                       )}
                     </td>

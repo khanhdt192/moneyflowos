@@ -6,6 +6,7 @@ import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { TxType } from "@/lib/finance-types";
 import { CATEGORY_META } from "@/lib/finance-types";
 import { formatCompact } from "@/lib/format";
+import { formatNumber, parseNumber } from "@/utils/format";
 
 interface Props {
   open: boolean;
@@ -32,7 +33,7 @@ export function QuickAddDialog({ open, onClose }: Props) {
 
   const [type, setType] = useState<TxType>("expense");
   const [category, setCategory] = useState("");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(0);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
 
@@ -41,7 +42,7 @@ export function QuickAddDialog({ open, onClose }: Props) {
     if (open) {
       setType("expense");
       setCategory("");
-      setAmount("");
+      setAmount(0);
       setDate(new Date().toISOString().slice(0, 10));
       setNote("");
     }
@@ -58,7 +59,7 @@ export function QuickAddDialog({ open, onClose }: Props) {
   }, [open, onClose]);
 
   const submit = () => {
-    const amt = parseFloat(amount);
+    const amt = amount;
     if (!category.trim() || isNaN(amt) || amt <= 0) {
       toast.error("Vui lòng nhập đầy đủ thông tin");
       return;
@@ -165,8 +166,11 @@ export function QuickAddDialog({ open, onClose }: Props) {
                     autoFocus
                     inputMode="numeric"
                     placeholder="0"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                    value={amount ? formatNumber(amount) : ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^\d,]/g, "");
+                      setAmount(parseNumber(raw));
+                    }}
                     className="num h-14 w-full rounded-xl border border-border bg-background px-4 pr-12 text-2xl font-bold tracking-tight outline-none focus:ring-2 focus:ring-ring/40"
                   />
                   <span className="num pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">

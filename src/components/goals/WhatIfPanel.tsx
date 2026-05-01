@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Sparkles, RotateCcw, TrendingUp } from "lucide-react";
 import { useActiveMonth, useFinance } from "@/lib/finance-store";
-import { formatCompact, formatVND } from "@/lib/format";
+import { formatCompact } from "@/lib/format"
+import { formatMoney } from "@/utils/format";
 
 export function WhatIfPanel() {
   const data = useActiveMonth();
@@ -191,7 +192,7 @@ function Slider({
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[12px] font-semibold text-foreground">{label}</span>
         <span className="num text-[12px] font-bold tabular-nums" style={{ color }}>
-          {formatVND(value)}
+          {formatMoney(value)}
         </span>
       </div>
       <input

@@ -15,7 +15,8 @@ import {
   Legend,
 } from "recharts";
 import { useFinance } from "@/lib/finance-store";
-import { formatVND, formatCompact } from "@/lib/format";
+import { formatCompact } from "@/lib/format"
+import { formatMoney } from "@/utils/format";
 
 export function BaoCao() {
   const state = useFinance();
@@ -82,7 +83,7 @@ export function BaoCao() {
                   tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}tr` : String(v))}
                 />
                 <Tooltip
-                  formatter={(v: number) => formatVND(v)}
+                  formatter={(v: number) => formatMoney(v)}
                   contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: 12 }}
                 />
                 <Bar dataKey="revenue" name="Tổng thu" fill="#6366f1" radius={[4, 4, 0, 0]} />
@@ -141,7 +142,7 @@ export function BaoCao() {
                   tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}tr` : String(v))}
                 />
                 <Tooltip
-                  formatter={(v: number) => formatVND(v)}
+                  formatter={(v: number) => formatMoney(v)}
                   contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: 12 }}
                 />
                 <Line

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Save, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
+import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
 
 /* ─────────────────────────────────────────────────────────────
    Cấu hình chi phí — two cards: shared 201-305 / tầng 1
@@ -153,7 +154,7 @@ export function CauHinh() {
             <p className="text-muted-foreground">
               Dùng chung giá nước với cấu hình 201–305:{" "}
               <span className="font-semibold text-foreground">
-                {(Number(waterRate) || 0).toLocaleString("vi-VN")} đ/m³
+                {formatNumber(Number(waterRate) || 0)} đ/m³
               </span>
             </p>
             <p className="mt-1 text-muted-foreground/70">
@@ -267,9 +268,10 @@ function Field({
     <div>
       <label className="text-xs font-medium text-muted-foreground">{label}</label>
       <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        type="text"
+        inputMode="numeric"
+        value={value ? formatNumber(parseNumber(value)) : ""}
+        onChange={(e) => onChange(String(parseNumber(e.target.value.replace(/[^\d,]/g, ""))))}
         className="num mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-right outline-none focus:ring-2 focus:ring-ring/40"
       />
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
@@ -281,7 +283,7 @@ function SumRow({ label, v, bold }: { label: string; v: number; bold?: boolean }
   return (
     <div className={`flex items-center justify-between ${bold ? "font-semibold text-foreground" : ""}`}>
       <span>{label}</span>
-      <span className="tabular-nums">{v.toLocaleString("vi-VN")} đ</span>
+      <span className="tabular-nums">{formatMoney(v)}</span>
     </div>
   );
 }

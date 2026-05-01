@@ -3,7 +3,7 @@ import { Plus, X, Check, Trash2, ChevronRight, Home, Pencil } from "lucide-react
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { RentalRoom } from "@/lib/finance-types";
-import { formatVND } from "@/lib/format";
+import { formatMoney } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 
@@ -107,23 +107,23 @@ export function Phong() {
                     {room.tenant || <span className="italic text-muted-foreground/50">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
-                    {formatVND(room.rent)}
+                    {formatMoney(room.rent)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                     {(() => {
                       const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
-                      return bill ? <span className="font-medium text-foreground">{formatVND(bill.totalAmount)}</span> : <span className="opacity-40">—</span>;
+                      return bill ? <span className="font-medium text-foreground">{formatMoney(bill.totalAmount)}</span> : <span className="opacity-40">—</span>;
                     })()}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {(() => {
                       const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
-                      return bill ? <span className="text-emerald-600">{formatVND(bill.paidAmount)}</span> : <span className="opacity-40">—</span>;
+                      return bill ? <span className="text-emerald-600">{formatMoney(bill.paidAmount)}</span> : <span className="opacity-40">—</span>;
                     })()}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {debt > 0 ? (
-                      <span className="font-semibold text-rose-600">{formatVND(debt)}</span>
+                      <span className="font-semibold text-rose-600">{formatMoney(debt)}</span>
                     ) : (
                       <span className="text-muted-foreground/40">—</span>
                     )}
@@ -283,7 +283,7 @@ function RoomDrawer({
                 <InfoGrid
                   rows={[
                     { label: "Khách thuê", value: room.tenant || "—" },
-                    { label: "Giá thuê", value: formatVND(room.rent) },
+                    { label: "Giá thuê", value: formatMoney(room.rent) },
                     {
                       label: "Trạng thái",
                       value: room.occupied ? "Đang thuê" : "Trống",
@@ -297,17 +297,17 @@ function RoomDrawer({
                       Hóa đơn tháng này
                     </h4>
                     <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2 text-sm">
-                      <Row label="Tiền thuê" value={formatVND(bill.rentAmount)} />
-                      <Row label="Tiền điện" value={formatVND(bill.electricityAmount)} />
-                      <Row label="Nước" value={formatVND(bill.waterAmount)} />
-                      <Row label="Wifi" value={formatVND(bill.wifiAmount)} />
-                      <Row label="Vệ sinh" value={formatVND(bill.cleaningAmount)} />
+                      <Row label="Tiền thuê" value={formatMoney(bill.rentAmount)} />
+                      <Row label="Tiền điện" value={formatMoney(bill.electricityAmount)} />
+                      <Row label="Nước" value={formatMoney(bill.waterAmount)} />
+                      <Row label="Wifi" value={formatMoney(bill.wifiAmount)} />
+                      <Row label="Vệ sinh" value={formatMoney(bill.cleaningAmount)} />
                       <div className="border-t border-border pt-2 font-bold">
-                        <Row label="Tổng" value={formatVND(bill.totalAmount)} />
+                        <Row label="Tổng" value={formatMoney(bill.totalAmount)} />
                       </div>
-                      <Row label="Đã thu" value={formatVND(bill.paidAmount)} />
+                      <Row label="Đã thu" value={formatMoney(bill.paidAmount)} />
                       {debt > 0 && (
-                        <Row label="Còn thiếu" value={formatVND(debt)} className="text-rose-600 font-semibold" />
+                        <Row label="Còn thiếu" value={formatMoney(debt)} className="text-rose-600 font-semibold" />
                       )}
                     </div>
                   </div>

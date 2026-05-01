@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { BudgetState } from "./types";
-import { formatVND } from "@/lib/format";
+import { formatMoney } from "@/utils/format";
 
 export function AnnualSummary({ data }: { data: BudgetState }) {
   const [open, setOpen] = useState(false);
@@ -67,8 +67,8 @@ export function AnnualSummary({ data }: { data: BudgetState }) {
                             <span className="font-medium text-foreground">{r.label}</span>
                           </span>
                         </td>
-                        <td className="num py-3 text-right">{formatVND(r.monthly)}</td>
-                        <td className="num py-3 text-right">{formatVND(r.monthly * 12)}</td>
+                        <td className="num py-3 text-right">{formatMoney(r.monthly)}</td>
+                        <td className="num py-3 text-right">{formatMoney(r.monthly * 12)}</td>
                         <td className="num py-3 text-right text-muted-foreground">
                           {monthlyIncome > 0 ? ((r.monthly / monthlyIncome) * 100).toFixed(1) : "0.0"}%
                         </td>

@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Eye, CheckCircle, Search } from "lucide-reac
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { RentalRoomBill } from "@/lib/finance-types";
-import { formatVND } from "@/lib/format";
+import { formatMoney } from "@/utils/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type BillStatus = "unpaid" | "partial" | "paid" | "overdue";
@@ -122,15 +122,15 @@ export function HoaDon() {
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
             <div className="text-xs text-muted-foreground">Tổng phải thu</div>
-            <div className="mt-1 text-base font-bold tabular-nums">{formatVND(totalRevenue)}</div>
+            <div className="mt-1 text-base font-bold tabular-nums">{formatMoney(totalRevenue)}</div>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
             <div className="text-xs text-emerald-700">Đã thu</div>
-            <div className="mt-1 text-base font-bold tabular-nums text-emerald-700">{formatVND(totalCollected)}</div>
+            <div className="mt-1 text-base font-bold tabular-nums text-emerald-700">{formatMoney(totalCollected)}</div>
           </div>
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
             <div className="text-xs text-rose-700">Còn nợ</div>
-            <div className="mt-1 text-base font-bold tabular-nums text-rose-700">{formatVND(totalDebt)}</div>
+            <div className="mt-1 text-base font-bold tabular-nums text-rose-700">{formatMoney(totalDebt)}</div>
           </div>
         </div>
       )}
@@ -179,11 +179,11 @@ export function HoaDon() {
                       {room?.name ?? bill.roomId}
                       {room?.tenant && <div className="text-xs font-normal text-muted-foreground">{room.tenant}</div>}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">{formatVND(bill.totalAmount)}</td>
-                    <td className="px-4 py-3 text-right text-emerald-600 tabular-nums">{formatVND(bill.paidAmount)}</td>
+                    <td className="px-4 py-3 text-right font-medium tabular-nums">{formatMoney(bill.totalAmount)}</td>
+                    <td className="px-4 py-3 text-right text-emerald-600 tabular-nums">{formatMoney(bill.paidAmount)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {remaining > 0 ? (
-                        <span className="font-semibold text-rose-600">{formatVND(remaining)}</span>
+                        <span className="font-semibold text-rose-600">{formatMoney(remaining)}</span>
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
                       )}
@@ -268,17 +268,17 @@ function InvoiceModal({
           <p className="text-xs text-muted-foreground">Tháng {Number(m)}/{y}</p>
         </DialogHeader>
         <div className="space-y-2 text-sm mt-2">
-          <Row label="Tiền thuê" value={formatVND(bill.rentAmount)} />
-          <Row label="Tiền điện" value={formatVND(bill.electricityAmount)} />
-          <Row label="Tiền nước" value={formatVND(bill.waterAmount)} />
-          <Row label="Wifi" value={formatVND(bill.wifiAmount)} />
-          <Row label="Vệ sinh" value={formatVND(bill.cleaningAmount)} />
-          {bill.otherAmount > 0 && <Row label="Phụ phí khác" value={formatVND(bill.otherAmount)} />}
+          <Row label="Tiền thuê" value={formatMoney(bill.rentAmount)} />
+          <Row label="Tiền điện" value={formatMoney(bill.electricityAmount)} />
+          <Row label="Tiền nước" value={formatMoney(bill.waterAmount)} />
+          <Row label="Wifi" value={formatMoney(bill.wifiAmount)} />
+          <Row label="Vệ sinh" value={formatMoney(bill.cleaningAmount)} />
+          {bill.otherAmount > 0 && <Row label="Phụ phí khác" value={formatMoney(bill.otherAmount)} />}
           <div className="border-t border-border pt-2">
-            <Row label="Tổng cộng" value={formatVND(bill.totalAmount)} bold />
+            <Row label="Tổng cộng" value={formatMoney(bill.totalAmount)} bold />
           </div>
-          <Row label="Đã thu" value={formatVND(bill.paidAmount)} />
-          {remaining > 0 && <Row label="Còn thiếu" value={formatVND(remaining)} bold className="text-rose-600" />}
+          <Row label="Đã thu" value={formatMoney(bill.paidAmount)} />
+          {remaining > 0 && <Row label="Còn thiếu" value={formatMoney(remaining)} bold className="text-rose-600" />}
         </div>
         {remaining > 0 && (
           <button
