@@ -200,6 +200,11 @@ export function ChotThang() {
         await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
         setSaveState(roomId, "saved");
         setTimeout(() => setSaveState(roomId, "idle"), 2500);
+        // store.refetch() already ran inside upsertElectricityReading.
+        // Wait 200ms for the Supabase view (rental_room_overview) to propagate,
+        // then sync apiRooms so the action buttons reflect the new bill.
+        await new Promise<void>((r) => setTimeout(r, 200));
+        await apiRefetch();
       } catch {
         setSaveState(roomId, "error");
       }
@@ -405,15 +410,22 @@ export function ChotThang() {
               const ss       = saveStates[room.id] ?? "idle";
               const hasLocalEdit = !!rows[room.id];
 
-              /* Status from the Supabase view (never stale after apiRefetch) */
-              const apiBillStatus = apiRow?.bill_status ?? null;
+              // storeBill is always up-to-date: store.refetch() runs inside
+              // upsertElectricityReading, so it reflects the DB state immediately.
+              // apiRow catches up 200ms later after apiRefetch().
+              const storeBill = storeBillMap[room.id];
+
+              /* Bill status: prefer API view (authoritative); fall back to local store */
+              const apiBillStatus = apiRow?.bill_status ?? storeBill?.status ?? null;
               const displayStatus = getDisplayStatus(room, apiBillStatus, !!reading, cycleId);
               const cfg = STATUS_CFG[displayStatus];
 
-              /* can_confirm / can_pay driven by the view */
-              const canConfirm = apiRow?.ui?.can_confirm ?? false;
-              const canPay     = apiRow?.ui?.can_pay     ?? false;
-              const hasBill    = !!apiRow?.bill_id;
+              /* Action availability: prefer API view flags; fall back to store */
+              const hasBill    = !!apiRow?.bill_id || !!storeBill;
+              const canConfirm = apiRow?.ui?.can_confirm
+                ?? (storeBill?.status === "draft");
+              const canPay     = apiRow?.ui?.can_pay
+                ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
 
               /* live total: use confirmed DB value when available, else estimate */
               const liveTotal = apiRow?.total_amount != null
