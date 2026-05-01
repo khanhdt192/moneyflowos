@@ -287,7 +287,7 @@ export function ChotThang() {
               const displayStatus = getStatus(apiRow);
               const cfg = STATUS_CFG[displayStatus];
 
-              const apiTotal = apiRow?.total_amount ?? null;
+              const total = apiRow?.total_amount ?? null;
 
               return (
                 <tr key={room.id}
@@ -335,10 +335,10 @@ export function ChotThang() {
 
                   {/* Tổng bill — auto-calc live */}
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {apiTotal ? (
+                    {total ? (
                       <div className="inline-flex flex-col items-end gap-0.5">
                         <span className={`font-semibold ${!bill ? "text-muted-foreground" : ""}`}>
-                          {formatMoney(apiTotal)}
+                          {formatMoney(total)}
                         </span>
                         
                       </div>
