@@ -409,6 +409,7 @@ class FinanceStore {
         else updatedBills.push(nextBill);
         this.mutateRental({ roomBills: updatedBills }, false);
       }
+      await this.refetch();
     } catch (err) {
       console.error("[store] upsertReading failed", err);
       toast.error("Không lưu được số đo");
