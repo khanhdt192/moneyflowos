@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   CheckCircle2,
   Download,
   Loader2,
@@ -293,6 +294,7 @@ export function ChotThang() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
+              <th className="w-8 px-2 py-3" />
               <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
               <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Số đầu</th>
@@ -306,7 +308,7 @@ export function ChotThang() {
           <tbody className="divide-y divide-border">
             {allRooms.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   Chưa có phòng nào — thêm phòng trong tab Phòng
                 </td>
               </tr>
@@ -359,14 +361,34 @@ export function ChotThang() {
                   <tr
                     onClick={toggleExpand}
                     className={[
-                      "bg-card transition-colors",
-                      room.occupied && hasBill ? "cursor-pointer hover:bg-muted/10" : "",
+                      "transition-colors",
+                      room.occupied && hasBill
+                        ? "cursor-pointer hover:bg-muted/40"
+                        : "bg-card",
                       !room.occupied ? "opacity-50" : "",
-                      isExpanded ? "bg-muted/5" : "",
+                      isExpanded
+                        ? "bg-muted/30 border-l-4 border-indigo-400"
+                        : "border-l-4 border-transparent",
                     ].join(" ")}
                   >
+                    {/* Expand chevron */}
+                    <td className="w-8 px-2 py-3 text-center text-muted-foreground">
+                      {room.occupied && hasBill && (
+                        <ChevronDown
+                          className={`h-3.5 w-3.5 mx-auto transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`}
+                        />
+                      )}
+                    </td>
+
                     {/* Phòng */}
-                    <td className="px-4 py-3 font-medium">{room.name}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium leading-tight">{room.name}</p>
+                      {room.occupied && hasBill && (
+                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                          Nhấn để xem chi tiết
+                        </p>
+                      )}
+                    </td>
 
                     {/* Khách thuê */}
                     <td className="px-4 py-3 text-muted-foreground">
@@ -479,7 +501,7 @@ export function ChotThang() {
                   {/* ── Expanded detail row ── */}
                   {isExpanded && (
                     <tr>
-                      <td colSpan={8} className="p-0">
+                      <td colSpan={9} className="p-0">
                         <div className="border-t border-border bg-muted/5 px-6 py-5 space-y-4">
                           {storeBill ? (
                             <>
@@ -588,15 +610,17 @@ function BillBreakdown({
         <tbody>
           {items.map((r) => (
             <tr key={r.label} className="border-b border-border last:border-0">
-              <td className="px-4 py-2 text-muted-foreground">{r.label}</td>
-              <td className="px-4 py-2 text-right tabular-nums">{formatMoney(r.amount)}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{r.label}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(r.amount)}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t-2 border-border bg-muted/30">
-            <td className="px-4 py-2.5 font-semibold">Tổng cộng</td>
-            <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatMoney(bill.totalAmount)}</td>
+          <tr className="border-t-2 border-border bg-muted/20">
+            <td className="px-4 py-3 text-base font-semibold text-foreground">Tổng cộng</td>
+            <td className="px-4 py-3 text-right text-base font-semibold tabular-nums text-foreground">
+              {formatMoney(bill.totalAmount)}
+            </td>
           </tr>
         </tfoot>
       </table>
@@ -617,40 +641,56 @@ function PaymentSection({
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
       <p className="text-sm font-semibold">Thu tiền</p>
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">Còn thiếu</span>
-        <span className="font-semibold text-rose-600">{formatMoney(remaining)}</span>
+
+      {/* Payment summary */}
+      <div className="flex items-center gap-6 text-sm">
+        <div>
+          <span className="text-muted-foreground text-xs">Đã trả</span>
+          <p className="font-semibold text-emerald-600 tabular-nums">{formatMoney(bill.paidAmount)}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs">Còn thiếu</span>
+          <p className="font-semibold text-rose-600 tabular-nums">{formatMoney(remaining)}</p>
+        </div>
       </div>
-      <input
-        type="number"
-        value={payInput}
-        onChange={(e) => setPayInput(e.target.value)}
-        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        placeholder="Số tiền thu"
-        autoFocus
-      />
-      <select
-        value={payMethod}
-        onChange={(e) => setPayMethod(e.target.value)}
-        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
-      >
-        <option value="cash">Tiền mặt</option>
-        <option value="transfer">Chuyển khoản</option>
-      </select>
-      <input
-        type="text"
-        value={payNote}
-        onChange={(e) => setPayNote(e.target.value)}
-        placeholder="Ghi chú (tùy chọn)"
-        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
-      />
-      <button
-        type="button"
-        onClick={onPay}
-        className="w-full rounded-lg bg-foreground py-2 text-sm font-medium text-background hover:opacity-90 transition-opacity"
-      >
-        Thu tiền
-      </button>
+
+      {/* Primary action row: amount + button side-by-side */}
+      <div className="flex gap-2">
+        <input
+          type="number"
+          value={payInput}
+          onChange={(e) => setPayInput(e.target.value)}
+          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          placeholder="Số tiền thu"
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={onPay}
+          className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+        >
+          Thu tiền
+        </button>
+      </div>
+
+      {/* Secondary options */}
+      <div className="flex gap-2">
+        <select
+          value={payMethod}
+          onChange={(e) => setPayMethod(e.target.value)}
+          className="w-36 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+        >
+          <option value="cash">Tiền mặt</option>
+          <option value="transfer">Chuyển khoản</option>
+        </select>
+        <input
+          type="text"
+          value={payNote}
+          onChange={(e) => setPayNote(e.target.value)}
+          placeholder="Ghi chú (tùy chọn)"
+          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+        />
+      </div>
     </div>
   );
 }

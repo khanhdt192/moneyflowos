@@ -1,0 +1,190 @@
+You are a senior React frontend engineer.
+
+I have a rental management table UI (MoneyFlowOS) built with React + Supabase.
+
+---
+
+# 🎯 GOAL
+
+Improve UX and UI in 2 areas:
+
+1. Expandable row (bill detail + payment section)
+2. Table row affordance (make it obvious that rows are clickable)
+
+---
+
+# 1. IMPROVE EXPANDED ROW UI
+
+Inside the expanded row, update layout as follows:
+
+---
+
+## BILL BREAKDOWN (CLEAN + CLEAR)
+
+Show ONLY:
+
+* Tiền thuê
+* Điện
+* Nước
+* Wifi
+* Vệ sinh
+* Tổng cộng
+
+---
+
+## STYLING REQUIREMENTS
+
+* Add spacing between rows
+* Add border-top before "Tổng cộng"
+* Make "Tổng cộng" visually stronger:
+
+  * larger font (font-semibold or text-lg)
+  * darker color
+
+---
+
+## REMOVE FROM BREAKDOWN
+
+Do NOT include:
+
+* Đã thanh toán
+* Còn lại
+
+---
+
+## PAYMENT SECTION (SEPARATE BLOCK)
+
+Below breakdown, create a separate block:
+
+### Show:
+
+* Đã trả (green text)
+* Còn thiếu (red text)
+
+---
+
+### Layout:
+
+First row:
+
+[ Số tiền thu input ]   [ Thu tiền button ]
+
+Second row (optional):
+
+* Payment method (select)
+* Note input
+
+---
+
+## UX REQUIREMENTS
+
+* Reduce visual clutter
+* Make primary action (Thu tiền) easy to access
+* Keep existing logic (handlePay, API calls)
+
+---
+
+# 2. MAKE TABLE ROW CLICKABLE (AFFORDANCE)
+
+Currently users don’t know rows are clickable.
+
+Fix this with:
+
+---
+
+## ADD EXPAND ICON
+
+At the beginning of each row:
+
+* Collapsed: ▶
+* Expanded: ▼
+
+Example:
+
+▶ Phòng 202
+▼ Phòng 202
+
+---
+
+## IMPLEMENT
+
+```tsx
+<td className="px-2">
+  {expandedRoomId === room.id ? "▼" : "▶"}
+</td>
+```
+
+---
+
+## MAKE ROW CLICKABLE
+
+* Add onClick to entire row:
+
+```tsx
+<tr onClick={...}>
+```
+
+* Add:
+
+```css
+cursor-pointer
+```
+
+---
+
+## ADD HOVER STATE
+
+```css
+hover:bg-muted/40 transition-colors
+```
+
+---
+
+## OPTIONAL (BUT RECOMMENDED)
+
+Add subtle hint text under room name:
+
+* "Nhấn để xem chi tiết"
+
+---
+
+## HIGHLIGHT EXPANDED ROW
+
+When expanded:
+
+```css
+bg-muted/30
+```
+
+OR
+
+```css
+border-l-4 border-indigo-400
+```
+
+---
+
+# 3. KEEP SYSTEM CONSISTENT
+
+* Do NOT change API logic
+* Do NOT reintroduce global store
+* Keep Supabase as source of truth
+* Keep existing handlers (confirm, pay)
+
+---
+
+# 4. OUTPUT
+
+* Updated JSX for table row
+* Updated expanded row UI
+* Clean styling (Tailwind)
+* No duplicated code
+* No unused imports
+* No runtime errors
+
+---
+
+# IMPORTANT
+
+* This is a UX improvement task, not logic refactor
+* Focus on clarity, usability, and visual hierarchy
