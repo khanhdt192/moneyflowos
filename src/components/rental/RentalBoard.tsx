@@ -17,6 +17,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? "tongquan");
+  const [chotThangFocus, setChotThangFocus] = useState<{ roomId: string; cycleId: string; nonce: number } | null>(null);
 
   return (
     <div className="space-y-6">
@@ -46,8 +47,15 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
 
       <div>
         {activeTab === "tongquan"  && <TongQuan onNavigate={setActiveTab} />}
-        {activeTab === "phong"     && <Phong />}
-        {activeTab === "chotthang" && <ChotThang />}
+        {activeTab === "phong"     && (
+          <Phong
+            onOpenBillDetail={(roomId, cycleId) => {
+              setChotThangFocus({ roomId, cycleId, nonce: Date.now() });
+              setActiveTab("chotthang");
+            }}
+          />
+        )}
+        {activeTab === "chotthang" && <ChotThang focusRequest={chotThangFocus} />}
         {activeTab === "baocao"    && <BaoCao />}
         {activeTab === "caidat"    && <CaiDat />}
       </div>
