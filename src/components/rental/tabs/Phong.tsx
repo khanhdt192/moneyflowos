@@ -238,8 +238,10 @@ function RoomModal({
   const [tenantName, setTenantName] = useState("");
   const [tenantPhone, setTenantPhone] = useState("");
   const [tenantAddress, setTenantAddress] = useState("");
+  const [addTenantMode, setAddTenantMode] = useState<"new" | "existing">("new");
   const [existingTenants, setExistingTenants] = useState<Tenant[]>([]);
   const [blockedTenantIds, setBlockedTenantIds] = useState<Set<string>>(new Set());
+  const [blockedTenantReason, setBlockedTenantReason] = useState<Record<string, string>>({});
   const [selectedTenantId, setSelectedTenantId] = useState("");
 
   const room = roomId ? state.rental.rooms.find((r) => r.id === roomId) ?? null : null;
@@ -267,13 +269,19 @@ function RoomModal({
     setExistingTenants(tenants);
     const tenantIdByRoomId = new Map(state.rental.rooms.map((r) => [r.id, r.tenant_id || r.tenantInfo?.id || null]));
     const blocked = new Set<string>();
+    const blockedReason: Record<string, string> = {};
+    const roomNameByRoomId = new Map(state.rental.rooms.map((r) => [r.id, r.name]));
     state.rental.roomBills.forEach((b) => {
       if (b.status === "cancelled") return;
       if (b.paidAmount >= b.totalAmount) return;
       const tenantId = tenantIdByRoomId.get(b.roomId);
-      if (tenantId) blocked.add(tenantId);
+      if (tenantId) {
+        blocked.add(tenantId);
+        blockedReason[tenantId] = roomNameByRoomId.get(b.roomId) ? `Đang nợ bill phòng ${roomNameByRoomId.get(b.roomId)}` : "Đang nợ bill";
+      }
     });
     setBlockedTenantIds(blocked);
+    setBlockedTenantReason(blockedReason);
     return tenants;
   };
 
@@ -282,6 +290,8 @@ function RoomModal({
     setTenantName(room.tenantInfo?.fullName || "");
     setTenantPhone(room.tenantInfo?.phone || "");
     setTenantAddress(room.tenantInfo?.address || "");
+    setAddTenantMode("new");
+    setSelectedTenantId("");
   }, [roomId, room?.tenantInfo?.id, room?.tenantInfo?.fullName, room?.tenantInfo?.phone, room?.tenantInfo?.address, room]);
 
   return (
@@ -332,18 +342,42 @@ function RoomModal({
                   <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
                     {(tenantMode === "edit" || tenantMode === "add") ? (
                       <div className="space-y-2">
-                        <div>
-                          <label className="mb-1 block text-xs text-muted-foreground">Họ tên</label>
-                          <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Họ tên" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs text-muted-foreground">Số điện thoại</label>
-                          <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs text-muted-foreground">Địa chỉ</label>
-                          <input value={tenantAddress} onChange={(e) => setTenantAddress(e.target.value)} placeholder="Địa chỉ" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                        </div>
+                        {tenantMode === "add" && (
+                          <div className="flex gap-2 rounded-lg border border-border p-1">
+                            <button type="button" onClick={() => setAddTenantMode("new")} className={`flex-1 rounded-md py-1.5 text-xs font-medium ${addTenantMode === "new" ? "bg-foreground text-background" : "text-muted-foreground"}`}>Tạo mới</button>
+                            <button type="button" onClick={() => setAddTenantMode("existing")} className={`flex-1 rounded-md py-1.5 text-xs font-medium ${addTenantMode === "existing" ? "bg-foreground text-background" : "text-muted-foreground"}`}>Chọn người thuê có sẵn</button>
+                          </div>
+                        )}
+                        {tenantMode === "edit" || addTenantMode === "new" ? (
+                          <>
+                            <div>
+                              <label className="mb-1 block text-xs text-muted-foreground">Họ tên</label>
+                              <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Họ tên" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs text-muted-foreground">Số điện thoại</label>
+                              <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs text-muted-foreground">Địa chỉ</label>
+                              <input value={tenantAddress} onChange={(e) => setTenantAddress(e.target.value)} placeholder="Địa chỉ" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <label className="mb-1 block text-xs text-muted-foreground">Người thuê có sẵn</label>
+                            <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm">
+                              <option value="">Chọn người thuê</option>
+                              {[...existingTenants]
+                                .sort((a, b) => Number(blockedTenantIds.has(a.id)) - Number(blockedTenantIds.has(b.id)))
+                                .map((tenant) => (
+                                  <option key={tenant.id} value={tenant.id} disabled={blockedTenantIds.has(tenant.id)}>
+                                    {tenant.full_name} — {blockedTenantIds.has(tenant.id) ? (blockedTenantReason[tenant.id] || "Đang nợ bill") : "Đã thanh toán"}
+                                  </option>
+                                ))}
+                            </select>
+                          </>
+                        )}
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
                           <button type="button" onClick={async () => {
@@ -351,8 +385,16 @@ function RoomModal({
                               if (!room) return;
                               if (tenantMode === "edit" && room.tenantInfo) await update(room.tenantInfo.id, { fullName: tenantName.trim(), phone: tenantPhone.trim(), address: tenantAddress.trim() });
                               if (tenantMode === "add") {
-                                const userId = actions.getUserId(); if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
-                                await createAndAssign(room.id, { userId, fullName: tenantName.trim(), phone: tenantPhone.trim() || undefined, address: tenantAddress.trim() || undefined });
+                                if (addTenantMode === "existing") {
+                                  if (!selectedTenantId || blockedTenantIds.has(selectedTenantId)) {
+                                    toast.error("Người thuê đang nợ bill, không thể gán phòng");
+                                    return;
+                                  }
+                                  await assignExisting(room.id, selectedTenantId);
+                                } else {
+                                  const userId = actions.getUserId(); if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
+                                  await createAndAssign(room.id, { userId, fullName: tenantName.trim(), phone: tenantPhone.trim() || undefined, address: tenantAddress.trim() || undefined });
+                                }
                               }
                               setTenantName(room.tenantInfo?.fullName || "");
                               setTenantPhone(room.tenantInfo?.phone || "");
