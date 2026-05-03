@@ -366,8 +366,12 @@ export const cloud = {
   },
 
   /* rooms */
-  async insertRoom(userId: string, name: string, rent: number) {
-    const { data, error } = await supabase.from("rental_rooms").insert({ user_id: userId, name, rent }).select().single();
+  async insertRoom(userId: string, name: string, rent: number, floor: number | null) {
+    const { data, error } = await supabase
+      .from("rental_rooms")
+      .insert({ user_id: userId, name, rent, floor })
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },

@@ -28,6 +28,21 @@ const STATUS_CONFIG: Record<Status, { label: string; className: string }> = {
   debt: { label: "Nợ tiền", className: "bg-rose-50 text-rose-700 border-rose-200" },
 };
 
+function detectFloorFromRoomName(name: string): number | null {
+  const normalized = name.trim().toLowerCase();
+  const tangMatch = normalized.match(/t[ầa]ng\s*(\d+)/i);
+  if (tangMatch) {
+    const floor = Number.parseInt(tangMatch[1], 10);
+    return Number.isNaN(floor) ? null : floor;
+  }
+
+  const numberMatch = normalized.match(/\d+/);
+  if (!numberMatch || numberMatch[0].length < 3) return null;
+
+  const firstDigit = Number.parseInt(numberMatch[0][0], 10);
+  return Number.isNaN(firstDigit) ? null : firstDigit;
+}
+
 export function Phong() {
   const state = useFinance();
   const actions = useFinanceActions();
@@ -65,10 +80,10 @@ export function Phong() {
       {adding && (
         <AddRoomForm
           onCancel={() => setAdding(false)}
-          onCreate={async ({ name, rent, addTenantNow, tenantFullName, tenantPhone, tenantAddress }) => {
+          onCreate={async ({ name, rent, floor, addTenantNow, tenantFullName, tenantPhone, tenantAddress }) => {
             let createdRoomId: string | null = null;
             try {
-              const room = await actions.addRoom(name, rent);
+              const room = await actions.addRoom(name, rent, floor);
               createdRoomId = room.id;
 
               if (addTenantNow) {
@@ -573,6 +588,7 @@ function AddRoomForm({
   onCreate: (payload: {
     name: string;
     rent: number;
+    floor: number | null;
     addTenantNow: boolean;
     tenantFullName: string;
     tenantPhone?: string;
@@ -581,12 +597,23 @@ function AddRoomForm({
 }) {
   const [name, setName] = useState("");
   const [rent, setRent] = useState("");
+  const [floor, setFloor] = useState("");
+  const [isFloorManual, setIsFloorManual] = useState(false);
   const [addTenantNow, setAddTenantNow] = useState(false);
   const [tenantFullName, setTenantFullName] = useState("");
   const [tenantPhone, setTenantPhone] = useState("");
   const [tenantAddress, setTenantAddress] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const parsedFloor = floor.trim() === "" ? null : Number.parseInt(floor, 10);
   const valid = Boolean(name.trim()) && parseFloat(rent) > 0 && (!addTenantNow || Boolean(tenantFullName.trim()));
+
+  const onRoomNameChange = (value: string) => {
+    setName(value);
+    if (isFloorManual) return;
+
+    const detectedFloor = detectFloorFromRoomName(value);
+    setFloor(detectedFloor === null ? "" : String(detectedFloor));
+  };
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -602,7 +629,7 @@ function AddRoomForm({
           <input
             autoFocus
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => onRoomNameChange(e.target.value)}
             placeholder="VD: Phòng 302"
             className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
@@ -614,6 +641,20 @@ function AddRoomForm({
             value={rent}
             onChange={(e) => setRent(e.target.value)}
             placeholder="VD: 4000000"
+            className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">Tầng</label>
+          <input
+            type="number"
+            min={0}
+            value={floor}
+            onChange={(e) => {
+              setIsFloorManual(true);
+              setFloor(e.target.value);
+            }}
+            placeholder="Tự nhận diện từ tên phòng"
             className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
         </div>
@@ -672,6 +713,7 @@ function AddRoomForm({
               await onCreate({
                 name: name.trim(),
                 rent: parseFloat(rent),
+                floor: Number.isNaN(parsedFloor as number) ? null : parsedFloor,
                 addTenantNow,
                 tenantFullName: tenantFullName.trim(),
                 tenantPhone: tenantPhone.trim() || undefined,
