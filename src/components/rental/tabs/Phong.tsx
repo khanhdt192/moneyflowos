@@ -246,19 +246,6 @@ function RoomDrawer({
     return tenants;
   };
 
-  const resolveCurrentTenantId = async (): Promise<string> => {
-    if (!room?.tenantInfo) throw new Error("Phòng chưa có người thuê");
-    const tenants = existingTenants.length > 0 ? existingTenants : await loadTenants();
-    const matched = tenants.find(
-      (tenant) =>
-        tenant.full_name === room.tenantInfo?.fullName &&
-        (tenant.phone || "") === (room.tenantInfo?.phone || "") &&
-        (tenant.address || "") === (room.tenantInfo?.address || ""),
-    );
-    if (!matched) throw new Error("Không tìm thấy người thuê để cập nhật");
-    return matched.id;
-  };
-
   return (
     <Sheet
       open={!!room}
@@ -393,7 +380,9 @@ function RoomDrawer({
                         className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
                       >
                         <option value="">Chọn người thuê có sẵn</option>
-                        {existingTenants.map((tenant) => (
+                        {existingTenants
+                          .filter((tenant) => tenantMode !== "change" || tenant.id !== room?.tenantInfo?.id)
+                          .map((tenant) => (
                           <option key={tenant.id} value={tenant.id}>
                             {tenant.full_name} {tenant.phone ? `- ${tenant.phone}` : ""}
                           </option>
@@ -408,8 +397,7 @@ function RoomDrawer({
                           try {
                             if (!room) return;
                             if (tenantMode === "edit" && room.tenantInfo) {
-                              const tenantId = await resolveCurrentTenantId();
-                              await update(tenantId, { fullName: tenantName.trim(), phone: tenantPhone.trim(), address: tenantAddress.trim() });
+                              await update(room.tenantInfo.id, { fullName: tenantName.trim(), phone: tenantPhone.trim(), address: tenantAddress.trim() });
                               toast.success("Đã cập nhật người thuê");
                             }
                             if (tenantMode === "change" && selectedTenantId) {

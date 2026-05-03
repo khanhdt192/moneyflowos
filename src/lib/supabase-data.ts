@@ -151,6 +151,7 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     tenant: r.tenant?.full_name ?? undefined,
     tenantInfo: r.tenant?.full_name
       ? {
+          id: r.tenant.id,
           fullName: r.tenant.full_name,
           phone: r.tenant.phone ?? undefined,
           address: r.tenant.address ?? undefined,
