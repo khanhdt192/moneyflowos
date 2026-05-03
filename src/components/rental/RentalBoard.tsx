@@ -62,8 +62,8 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
             onFocusRequestConsumed={() => setChotThangFocus(null)}
           />
         )}
-        {activeTab === "chiphikhac" && <CaiDat initialSection="chiphi" />}
-        {activeTab === "mauhoadon" && <CaiDat initialSection="thanhtoan" />}
+        {activeTab === "chiphikhac" && <CaiDat key="chiphi" initialSection="chiphi" />}
+        {activeTab === "mauhoadon" && <CaiDat key="thanhtoan" initialSection="thanhtoan" />}
         {activeTab === "baocao"    && <BaoCao />}
       </div>
     </div>
