@@ -530,14 +530,45 @@ export function ChotThang() {
                     <Row label="Số cuối" value={reading.end || "0"} />
                     <Row label="Nước (m³)" value={reading.water || "0"} />
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <input type="number" value={reading.start} onChange={(e) => onReadingChange(room.id, "start", e.target.value)} disabled={!occupied || isT1(room)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Số đầu" />
-                    <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied || isT1(room)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Số cuối" />
-                    <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Nước (m³)" />
+                  <div className="space-y-3 rounded-xl border border-border p-4">
+                    <h4 className="text-sm font-semibold">Nhập chỉ số</h4>
+                    <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập điện</p>
+                      {isT1(room) ? (
+                        <p className="text-sm text-muted-foreground">Điện tầng 1 tính cố định</p>
+                      ) : (
+                        <>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-xs text-muted-foreground">Số đầu điện</label>
+                              <input type="number" value={reading.start} onChange={(e) => onReadingChange(room.id, "start", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs text-muted-foreground">Số cuối điện</label>
+                              <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                            </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Tiêu thụ: {Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0)} kWh</p>
+                        </>
+                      )}
+                    </div>
+                    <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập nước</p>
+                      <div>
+                        <label className="mb-1 block text-xs text-muted-foreground">Nước (m³)</label>
+                        <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <RowBtn icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Chốt" onClick={() => handleConfirmSingle(room.id)} color="indigo" disabled={!canConfirm} />
-                    <RowBtn icon={<Download className="h-3.5 w-3.5" />} label="PDF" onClick={() => handleExportSingle(room.id)} color="rose" />
+                  <div className="flex flex-wrap gap-2">
+                    {storeBill && canPay ? (
+                      <button type="button" onClick={() => handlePay(room.id)} className="rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background">Thu tiền</button>
+                    ) : canConfirm ? (
+                      <button type="button" onClick={() => handleConfirmSingle(room.id)} className="rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background">Chốt bill</button>
+                    ) : null}
+                    <button type="button" onClick={() => handleConfirmSingle(room.id)} disabled={!canConfirm} className="rounded-lg border border-border px-4 py-2 text-sm font-medium disabled:opacity-40">Chốt bill</button>
+                    <button type="button" onClick={() => handleExportSingle(room.id)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">PDF</button>
+                    <button type="button" onClick={() => setSelectedRoomId(null)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">Đóng</button>
                   </div>
                   {storeBill ? <BillBreakdown bill={storeBill} settings={settings} /> : null}
                   {storeBill && canPay ? (
@@ -682,9 +713,9 @@ function PaymentSection({
         <button
           type="button"
           onClick={onPay}
-          className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+          className="shrink-0 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/30 transition-colors"
         >
-          Thu tiền
+          Ghi nhận
         </button>
       </div>
 

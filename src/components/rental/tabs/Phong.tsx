@@ -352,8 +352,9 @@ function RoomModal({
                 </button>
               </div>
             ) : (
-              <div className="space-y-5">
-                <InfoGrid
+              <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+                <div className="space-y-5">
+                  <InfoGrid
                   rows={[
                     { label: "Giá thuê", value: formatMoney(room.rent) },
                     {
@@ -361,7 +362,7 @@ function RoomModal({
                       value: isRoomOccupied(room) ? "Đang thuê" : "Trống",
                     },
                   ]}
-                />
+                  />
 
                 <div>
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</h4>
@@ -471,8 +472,11 @@ function RoomModal({
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác</h4>
+                </div>
+
+                <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
+                  <button type="button" onClick={() => setEditing(true)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Sửa phòng</button>
                   <button
                     type="button"
                     onClick={() => {
@@ -492,7 +496,7 @@ function RoomModal({
                         toast.success(`${room.name}: Đã thu đủ tiền`);
                         onClose();
                       }}
-                      className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+                      className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
                     >
                       Đánh dấu đã thu đủ
                     </button>
@@ -523,7 +527,7 @@ function RoomModal({
                             toast.error("Không tải được danh sách người thuê");
                           }
                         }}
-                        className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
+                      className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
                       >Đổi người thuê</button>
                     </>
                   ) : (
