@@ -108,6 +108,8 @@ Columns:
 Important notes:
 - Bill status in UI must map from this table or from views built on top of it.
 - Payment state is derived from `status` and `paid_amount`.
+- For tenant mobility rules, a bill is considered unpaid when `paid_amount < total_amount`.
+- `cancelled` bills may be excluded from unpaid-tenant blocking rules.
 
 ---
 
@@ -260,6 +262,26 @@ Rules:
 - Edit current tenant must use real tenant ID, not text matching.
 - Occupancy display should prefer tenant assignment.
 
+### Tenant mobility rules
+These rules apply to tenant reassignment and tenant removal actions in tab `Phòng`.
+
+#### Room-level guard
+If the current room has a bill for the current cycle and that bill is unpaid:
+- do NOT allow `Đổi người thuê`
+- do NOT allow `Xóa người thuê khỏi phòng`
+- unpaid means `paidAmount < totalAmount`
+
+#### Tenant-level global debt guard
+A tenant must NOT be assignable to another room if that tenant has any unpaid bill in the system.
+
+Practical rule:
+- when selecting an existing tenant for reassignment or assignment,
+  tenants with unpaid bills must be blocked from selection
+- `cancelled` bills may be excluded from this blocking rule
+
+Rationale:
+- this prevents moving a tenant with debt from one room into another room and bypassing unpaid bill handling
+
 ---
 
 ## 3.3 Chốt tháng (monthly billing)
@@ -361,6 +383,7 @@ Never do these in MoneyFlowOS:
 - Infer tenant ID from `full_name + phone + address` text matching
 - Treat local UI state as database truth after mutation without refetch
 - Assume unnamed/new rooms should default to `floor = 1`
+- Allow tenant reassignment to bypass unpaid bill rules
 
 ---
 
@@ -374,5 +397,6 @@ Before changing rental code, verify all of the following:
 5. Does the view/query actually expose the fields being filtered on?
 6. After mutation, is there a refetch or equivalent sync?
 7. If room creation is being changed, does the flow preserve floor detection + manual override behavior?
+8. If tenant reassignment is being changed, does the flow respect both room-level and tenant-level unpaid-bill guards?
 
 If any assumption is unsupported by this file or live schema, stop and say so.
