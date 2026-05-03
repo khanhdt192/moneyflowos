@@ -142,13 +142,20 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     color: g.color ?? "var(--income)",
   }));
 
-  const rooms: RentalRoom[] = (roomsRes.data ?? []).map((r) => ({
+  const rooms: RentalRoom[] = (roomsRes.data ?? []).map((r: any) => ({
     id: r.id,
     name: r.name,
     floor: r.floor ?? undefined,
     rent: num(r.rent),
     occupied: r.occupied,
     tenant: r.tenant?.full_name ?? undefined,
+    tenantInfo: r.tenant?.full_name
+      ? {
+          fullName: r.tenant.full_name,
+          phone: r.tenant.phone ?? undefined,
+          address: r.tenant.address ?? undefined,
+        }
+      : undefined,
   }));
 
   // Settings - merge DB row over defaults

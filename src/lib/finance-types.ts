@@ -39,6 +39,12 @@ export interface Goal {
   deadline?: string;
 }
 
+export interface RentalTenantInfo {
+  fullName: string;
+  phone?: string;
+  address?: string;
+}
+
 export interface RentalRoom {
   id: string;
   name: string;
@@ -46,6 +52,7 @@ export interface RentalRoom {
   rent: number;
   occupied: boolean;
   tenant?: string;
+  tenantInfo?: RentalTenantInfo;
   occupants?: number;
   allocationWeight?: number;
   electricityRateOverride?: number;
