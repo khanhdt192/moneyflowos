@@ -305,16 +305,16 @@ function RoomModal({
       }}
     >
       <DialogContent
-        className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto"
+        className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto [&>button]:hidden"
         onOpenAutoFocus={() => {
           if (room) handleOpen(room);
         }}
       >
         {room && (
           <>
-            <DialogHeader className="-mx-6 -mt-6 mb-4 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-3 backdrop-blur">
+            <DialogHeader className="-mx-6 -mt-6 mb-3 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-2 backdrop-blur">
               <div className="flex items-center justify-between gap-3">
-                <DialogTitle className="text-lg font-bold">{room.name}</DialogTitle>
+                <DialogTitle className="text-base font-semibold">{room.name}</DialogTitle>
                 <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
                   <X className="h-5 w-5" />
                 </button>
@@ -491,13 +491,16 @@ function RoomModal({
                   <button
                     type="button"
                     onClick={() => {
+                      if (!bill) return;
                       onClose();
                       onOpenBillDetail?.(room.id, cycleId);
                     }}
-                    className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
+                    disabled={!bill}
+                    className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                   >
                     Thông tin hoá đơn
                   </button>
+                  {!bill && <p className="text-xs text-muted-foreground">Chưa có hóa đơn tháng này</p>}
                   {room.tenantInfo ? (
                     <>
                       <button type="button" onClick={() => setTenantMode("edit")} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Sửa người thuê</button>

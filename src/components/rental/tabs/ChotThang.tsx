@@ -524,20 +524,22 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
         </table>
       </div>
 
-      <Dialog open={!!selectedRoomId} onOpenChange={(open) => !open && setSelectedRoomId(null)}>
-        <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
-          {selectedRoomId && (
-            (() => {
-              const room = roomMap[selectedRoomId];
-              const apiRow = apiBillMap[selectedRoomId];
-              const storeBill = storeBillMap[selectedRoomId];
-              const reading = getRow(selectedRoomId);
-              const occupied = room ? isRoomOccupied(room) : false;
-              const hasBill = !!apiRow?.bill_id || !!storeBill;
+      {selectedRoomId && (() => {
+        const room = roomMap[selectedRoomId];
+        const apiRow = apiBillMap[selectedRoomId];
+        const storeBill = storeBillMap[selectedRoomId];
+        const occupied = room ? isRoomOccupied(room) : false;
+        const hasBill = !!apiRow?.bill_id || !!storeBill;
+        const canRenderDetailModal = !!room && occupied && hasBill;
+        if (!canRenderDetailModal) return null;
+        return (
+          <Dialog open onOpenChange={(open) => !open && setSelectedRoomId(null)}>
+            <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
+              {(() => {
+                const reading = getRow(selectedRoomId);
               const status = room ? getDisplayStatus(room, apiRow?.bill_status ?? storeBill?.status ?? null, !!readingMap[selectedRoomId], cycleId) : "empty";
               const canConfirm = apiRow?.ui?.can_confirm ?? (storeBill?.status === "draft");
               const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
-              if (!room || !occupied || !hasBill) return null;
               return (
                 <div className="space-y-4">
                   <DialogHeader>
@@ -595,10 +597,11 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
                   ) : null}
                 </div>
               );
-            })()
-          )}
-        </DialogContent>
-      </Dialog>
+              })()}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
