@@ -239,6 +239,7 @@ function RoomModal({
   const [tenantPhone, setTenantPhone] = useState("");
   const [tenantAddress, setTenantAddress] = useState("");
   const [existingTenants, setExistingTenants] = useState<Tenant[]>([]);
+  const [blockedTenantIds, setBlockedTenantIds] = useState<Set<string>>(new Set());
   const [selectedTenantId, setSelectedTenantId] = useState("");
 
   const room = roomId ? state.rental.rooms.find((r) => r.id === roomId) ?? null : null;
@@ -264,6 +265,15 @@ function RoomModal({
     if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
     const tenants = await listTenants(userId);
     setExistingTenants(tenants);
+    const tenantIdByRoomId = new Map(state.rental.rooms.map((r) => [r.id, r.tenant_id || r.tenantInfo?.id || null]));
+    const blocked = new Set<string>();
+    state.rental.roomBills.forEach((b) => {
+      if (b.status === "cancelled") return;
+      if (b.paidAmount >= b.totalAmount) return;
+      const tenantId = tenantIdByRoomId.get(b.roomId);
+      if (tenantId) blocked.add(tenantId);
+    });
+    setBlockedTenantIds(blocked);
     return tenants;
   };
 
@@ -272,7 +282,7 @@ function RoomModal({
     setTenantName(room.tenantInfo?.fullName || "");
     setTenantPhone(room.tenantInfo?.phone || "");
     setTenantAddress(room.tenantInfo?.address || "");
-  }, [roomId, room?.tenantInfo?.id, room?.tenantInfo?.fullName, room?.tenantInfo?.phone, room?.tenantInfo?.address, tenantMode, room]);
+  }, [roomId, room?.tenantInfo?.id, room?.tenantInfo?.fullName, room?.tenantInfo?.phone, room?.tenantInfo?.address, room]);
 
   return (
     <Dialog
@@ -322,9 +332,18 @@ function RoomModal({
                   <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
                     {(tenantMode === "edit" || tenantMode === "add") ? (
                       <div className="space-y-2">
-                        <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Họ tên" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                        <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                        <input value={tenantAddress} onChange={(e) => setTenantAddress(e.target.value)} placeholder="Địa chỉ" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Họ tên</label>
+                          <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Họ tên" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Số điện thoại</label>
+                          <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Địa chỉ</label>
+                          <input value={tenantAddress} onChange={(e) => setTenantAddress(e.target.value)} placeholder="Địa chỉ" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
                           <button type="button" onClick={async () => {
@@ -335,6 +354,9 @@ function RoomModal({
                                 const userId = actions.getUserId(); if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
                                 await createAndAssign(room.id, { userId, fullName: tenantName.trim(), phone: tenantPhone.trim() || undefined, address: tenantAddress.trim() || undefined });
                               }
+                              setTenantName(room.tenantInfo?.fullName || "");
+                              setTenantPhone(room.tenantInfo?.phone || "");
+                              setTenantAddress(room.tenantInfo?.address || "");
                               setTenantMode("none"); toast.success("Đã lưu người thuê");
                             } catch { toast.error("Không thể lưu thông tin người thuê"); }
                           }} className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background">Lưu</button>
@@ -345,15 +367,25 @@ function RoomModal({
                         <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm">
                           <option value="">Chọn người thuê có sẵn</option>
                           {existingTenants.filter((t) => t.id !== room?.tenantInfo?.id).map((tenant) => (
-                            <option key={tenant.id} value={tenant.id}>{tenant.full_name} {tenant.phone ? `- ${tenant.phone}` : ""}</option>
+                            <option key={tenant.id} value={tenant.id} disabled={blockedTenantIds.has(tenant.id)}>
+                              {tenant.full_name} {tenant.phone ? `- ${tenant.phone}` : ""} {blockedTenantIds.has(tenant.id) ? "(Còn nợ bill phòng khác)" : ""}
+                            </option>
                           ))}
                         </select>
+                        <p className="text-xs text-muted-foreground">Người thuê đang nợ bill sẽ không thể chọn.</p>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
                           <button type="button" onClick={async () => {
                             try {
                               if (!room || !selectedTenantId) return;
+                              if (blockedTenantIds.has(selectedTenantId)) {
+                                toast.error("Không thể đổi người thuê đang nợ bill");
+                                return;
+                              }
                               await assignExisting(room.id, selectedTenantId);
+                              setTenantName(room.tenantInfo?.fullName || "");
+                              setTenantPhone(room.tenantInfo?.phone || "");
+                              setTenantAddress(room.tenantInfo?.address || "");
                               setTenantMode("none");
                               toast.success("Đã đổi người thuê");
                             } catch { toast.error("Không thể đổi người thuê"); }
@@ -430,6 +462,9 @@ function RoomModal({
                           }
                           try {
                             await removeFromRoom(room.id);
+                            setTenantName("");
+                            setTenantPhone("");
+                            setTenantAddress("");
                             toast.success("Đã xóa người thuê khỏi phòng");
                           } catch {
                             toast.error("Không thể xóa người thuê khỏi phòng");
@@ -453,7 +488,7 @@ function RoomModal({
                       className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30 disabled:opacity-50"
                       >Đổi người thuê</button>
                       {!canChangeTenant && (
-                        <p className="text-xs text-muted-foreground">Chỉ đổi người thuê khi hóa đơn tháng này đã thanh toán đủ</p>
+                        <p className="text-xs text-muted-foreground">Chỉ thao tác người thuê khi hóa đơn tháng này đã thanh toán đủ</p>
                       )}
                     </>
                   ) : (
