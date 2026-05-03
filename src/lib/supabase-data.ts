@@ -148,7 +148,10 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     floor: r.floor ?? undefined,
     rent: num(r.rent),
     occupied: r.occupied,
+    tenant_id: r.tenant_id ?? undefined,
     tenant: r.tenant?.full_name ?? undefined,
+    tenant_phone: r.tenant?.phone ?? undefined,
+    tenant_address: r.tenant?.address ?? undefined,
   }));
 
   // Settings - merge DB row over defaults

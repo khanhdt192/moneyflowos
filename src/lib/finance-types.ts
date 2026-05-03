@@ -45,7 +45,10 @@ export interface RentalRoom {
   floor?: number;
   rent: number;
   occupied: boolean;
+  tenant_id?: string;
   tenant?: string;
+  tenant_phone?: string;
+  tenant_address?: string;
   occupants?: number;
   allocationWeight?: number;
   electricityRateOverride?: number;

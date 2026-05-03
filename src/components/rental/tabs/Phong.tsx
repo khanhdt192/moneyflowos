@@ -2,15 +2,18 @@ import { useState } from "react";
 import { Plus, X, Check, Trash2, ChevronRight, Home, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
+import { cloud } from "@/lib/supabase-data";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { tenantService } from "@/services/tenant.service";
+import { roomService } from "@/services/room.service";
 
 type Status = "occupied" | "empty" | "debt";
 
 function getRoomStatus(room: RentalRoom, hasDebt: boolean): Status {
-  if (!room.occupied) return "empty";
+  if (!room.tenant_id) return "empty";
   if (hasDebt) return "debt";
   return "occupied";
 }
@@ -40,7 +43,7 @@ export function Phong() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {state.rental.rooms.length} phòng · {state.rental.rooms.filter((r) => r.occupied).length} đang thuê
+          {state.rental.rooms.length} phòng · {state.rental.rooms.filter((r) => !!r.tenant_id).length} đang thuê
         </p>
         <button
           type="button"
@@ -55,8 +58,15 @@ export function Phong() {
       {adding && (
         <AddRoomForm
           onCancel={() => setAdding(false)}
-          onCreate={(name, rent) => {
-            actions.addRoom(name, rent);
+          onCreate={async (name, rent, tenantInput) => {
+            const userId = actions.getUserId();
+            if (!userId) return;
+            const room = await cloud.insertRoom(userId, name, rent);
+            if (tenantInput) {
+              const tenant = await tenantService.createTenant(tenantInput);
+              await roomService.assignTenant(room.id, tenant.id);
+            }
+            await actions.refetch();
             setAdding(false);
             toast.success(`Đã thêm phòng ${name}`);
           }}
@@ -104,7 +114,14 @@ export function Phong() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {room.tenant || <span className="italic text-muted-foreground/50">—</span>}
+                    {room.tenant ? (
+                      <div className="leading-tight">
+                        <div className="text-foreground">{room.tenant}</div>
+                        <div className="text-xs text-muted-foreground">{room.tenant_phone ?? "—"}</div>
+                      </div>
+                    ) : (
+                      <span className="italic text-muted-foreground/50">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
                     {formatMoney(room.rent)}
@@ -282,14 +299,25 @@ function RoomDrawer({
               <div className="space-y-5">
                 <InfoGrid
                   rows={[
-                    { label: "Khách thuê", value: room.tenant || "—" },
+                    { label: "Tên phòng", value: room.name },
                     { label: "Giá thuê", value: formatMoney(room.rent) },
-                    {
-                      label: "Trạng thái",
-                      value: room.occupied ? "Đang thuê" : "Trống",
-                    },
                   ]}
                 />
+                <InfoGrid
+                  rows={[
+                    { label: "Họ tên", value: room.tenant || "—" },
+                    { label: "Số điện thoại", value: room.tenant_phone || "—" },
+                    { label: "Địa chỉ", value: room.tenant_address || "—" },
+                  ]}
+                />
+                {!room.tenant_id && (
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
+                  >
+                    Thêm người thuê
+                  </button>
+                )}
 
                 {bill && (
                   <div>
@@ -384,12 +412,20 @@ function AddRoomForm({
   onCreate,
 }: {
   onCancel: () => void;
-  onCreate: (name: string, rent: number) => void;
+  onCreate: (
+    name: string,
+    rent: number,
+    tenantInput?: { fullName: string; phone?: string; address?: string },
+  ) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [rent, setRent] = useState("");
-  const [tenant, setTenant] = useState("");
-  const valid = name.trim() && parseFloat(rent) > 0;
+  const [addTenantNow, setAddTenantNow] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [saving, setSaving] = useState(false);
+  const valid = !!name.trim() && parseFloat(rent) > 0 && (!addTenantNow || !!fullName.trim());
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -420,16 +456,29 @@ function AddRoomForm({
             className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
         </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground">Khách thuê</label>
-          <input
-            value={tenant}
-            onChange={(e) => setTenant(e.target.value)}
-            placeholder="Tuỳ chọn"
-            className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-          />
-        </div>
       </div>
+      <div className="mt-3">
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={addTenantNow} onChange={(e) => setAddTenantNow(e.target.checked)} />
+          <span>Thêm người thuê ngay</span>
+        </label>
+      </div>
+      {addTenantNow && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Họ tên</label>
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Số điện thoại</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Địa chỉ</label>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+          </div>
+        </div>
+      )}
       <div className="mt-3 flex gap-2 justify-end">
         <button
           type="button"
@@ -440,8 +489,27 @@ function AddRoomForm({
         </button>
         <button
           type="button"
-          disabled={!valid}
-          onClick={() => onCreate(name.trim(), parseFloat(rent))}
+          disabled={!valid || saving}
+          onClick={async () => {
+            try {
+              setSaving(true);
+              await onCreate(
+                name.trim(),
+                parseFloat(rent),
+                addTenantNow
+                  ? {
+                      fullName: fullName.trim(),
+                      phone: phone.trim() || undefined,
+                      address: address.trim() || undefined,
+                    }
+                  : undefined,
+              );
+            } catch {
+              toast.error("Không thể thêm phòng");
+            } finally {
+              setSaving(false);
+            }
+          }}
           className="rounded-lg bg-foreground px-4 py-1.5 text-sm font-semibold text-background disabled:opacity-50"
         >
           Thêm phòng
