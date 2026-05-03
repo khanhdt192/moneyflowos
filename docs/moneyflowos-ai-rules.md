@@ -93,6 +93,26 @@ Forbidden:
 
 ---
 
+### 3.6 Tenant mobility rules (NEW)
+
+AI must enforce both rules when implementing tenant change / assignment:
+
+1. Room-level guard:
+- If current room bill exists and is unpaid (paidAmount < totalAmount):
+  - do NOT allow changing tenant
+  - do NOT allow removing tenant
+
+2. Tenant-level global guard:
+- A tenant must NOT be assignable to any other room if that tenant has any unpaid bill
+- Unpaid means paidAmount < totalAmount
+- Cancelled bills may be excluded if status exists
+
+Forbidden:
+- allowing tenant reassignment that bypasses unpaid bills
+- implementing only room-level guard without tenant-level guard
+
+---
+
 ## 4. View & query rules
 
 ### 4.1 Never assume view structure
