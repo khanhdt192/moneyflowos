@@ -305,7 +305,7 @@ function RoomModal({
       }}
     >
       <DialogContent
-        className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto [&>button]:hidden"
+        className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden"
         onOpenAutoFocus={() => {
           if (room) handleOpen(room);
         }}
@@ -463,10 +463,12 @@ function RoomModal({
                     </h4>
                   {bill ? (
                     <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2 text-sm">
-                      <Row
-                        label="Trạng thái"
-                        value={bill.status === "draft" ? "Nháp" : bill.status === "paid" ? "Đã thu" : "Chưa thu"}
-                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Trạng thái</span>
+                        <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-medium">
+                          {bill.status === "draft" ? "Nháp" : bill.status === "paid" ? "Đã thu" : "Chưa thu"}
+                        </span>
+                      </div>
                       <Row label="Tiền thuê" value={formatMoney(bill.rentAmount)} />
                       <Row label="Tiền điện" value={formatMoney(bill.electricityAmount)} />
                       <Row label="Nước" value={formatMoney(bill.waterAmount)} />

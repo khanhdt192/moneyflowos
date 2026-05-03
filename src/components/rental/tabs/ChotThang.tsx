@@ -541,7 +541,7 @@ export function ChotThang({
         if (!canRenderDetailModal) return null;
         return (
           <Dialog open onOpenChange={(open) => !open && setSelectedRoomId(null)}>
-            <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
+            <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden">
               {(() => {
                 const reading = getRow(selectedRoomId);
               const status = room ? getDisplayStatus(room, apiRow?.bill_status ?? storeBill?.status ?? null, !!readingMap[selectedRoomId], cycleId) : "empty";
@@ -549,59 +549,76 @@ export function ChotThang({
               const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
               return (
                 <div className="space-y-4">
-                  <DialogHeader>
-                    <DialogTitle>{room.name} · Tháng {String(month).padStart(2, "0")}/{year}</DialogTitle>
-                  </DialogHeader>
-                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1">
-                    <Row label="Khách thuê" value={room.tenant || "Trống"} />
-                    <Row label="Trạng thái bill" value={STATUS_CFG[status].label} />
-                    <Row label="Số đầu" value={reading.start || "0"} />
-                    <Row label="Số cuối" value={reading.end || "0"} />
-                    <Row label="Nước (m³)" value={reading.water || "0"} />
-                  </div>
-                  <div className="space-y-3 rounded-xl border border-border p-4">
-                    <h4 className="text-sm font-semibold">Nhập chỉ số</h4>
-                    <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập điện</p>
-                      {isT1(room) ? (
-                        <p className="text-sm text-muted-foreground">Điện tầng 1 tính cố định</p>
-                      ) : (
-                        <>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div>
-                              <label className="mb-1 block text-xs text-muted-foreground">Số đầu điện</label>
-                              <input type="number" value={reading.start} onChange={(e) => onReadingChange(room.id, "start", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-xs text-muted-foreground">Số cuối điện</label>
-                              <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Tiêu thụ: {Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0)} kWh</p>
-                        </>
-                      )}
-                    </div>
-                    <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập nước</p>
+                  <DialogHeader className="-mx-6 -mt-6 mb-1 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-2 backdrop-blur">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">Nước (m³)</label>
-                        <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                        <DialogTitle className="text-base font-semibold">{room.name}</DialogTitle>
+                        <p className="text-xs text-muted-foreground">Tháng {String(month).padStart(2, "0")}/{year}</p>
                       </div>
+                      <button type="button" onClick={() => setSelectedRoomId(null)} className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </DialogHeader>
+                  <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+                    <div className="space-y-4">
+                      <SectionCard title="Thông tin phòng">
+                        <Row label="Khách thuê" value={room.tenant || "Trống"} />
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Trạng thái bill</span>
+                          <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
+                        </div>
+                      </SectionCard>
+                      <SectionCard title="Nhập điện nước">
+                        <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập điện</p>
+                          {isT1(room) ? (
+                            <p className="text-sm text-muted-foreground">Điện tầng 1 tính cố định</p>
+                          ) : (
+                            <>
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                  <label className="mb-1 block text-xs text-muted-foreground">Số đầu điện</label>
+                                  <input type="number" value={reading.start} onChange={(e) => onReadingChange(room.id, "start", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                                </div>
+                                <div>
+                                  <label className="mb-1 block text-xs text-muted-foreground">Số cuối điện</label>
+                                  <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                                </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground">Tiêu thụ: {Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0)} kWh</p>
+                            </>
+                          )}
+                        </div>
+                        <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập nước</p>
+                          <div>
+                            <label className="mb-1 block text-xs text-muted-foreground">Nước (m³)</label>
+                            <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                          </div>
+                        </div>
+                      </SectionCard>
+                      {storeBill ? <BillBreakdown bill={storeBill} settings={settings} /> : null}
+                    </div>
+                    <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
+                      {storeBill && canPay ? (
+                        <button type="button" onClick={() => handlePay(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Thu tiền</button>
+                      ) : canConfirm ? (
+                        <button type="button" onClick={() => handleConfirmSingle(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Chốt bill</button>
+                      ) : null}
+                      <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                      <button type="button" onClick={() => setSelectedRoomId(null)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Đóng</button>
+                      <SectionCard title="Chi tiết bill">
+                        <Row label="Số đầu" value={reading.start || "0"} />
+                        <Row label="Số cuối" value={reading.end || "0"} />
+                        <Row label="Nước (m³)" value={reading.water || "0"} />
+                      </SectionCard>
+                      {storeBill && canPay ? (
+                        <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
+                      ) : null}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {storeBill && canPay ? (
-                      <button type="button" onClick={() => handlePay(room.id)} className="rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background">Thu tiền</button>
-                    ) : canConfirm ? (
-                      <button type="button" onClick={() => handleConfirmSingle(room.id)} className="rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background">Chốt bill</button>
-                    ) : null}
-                    <button type="button" onClick={() => handleExportSingle(room.id)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">PDF</button>
-                    <button type="button" onClick={() => setSelectedRoomId(null)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">Đóng</button>
-                  </div>
-                  {storeBill ? <BillBreakdown bill={storeBill} settings={settings} /> : null}
-                  {storeBill && canPay ? (
-                    <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
-                  ) : null}
                 </div>
               );
               })()}
@@ -657,6 +674,15 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
     <div className="rounded-xl border border-border bg-card p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`mt-1 text-base font-semibold tabular-nums ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-3">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h4>
+      {children}
     </div>
   );
 }
