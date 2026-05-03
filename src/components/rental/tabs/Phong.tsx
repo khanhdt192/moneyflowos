@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, X, Check, Trash2, ChevronRight, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
@@ -244,6 +244,7 @@ function RoomModal({
   const room = roomId ? state.rental.rooms.find((r) => r.id === roomId) ?? null : null;
   const debt = room ? (debtMap[room.id] ?? 0) : 0;
   const bill = room ? state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId) : null;
+  const canChangeTenant = !bill || bill.paidAmount >= bill.totalAmount;
 
   const handleOpen = (r: RentalRoom | null) => {
     if (r) {
@@ -265,6 +266,13 @@ function RoomModal({
     setExistingTenants(tenants);
     return tenants;
   };
+
+  useEffect(() => {
+    if (!room) return;
+    setTenantName(room.tenantInfo?.fullName || "");
+    setTenantPhone(room.tenantInfo?.phone || "");
+    setTenantAddress(room.tenantInfo?.address || "");
+  }, [roomId, room?.tenantInfo?.id, room?.tenantInfo?.fullName, room?.tenantInfo?.phone, room?.tenantInfo?.address, tenantMode, room]);
 
   return (
     <Dialog
@@ -416,6 +424,10 @@ function RoomModal({
                         type="button"
                         onClick={async () => {
                           if (!confirm("Xóa người thuê khỏi phòng này?")) return;
+                          if (!canChangeTenant) {
+                            toast.error("Chỉ xóa người thuê khi hóa đơn tháng này đã thanh toán đủ");
+                            return;
+                          }
                           try {
                             await removeFromRoom(room.id);
                             toast.success("Đã xóa người thuê khỏi phòng");
@@ -423,11 +435,13 @@ function RoomModal({
                             toast.error("Không thể xóa người thuê khỏi phòng");
                           }
                         }}
-                        className="w-full rounded-lg border border-destructive/40 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/5"
+                        disabled={!canChangeTenant}
+                        className="w-full rounded-lg border border-destructive/40 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
                       >Xóa người thuê khỏi phòng</button>
                       <button
                         type="button"
                         onClick={async () => {
+                          if (!canChangeTenant) return;
                           try {
                             await loadTenants();
                             setTenantMode("change");
@@ -435,8 +449,12 @@ function RoomModal({
                             toast.error("Không tải được danh sách người thuê");
                           }
                         }}
-                      className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
+                        disabled={!canChangeTenant}
+                      className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30 disabled:opacity-50"
                       >Đổi người thuê</button>
+                      {!canChangeTenant && (
+                        <p className="text-xs text-muted-foreground">Chỉ đổi người thuê khi hóa đơn tháng này đã thanh toán đủ</p>
+                      )}
                     </>
                   ) : (
                     <button
