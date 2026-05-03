@@ -78,6 +78,21 @@ Forbidden:
 
 ---
 
+### 3.5 Floor handling (NEW)
+
+- Floor must NOT default to 1 implicitly
+- Floor should be derived from room name when possible
+- Add Room flow must:
+  - auto-detect floor from room name
+  - show editable field `Tầng`
+  - allow manual override
+
+Forbidden:
+- assuming all new rooms belong to floor 1
+- ignoring detected floor when inserting into DB
+
+---
+
 ## 4. View & query rules
 
 ### 4.1 Never assume view structure
@@ -135,10 +150,33 @@ Step 2: Confirm assumptions
 Step 3: Propose minimal changes
 Step 4: Implement
 Step 5: Ensure refetch / sync logic
+Step 6: Perform DOC IMPACT CHECK
 
 ---
 
-## 8. Strict forbidden behaviors
+## 8. DOC IMPACT CHECK (MANDATORY)
+
+After every task, AI must evaluate:
+
+1. Does this change affect schema?
+2. Does this change affect business workflow?
+3. Does this change affect frontend ↔ DB contract?
+
+Then explicitly answer:
+
+- database-contract.md: update needed / not needed
+- moneyflowos-ai-rules.md: update needed / not needed
+
+If update needed:
+- propose exact markdown changes
+
+Forbidden:
+- skipping this step
+- finishing task without checking doc impact
+
+---
+
+## 9. Strict forbidden behaviors
 
 AI must NEVER:
 
@@ -151,7 +189,7 @@ AI must NEVER:
 
 ---
 
-## 9. When uncertain
+## 10. When uncertain
 
 If you are not sure about schema or logic:
 
@@ -163,7 +201,7 @@ Do NOT guess.
 
 ---
 
-## 10. Goal of these rules
+## 11. Goal of these rules
 
 - Prevent schema drift
 - Prevent data corruption
