@@ -90,7 +90,13 @@ function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData)
 
 /* ─── component ───────────────────────────────────────────── */
 
-export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; cycleId: string; nonce: number } | null }) {
+export function ChotThang({
+  focusRequest,
+  onFocusRequestConsumed,
+}: {
+  focusRequest?: { roomId: string; cycleId: string; nonce: number } | null;
+  onFocusRequestConsumed?: () => void;
+}) {
   const state   = useFinance();
   const actions = useFinanceActions();
   const now     = new Date();
@@ -122,6 +128,11 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
   const [payInput, setPayInput]   = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [payNote, setPayNote]     = useState("");
+  const [inlineEdit, setInlineEdit] = useState<{
+    roomId: string;
+    mode: "electricity" | "water";
+    value: { start?: string; end?: string; water?: string };
+  } | null>(null);
 
   /* clear local rows and collapse expansion when month changes */
   useEffect(() => {
@@ -142,7 +153,8 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
     }
     setHighlightedRoomId(focusRequest.roomId);
     setSelectedRoomId(focusRequest.roomId);
-  }, [focusRequest?.nonce]);
+    onFocusRequestConsumed?.();
+  }, [focusRequest?.nonce, onFocusRequestConsumed]);
 
   /* ─── local store maps ──────────────────────────────────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
@@ -208,6 +220,25 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
         setSaveState(roomId, "error");
       }
     }, 600);
+  }
+
+  async function saveInlineReading(roomId: string, rowData: RowData) {
+    const start = parseFloat(rowData.start) || 0;
+    const end   = parseFloat(rowData.end)   || 0;
+    const water = parseFloat(rowData.water) || 0;
+    if (end < start) return;
+
+    setRows((p) => ({ ...p, [roomId]: rowData }));
+    setSaveState(roomId, "saving");
+    try {
+      await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
+      setSaveState(roomId, "saved");
+      setTimeout(() => setSaveState(roomId, "idle"), 2500);
+      await new Promise<void>((r) => setTimeout(r, 200));
+      await apiRefetch();
+    } catch {
+      setSaveState(roomId, "error");
+    }
   }
 
   /* ─── handlers ──────────────────────────────────────────── */
@@ -372,6 +403,7 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
                 }
                 setPayInput("");
                 setPayNote("");
+                setInlineEdit(null);
                 setHighlightedRoomId(room.id);
                 setSelectedRoomId(room.id);
               }
@@ -534,67 +566,111 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
         if (!canRenderDetailModal) return null;
         return (
           <Dialog open onOpenChange={(open) => !open && setSelectedRoomId(null)}>
-            <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
+            <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden">
               {(() => {
                 const reading = getRow(selectedRoomId);
               const status = room ? getDisplayStatus(room, apiRow?.bill_status ?? storeBill?.status ?? null, !!readingMap[selectedRoomId], cycleId) : "empty";
               const canConfirm = apiRow?.ui?.can_confirm ?? (storeBill?.status === "draft");
               const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
+              const kwh = Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0);
+              const electricityAmount = isT1(room)
+                ? settings.t1ElectricityBill
+                : kwh * settings.defaultElectricityRate;
+              const waterAmount = (parseFloat(reading.water) || 0) * settings.waterRatePerM3;
+              const remaining = storeBill ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount) : 0;
               return (
                 <div className="space-y-4">
-                  <DialogHeader>
-                    <DialogTitle>{room.name} · Tháng {String(month).padStart(2, "0")}/{year}</DialogTitle>
-                  </DialogHeader>
-                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1">
-                    <Row label="Khách thuê" value={room.tenant || "Trống"} />
-                    <Row label="Trạng thái bill" value={STATUS_CFG[status].label} />
-                    <Row label="Số đầu" value={reading.start || "0"} />
-                    <Row label="Số cuối" value={reading.end || "0"} />
-                    <Row label="Nước (m³)" value={reading.water || "0"} />
-                  </div>
-                  <div className="space-y-3 rounded-xl border border-border p-4">
-                    <h4 className="text-sm font-semibold">Nhập chỉ số</h4>
-                    <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập điện</p>
-                      {isT1(room) ? (
-                        <p className="text-sm text-muted-foreground">Điện tầng 1 tính cố định</p>
-                      ) : (
-                        <>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div>
-                              <label className="mb-1 block text-xs text-muted-foreground">Số đầu điện</label>
-                              <input type="number" value={reading.start} onChange={(e) => onReadingChange(room.id, "start", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-xs text-muted-foreground">Số cuối điện</label>
-                              <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Tiêu thụ: {Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0)} kWh</p>
-                        </>
-                      )}
-                    </div>
-                    <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập nước</p>
-                      <div>
-                        <label className="mb-1 block text-xs text-muted-foreground">Nước (m³)</label>
-                        <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  <DialogHeader className="-mx-6 -mt-6 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1 backdrop-blur">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex items-center gap-2 text-sm">
+                        <DialogTitle className="shrink-0 text-base font-semibold text-foreground">{room.name}</DialogTitle>
+                        <span className="shrink-0 text-muted-foreground">•</span>
+                        <span className="truncate text-muted-foreground">{room.tenant || "Trống"}</span>
+                        <span className="shrink-0 text-muted-foreground">•</span>
+                        <span className="truncate text-muted-foreground">Hóa đơn tháng {String(month).padStart(2, "0")}/{year}</span>
                       </div>
+                      <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
+                      <button type="button" onClick={() => { setInlineEdit(null); setSelectedRoomId(null); }} className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </DialogHeader>
+                  <div className="grid gap-5 pt-3 lg:grid-cols-[1fr_320px]">
+                    <div className="space-y-4">
+                      {storeBill ? (
+                        <SectionCard title="Tổng hợp hóa đơn">
+                          <Row label="Tiền thuê" value={formatMoney(storeBill.rentAmount)} />
+                          <div className="border-t border-border pt-2 space-y-2">
+                            <Row label="Tiền điện" value={formatMoney(storeBill.electricityAmount)} />
+                          {!isT1(room) && (
+                            <InlineEditRow
+                              label="Số đầu / Số cuối"
+                              value={`${reading.start || 0} / ${reading.end || 0}`}
+                              editing={inlineEdit?.roomId === room.id && inlineEdit?.mode === "electricity"}
+                              onEdit={() => setInlineEdit({ roomId: room.id, mode: "electricity", value: { start: reading.start, end: reading.end } })}
+                              onCancel={() => setInlineEdit(null)}
+                              onSave={async () => {
+                                if (!inlineEdit || inlineEdit.mode !== "electricity") return;
+                                await saveInlineReading(room.id, {
+                                  start: inlineEdit.value.start ?? reading.start,
+                                  end: inlineEdit.value.end ?? reading.end,
+                                  water: reading.water,
+                                });
+                                setInlineEdit(null);
+                              }}
+                            >
+                              <div className="grid grid-cols-2 gap-2">
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                              </div>
+                            </InlineEditRow>
+                          )}
+                          </div>
+                          <div className="border-t border-border pt-2 space-y-2">
+                          <Row label="Tiền nước" value={formatMoney(storeBill.waterAmount)} />
+                          <InlineEditRow
+                            label="Số m3 nước"
+                            value={reading.water || "0"}
+                            editing={inlineEdit?.roomId === room.id && inlineEdit?.mode === "water"}
+                            onEdit={() => setInlineEdit({ roomId: room.id, mode: "water", value: { water: reading.water } })}
+                            onCancel={() => setInlineEdit(null)}
+                            onSave={async () => {
+                              if (!inlineEdit || inlineEdit.mode !== "water") return;
+                              await saveInlineReading(room.id, {
+                                start: reading.start,
+                                end: reading.end,
+                                water: inlineEdit.value.water ?? reading.water,
+                              });
+                              setInlineEdit(null);
+                            }}
+                          >
+                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                          </InlineEditRow>
+                          </div>
+                          <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
+                          <Row label="Vệ sinh" value={formatMoney(storeBill.cleaningAmount)} />
+                          <Row label="Phụ phí khác" value={formatMoney(storeBill.otherAmount)} />
+                          <div className="border-t border-border pt-2">
+                            <Row label="Tổng" value={formatMoney(storeBill.totalAmount)} className="font-semibold" />
+                          </div>
+                          <Row label="Đã thu" value={formatMoney(storeBill.paidAmount)} />
+                          <Row label="Còn thiếu" value={formatMoney(remaining)} className="font-semibold text-rose-600" />
+                        </SectionCard>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
+                      {storeBill && canPay ? (
+                        <button type="button" onClick={() => handlePay(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Thu tiền</button>
+                      ) : canConfirm ? (
+                        <button type="button" onClick={() => handleConfirmSingle(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Chốt bill</button>
+                      ) : null}
+                      <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                      {storeBill && canPay ? (
+                        <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
+                      ) : null}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {storeBill && canPay ? (
-                      <button type="button" onClick={() => handlePay(room.id)} className="rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background">Thu tiền</button>
-                    ) : canConfirm ? (
-                      <button type="button" onClick={() => handleConfirmSingle(room.id)} className="rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background">Chốt bill</button>
-                    ) : null}
-                    <button type="button" onClick={() => handleExportSingle(room.id)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">PDF</button>
-                    <button type="button" onClick={() => setSelectedRoomId(null)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">Đóng</button>
-                  </div>
-                  {storeBill ? <BillBreakdown bill={storeBill} settings={settings} /> : null}
-                  {storeBill && canPay ? (
-                    <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
-                  ) : null}
                 </div>
               );
               })()}
@@ -654,44 +730,43 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
   );
 }
 
-function BillBreakdown({
-  bill, settings,
-}: {
-  bill: RentalRoomBill;
-  settings: RentalSettings;
-}) {
-  const items = [
-    { label: "Tiền thuê",  amount: bill.rentAmount },
-    { label: "Điện",       amount: bill.electricityAmount },
-    { label: "Nước",       amount: bill.waterAmount },
-    { label: "Wifi",       amount: bill.wifiAmount },
-    { label: "Vệ sinh",    amount: bill.cleaningAmount },
-    { label: settings.otherName || "Phụ phí", amount: bill.otherAmount },
-  ].filter((r) => r.amount > 0);
-
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
-      <p className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/20 border-b border-border">
-        Chi tiết hóa đơn
-      </p>
-      <table className="w-full text-sm">
-        <tbody>
-          {items.map((r) => (
-            <tr key={r.label} className="border-b border-border last:border-0">
-              <td className="px-4 py-2.5 text-muted-foreground">{r.label}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(r.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-border bg-muted/20">
-            <td className="px-4 py-3 text-base font-semibold text-foreground">Tổng cộng</td>
-            <td className="px-4 py-3 text-right text-base font-semibold tabular-nums text-foreground">
-              {formatMoney(bill.totalAmount)}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+    <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-3">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+function InlineEditRow({
+  label, value, editing, onEdit, onSave, onCancel, children,
+}: {
+  label: string;
+  value: string;
+  editing: boolean;
+  onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2 border-t border-border pt-2">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        {!editing ? (
+          <div className="flex items-center gap-3">
+            <span className="font-medium tabular-nums">{value}</span>
+            <button type="button" onClick={onEdit} className="text-xs font-medium text-indigo-600 hover:underline">Sửa</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onSave} className="rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background">Lưu</button>
+            <button type="button" onClick={onCancel} className="rounded-md border border-border px-2 py-1 text-xs font-medium">Huỷ</button>
+          </div>
+        )}
+      </div>
+      {editing ? children : null}
     </div>
   );
 }
