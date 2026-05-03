@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, X, Check, Trash2, ChevronRight, Home, Pencil } from "lucide-react";
+import { Plus, X, Check, Trash2, ChevronRight, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { useTenant } from "@/hooks/useTenant";
@@ -8,7 +8,6 @@ import type { Tenant } from "@/services/tenant.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 
 type Status = "occupied" | "empty" | "debt";
 
@@ -46,7 +45,7 @@ function detectFloorFromRoomName(name: string): number | null {
 export function Phong() {
   const state = useFinance();
   const actions = useFinanceActions();
-  const [selectedRoom, setSelectedRoom] = useState<RentalRoom | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const { createAndAssign } = useTenant(async () => {
     await actions.refetch();
@@ -148,7 +147,7 @@ export function Phong() {
               return (
                 <tr
                   key={room.id}
-                  onClick={() => setSelectedRoom(room)}
+                  onClick={() => setSelectedRoomId(room.id)}
                   className="cursor-pointer bg-card hover:bg-muted/20 transition-colors"
                 >
                   <td className="px-4 py-3">
@@ -207,25 +206,25 @@ export function Phong() {
       </div>
 
       <RoomModal
-        room={selectedRoom}
+        roomId={selectedRoomId}
         cycleId={cycleId}
-        onClose={() => setSelectedRoom(null)}
-        debt={selectedRoom ? (debtMap[selectedRoom.id] ?? 0) : 0}
+        onClose={() => setSelectedRoomId(null)}
+        debtMap={debtMap}
       />
     </div>
   );
 }
 
 function RoomModal({
-  room,
+  roomId,
   cycleId,
   onClose,
-  debt,
+  debtMap,
 }: {
-  room: RentalRoom | null;
+  roomId: string | null;
   cycleId: string;
   onClose: () => void;
-  debt: number;
+  debtMap: Record<string, number>;
 }) {
   const state = useFinance();
   const actions = useFinanceActions();
@@ -242,6 +241,8 @@ function RoomModal({
   const [existingTenants, setExistingTenants] = useState<Tenant[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState("");
 
+  const room = roomId ? state.rental.rooms.find((r) => r.id === roomId) ?? null : null;
+  const debt = room ? (debtMap[room.id] ?? 0) : 0;
   const bill = room ? state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId) : null;
 
   const handleOpen = (r: RentalRoom | null) => {
@@ -267,7 +268,7 @@ function RoomModal({
 
   return (
     <Dialog
-      open={!!room}
+      open={!!roomId}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
@@ -281,93 +282,77 @@ function RoomModal({
         {room && (
           <>
             <DialogHeader className="mb-6">
-              <div className="flex items-center justify-between">
-                <DialogTitle className="text-lg font-bold">{room.name}</DialogTitle>
-                {!editing && (
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <Pencil className="h-3 w-3" /> Sửa
-                  </button>
-                )}
-              </div>
+              <DialogTitle className="text-lg font-bold">{room.name}</DialogTitle>
             </DialogHeader>
 
-            {editing ? (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Tên phòng</label>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Giá thuê / tháng</label>
-                  <input
-                    type="number"
-                    value={rent}
-                    onChange={(e) => setRent(e.target.value)}
-                    className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                  />
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className="flex h-9 flex-1 items-center justify-center rounded-lg border border-border text-sm font-medium"
-                  >
-                    Huỷ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      actions.updateRoom(room.id, {
-                        name,
-                        rent: parseFloat(rent) || room.rent,
-                      });
-                      setEditing(false);
-                      toast.success("Đã cập nhật phòng");
-                    }}
-                    className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-foreground text-sm font-semibold text-background"
-                  >
-                    <Check className="h-4 w-4" /> Lưu
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Xoá ${room.name}?`)) {
-                      actions.removeRoom(room.id);
-                      onClose();
-                      toast.success(`Đã xoá ${room.name}`);
-                    }
-                  }}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-destructive/40 py-2 text-sm font-medium text-destructive hover:bg-destructive/5"
-                >
-                  <Trash2 className="h-4 w-4" /> Xoá phòng
-                </button>
-              </div>
-            ) : (
               <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
                 <div className="space-y-5">
-                  <InfoGrid
-                  rows={[
-                    { label: "Giá thuê", value: formatMoney(room.rent) },
-                    {
-                      label: "Trạng thái",
-                      value: isRoomOccupied(room) ? "Đang thuê" : "Trống",
-                    },
-                  ]}
-                  />
+                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thông tin phòng</h4>
+                    {editing ? (
+                      <>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Tên phòng</label>
+                          <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Giá thuê / tháng</label>
+                          <input type="number" value={rent} onChange={(e) => setRent(e.target.value)} className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => { setEditing(false); setName(room.name); setRent(String(room.rent)); }} className="flex-1 rounded-lg border border-border py-2 text-sm font-medium">Huỷ</button>
+                          <button type="button" onClick={() => { actions.updateRoom(room.id, { name, rent: parseFloat(rent) || room.rent }); setEditing(false); toast.success("Đã cập nhật phòng"); }} className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background">Lưu</button>
+                        </div>
+                      </>
+                    ) : (
+                      <InfoGrid rows={[{ label: "Giá thuê", value: formatMoney(room.rent) }, { label: "Trạng thái", value: isRoomOccupied(room) ? "Đang thuê" : "Trống" }]} />
+                    )}
+                  </div>
 
                 <div>
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</h4>
                   <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
-                    {room.tenantInfo ? (
+                    {(tenantMode === "edit" || tenantMode === "add") ? (
+                      <div className="space-y-2">
+                        <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Họ tên" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        <input value={tenantAddress} onChange={(e) => setTenantAddress(e.target.value)} placeholder="Địa chỉ" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
+                          <button type="button" onClick={async () => {
+                            try {
+                              if (!room) return;
+                              if (tenantMode === "edit" && room.tenantInfo) await update(room.tenantInfo.id, { fullName: tenantName.trim(), phone: tenantPhone.trim(), address: tenantAddress.trim() });
+                              if (tenantMode === "add") {
+                                const userId = actions.getUserId(); if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
+                                await createAndAssign(room.id, { userId, fullName: tenantName.trim(), phone: tenantPhone.trim() || undefined, address: tenantAddress.trim() || undefined });
+                              }
+                              setTenantMode("none"); toast.success("Đã lưu người thuê");
+                            } catch { toast.error("Không thể lưu thông tin người thuê"); }
+                          }} className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background">Lưu</button>
+                        </div>
+                      </div>
+                    ) : tenantMode === "change" ? (
+                      <div className="space-y-2">
+                        <select value={selectedTenantId} onChange={(e) => setSelectedTenantId(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm">
+                          <option value="">Chọn người thuê có sẵn</option>
+                          {existingTenants.filter((t) => t.id !== room?.tenantInfo?.id).map((tenant) => (
+                            <option key={tenant.id} value={tenant.id}>{tenant.full_name} {tenant.phone ? `- ${tenant.phone}` : ""}</option>
+                          ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
+                          <button type="button" onClick={async () => {
+                            try {
+                              if (!room || !selectedTenantId) return;
+                              await assignExisting(room.id, selectedTenantId);
+                              setTenantMode("none");
+                              toast.success("Đã đổi người thuê");
+                            } catch { toast.error("Không thể đổi người thuê"); }
+                          }} className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background">Lưu</button>
+                        </div>
+                      </div>
+                    ) : room.tenantInfo ? (
                       <div className="space-y-2">
                         <Row label="Họ tên" value={room.tenantInfo.fullName} />
                         <Row label="Số điện thoại" value={room.tenantInfo.phone || "—"} />
@@ -383,72 +368,6 @@ function RoomModal({
                     )}
                   </div>
                 </div>
-
-                {tenantMode !== "none" && (
-                  <div className="rounded-xl border border-border bg-card p-3 space-y-3">
-                    {(tenantMode === "edit" || tenantMode === "add") && (
-                      <>
-                        <input value={tenantName} onChange={(e) => setTenantName(e.target.value)} placeholder="Họ tên" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                        <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                        <input value={tenantAddress} onChange={(e) => setTenantAddress(e.target.value)} placeholder="Địa chỉ" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
-                      </>
-                    )}
-                    {(tenantMode === "change" || tenantMode === "add") && (
-                      <select
-                        value={selectedTenantId}
-                        onChange={(e) => setSelectedTenantId(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                      >
-                        <option value="">Chọn người thuê có sẵn</option>
-                        {existingTenants
-                          .filter((tenant) => tenantMode !== "change" || tenant.id !== room?.tenantInfo?.id)
-                          .map((tenant) => (
-                          <option key={tenant.id} value={tenant.id}>
-                            {tenant.full_name} {tenant.phone ? `- ${tenant.phone}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            if (!room) return;
-                            if (tenantMode === "edit" && room.tenantInfo) {
-                              await update(room.tenantInfo.id, { fullName: tenantName.trim(), phone: tenantPhone.trim(), address: tenantAddress.trim() });
-                              toast.success("Đã cập nhật người thuê");
-                            }
-                            if (tenantMode === "change" && selectedTenantId) {
-                              await assignExisting(room.id, selectedTenantId);
-                              toast.success("Đã đổi người thuê");
-                            }
-                            if (tenantMode === "add") {
-                              if (selectedTenantId) {
-                                await assignExisting(room.id, selectedTenantId);
-                              } else {
-                                const userId = actions.getUserId();
-                                if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
-                                await createAndAssign(room.id, {
-                                  userId,
-                                  fullName: tenantName.trim(),
-                                  phone: tenantPhone.trim() || undefined,
-                                  address: tenantAddress.trim() || undefined,
-                                });
-                              }
-                              toast.success("Đã thêm người thuê vào phòng");
-                            }
-                            setTenantMode("none");
-                          } catch {
-                            toast.error("Không thể lưu thông tin người thuê");
-                          }
-                        }}
-                        className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background"
-                      >Lưu</button>
-                    </div>
-                  </div>
-                )}
 
                 {bill && (
                   <div>
@@ -477,17 +396,7 @@ function RoomModal({
                 <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
                   <button type="button" onClick={() => setEditing(true)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Sửa phòng</button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      actions.setRoomOccupied(room.id, !room.occupied);
-                      toast.success(room.occupied ? `${room.name}: Phòng trống` : `${room.name}: Đã có khách`);
-                      onClose();
-                    }}
-                    className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
-                  >
-                    {room.occupied ? "Đánh dấu phòng trống" : "Đánh dấu đã thuê"}
-                  </button>
+                  <button type="button" disabled className="w-full rounded-lg border border-border py-2.5 text-sm font-medium text-muted-foreground/70">Trạng thái phòng theo người thuê</button>
                   {bill && debt > 0 && (
                     <button
                       type="button"
@@ -546,7 +455,6 @@ function RoomModal({
                   )}
                 </div>
               </div>
-            )}
           </>
         )}
       </DialogContent>
