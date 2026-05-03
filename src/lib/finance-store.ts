@@ -323,10 +323,16 @@ class FinanceStore {
 
   /* ─── rooms ─────────────────────────────────────────────── */
 
-  async addRoom(name: string, rent: number): Promise<RentalRoom> {
+  async addRoom(name: string, rent: number, floor: number | null): Promise<RentalRoom> {
     if (!this.userId) throw new Error("Not logged in");
-    const row = await cloud.insertRoom(this.userId, name, rent);
-    const room: RentalRoom = { id: row.id, name: row.name, rent: Number(row.rent ?? rent), occupied: row.occupied ?? false };
+    const row = await cloud.insertRoom(this.userId, name, rent, floor);
+    const room: RentalRoom = {
+      id: row.id,
+      name: row.name,
+      floor: row.floor ?? undefined,
+      rent: Number(row.rent ?? rent),
+      occupied: row.occupied ?? false,
+    };
     this.mutateRental({ rooms: [...this.state.rental.rooms, room] });
     return room;
   }
