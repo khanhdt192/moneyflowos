@@ -5,14 +5,15 @@ import { ChotThang } from "./tabs/ChotThang";
 import { BaoCao } from "./tabs/BaoCao";
 import { CaiDat } from "./tabs/CaiDat";
 
-type Tab = "tongquan" | "phong" | "chotthang" | "baocao" | "caidat";
+type Tab = "tongquan" | "phong" | "chotthang" | "chiphikhac" | "mauhoadon" | "baocao";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "tongquan",  label: "Tổng quan" },
   { id: "phong",     label: "Phòng" },
   { id: "chotthang", label: "Chốt tháng" },
+  { id: "chiphikhac", label: "Chi phí khác" },
+  { id: "mauhoadon",  label: "Mẫu hóa đơn" },
   { id: "baocao",    label: "Báo cáo" },
-  { id: "caidat",    label: "Cài đặt" },
 ];
 
 export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
@@ -61,8 +62,9 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
             onFocusRequestConsumed={() => setChotThangFocus(null)}
           />
         )}
+        {activeTab === "chiphikhac" && <CaiDat key="chiphi" initialSection="chiphi" />}
+        {activeTab === "mauhoadon" && <CaiDat key="thanhtoan" initialSection="thanhtoan" />}
         {activeTab === "baocao"    && <BaoCao />}
-        {activeTab === "caidat"    && <CaiDat />}
       </div>
     </div>
   );

@@ -4,39 +4,44 @@ import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { formatMoney, formatNumber, parseNumber } from "@/utils/format";
 
-type Section = "chiphi" | "phong" | "thanhtoan";
+type Section = "chiphi" | "thanhtoan";
 
 const SECTIONS: { id: Section; label: string }[] = [
-  { id: "chiphi",    label: "Chi phí" },
-  { id: "phong",     label: "Phòng & giá" },
-  { id: "thanhtoan", label: "Thanh toán & hóa đơn" },
+  { id: "chiphi",    label: "Chi phí khác" },
+  { id: "thanhtoan", label: "Mẫu hóa đơn" },
 ];
 
-export function CaiDat() {
-  const [section, setSection] = useState<Section>("chiphi");
+export function CaiDat({
+  initialSection,
+  hideSectionTabs = true,
+}: {
+  initialSection?: Section;
+  hideSectionTabs?: boolean;
+}) {
+  const [section, setSection] = useState<Section>(initialSection ?? "chiphi");
 
   return (
     <div className="space-y-6">
-      {/* Pill-style segmented control */}
-      <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/30 p-1">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setSection(s.id)}
-            className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm transition-all ${
-              section === s.id
-                ? "bg-white font-semibold text-foreground shadow-sm"
-                : "font-medium text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {!hideSectionTabs && (
+        <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/30 p-1">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSection(s.id)}
+              className={`whitespace-nowrap rounded-full px-4 py-1.5 text-sm transition-all ${
+                section === s.id
+                  ? "bg-white font-semibold text-foreground shadow-sm"
+                  : "font-medium text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {section === "chiphi"    && <SectionChiPhi />}
-      {section === "phong"     && <SectionPhong />}
       {section === "thanhtoan" && <SectionThanhToanHoaDon />}
     </div>
   );
@@ -176,88 +181,6 @@ function SectionChiPhi() {
           </SumBox>
           <SaveBtn onClick={saveT1} />
         </ConfigCard>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════
-   Phòng & giá thuê
-══════════════════════════════════════════════════════ */
-function SectionPhong() {
-  const state = useFinance();
-  const actions = useFinanceActions();
-  const [editId, setEditId]     = useState<string | null>(null);
-  const [editRent, setEditRent] = useState("");
-  const [editName, setEditName] = useState("");
-
-  const startEdit = (id: string, name: string, rent: number) => {
-    setEditId(id); setEditRent(String(rent)); setEditName(name);
-  };
-
-  const saveEdit = () => {
-    if (!editId) return;
-    actions.updateRoom(editId, { name: editName, rent: Number(editRent) || 0 });
-    toast.success("Đã cập nhật");
-    setEditId(null);
-  };
-
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Chỉnh sửa tên phòng và giá thuê cơ bản. Thêm/xoá phòng trong tab <strong>Phòng</strong>.
-      </p>
-      <div className="rounded-xl border border-border overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Giá thuê / tháng</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sửa</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {state.rental.rooms.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-muted-foreground">Chưa có phòng nào</td>
-              </tr>
-            )}
-            {state.rental.rooms.map((room) =>
-              editId === room.id ? (
-                <tr key={room.id} className="bg-muted/10">
-                  <td className="px-4 py-2">
-                    <input value={editName} onChange={(e) => setEditName(e.target.value)}
-                      className="h-8 w-28 rounded border border-border bg-background px-2 text-sm outline-none" />
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground text-xs">{room.tenant || "—"}</td>
-                  <td className="px-4 py-2 text-right">
-                    <input type="number" value={editRent} onChange={(e) => setEditRent(e.target.value)}
-                      className="num h-8 w-32 rounded border border-border bg-background px-2 text-right text-sm outline-none" />
-                  </td>
-                  <td className="px-4 py-2 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <button type="button" onClick={saveEdit}
-                        className="rounded-lg bg-foreground px-2.5 py-1 text-xs font-semibold text-background">Lưu</button>
-                      <button type="button" onClick={() => setEditId(null)}
-                        className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium">Huỷ</button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                <tr key={room.id} className="bg-card">
-                  <td className="px-4 py-3 font-semibold text-foreground">{room.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{room.tenant || <span className="italic opacity-50">—</span>}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">{formatMoney(room.rent)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button type="button" onClick={() => startEdit(room.id, room.name, room.rent)}
-                      className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted/40">Sửa</button>
-                  </td>
-                </tr>
-              )
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );
