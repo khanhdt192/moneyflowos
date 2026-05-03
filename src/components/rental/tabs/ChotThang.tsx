@@ -218,6 +218,25 @@ export function ChotThang({
     }, 600);
   }
 
+  async function saveInlineReading(roomId: string, rowData: RowData) {
+    const start = parseFloat(rowData.start) || 0;
+    const end   = parseFloat(rowData.end)   || 0;
+    const water = parseFloat(rowData.water) || 0;
+    if (end < start) return;
+
+    setRows((p) => ({ ...p, [roomId]: rowData }));
+    setSaveState(roomId, "saving");
+    try {
+      await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
+      setSaveState(roomId, "saved");
+      setTimeout(() => setSaveState(roomId, "idle"), 2500);
+      await new Promise<void>((r) => setTimeout(r, 200));
+      await apiRefetch();
+    } catch {
+      setSaveState(roomId, "error");
+    }
+  }
+
   /* ─── handlers ──────────────────────────────────────────── */
 
   async function handleConfirmSingle(roomId: string) {
@@ -572,7 +591,7 @@ export function ChotThang({
                       </button>
                     </div>
                   </DialogHeader>
-                  <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+                  <div className="grid gap-5 pt-3 lg:grid-cols-[1fr_320px]">
                     <div className="space-y-4">
                       {storeBill ? (
                         <SectionCard title="Tổng hợp hóa đơn">
@@ -586,11 +605,13 @@ export function ChotThang({
                               editing={inlineEdit?.roomId === room.id}
                               onEdit={() => setInlineEdit({ roomId: room.id, start: reading.start, end: reading.end, water: reading.water })}
                               onCancel={() => setInlineEdit(null)}
-                              onSave={() => {
+                              onSave={async () => {
                                 if (!inlineEdit) return;
-                                onReadingChange(room.id, "start", inlineEdit.start);
-                                onReadingChange(room.id, "end", inlineEdit.end);
-                                onReadingChange(room.id, "water", inlineEdit.water);
+                                await saveInlineReading(room.id, {
+                                  start: inlineEdit.start,
+                                  end: inlineEdit.end,
+                                  water: inlineEdit.water,
+                                });
                                 setInlineEdit(null);
                               }}
                             >
@@ -609,11 +630,13 @@ export function ChotThang({
                             editing={inlineEdit?.roomId === room.id}
                             onEdit={() => setInlineEdit({ roomId: room.id, start: reading.start, end: reading.end, water: reading.water })}
                             onCancel={() => setInlineEdit(null)}
-                            onSave={() => {
+                            onSave={async () => {
                               if (!inlineEdit) return;
-                              onReadingChange(room.id, "start", inlineEdit.start);
-                              onReadingChange(room.id, "end", inlineEdit.end);
-                              onReadingChange(room.id, "water", inlineEdit.water);
+                              await saveInlineReading(room.id, {
+                                start: inlineEdit.start,
+                                end: inlineEdit.end,
+                                water: inlineEdit.water,
+                              });
                               setInlineEdit(null);
                             }}
                           >
