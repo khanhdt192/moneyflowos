@@ -557,7 +557,7 @@ export function ChotThang({
               const remaining = storeBill ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount) : 0;
               return (
                 <div className="space-y-4">
-                  <DialogHeader className="-mx-6 -mt-6 mb-1 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1 backdrop-blur">
+                  <DialogHeader className="-mx-6 -mt-6 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1 backdrop-blur">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 flex items-center gap-2 text-sm">
                         <DialogTitle className="shrink-0 text-base font-semibold text-foreground">{room.name}</DialogTitle>
@@ -577,7 +577,8 @@ export function ChotThang({
                       {storeBill ? (
                         <SectionCard title="Tổng hợp hóa đơn">
                           <Row label="Tiền thuê" value={formatMoney(storeBill.rentAmount)} />
-                          <Row label="Điện" value={formatMoney(storeBill.electricityAmount)} />
+                          <div className="border-t border-border pt-2 space-y-2">
+                            <Row label="Tiền điện" value={formatMoney(storeBill.electricityAmount)} />
                           {!isT1(room) && (
                             <InlineEditRow
                               label="Số đầu / Số cuối"
@@ -599,7 +600,9 @@ export function ChotThang({
                               </div>
                             </InlineEditRow>
                           )}
-                          <Row label="Nước" value={formatMoney(storeBill.waterAmount)} />
+                          </div>
+                          <div className="border-t border-border pt-2 space-y-2">
+                          <Row label="Tiền nước" value={formatMoney(storeBill.waterAmount)} />
                           <InlineEditRow
                             label="Số m3 nước"
                             value={reading.water || "0"}
@@ -616,6 +619,7 @@ export function ChotThang({
                           >
                             <input type="number" value={inlineEdit?.water ?? ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, water: e.target.value } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                           </InlineEditRow>
+                          </div>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
                           <Row label="Vệ sinh" value={formatMoney(storeBill.cleaningAmount)} />
                           <Row label="Phụ phí khác" value={formatMoney(storeBill.otherAmount)} />

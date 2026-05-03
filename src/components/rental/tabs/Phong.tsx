@@ -312,10 +312,16 @@ function RoomModal({
       >
         {room && (
           <>
-            <DialogHeader className="-mx-6 -mt-6 mb-3 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-2 backdrop-blur">
+            <DialogHeader className="-mx-6 -mt-6 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1 backdrop-blur">
               <div className="flex items-center justify-between gap-3">
-                <DialogTitle className="text-base font-semibold">{room.name}</DialogTitle>
-                <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
+                <div className="min-w-0 flex items-center gap-2 text-sm">
+                  <DialogTitle className="shrink-0 text-base font-semibold text-foreground">{room.name}</DialogTitle>
+                  <span className="shrink-0 text-muted-foreground">•</span>
+                  <span className="truncate text-muted-foreground">{room.tenantInfo?.fullName || "Trống"}</span>
+                  <span className="shrink-0 text-muted-foreground">•</span>
+                  <span className="truncate text-muted-foreground">{room.tenantInfo?.phone || "Chưa có SĐT"}</span>
+                </div>
+                <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
                   <X className="h-5 w-5" />
                 </button>
               </div>
