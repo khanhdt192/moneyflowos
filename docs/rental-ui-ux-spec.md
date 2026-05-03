@@ -130,7 +130,7 @@ All forms:
 
 ---
 
-## 4. Tab Chốt tháng (NEW)
+## 4. Tab Chốt tháng (UPDATED)
 
 ### 4.1 Shared shell consistency
 
@@ -144,52 +144,59 @@ Chốt tháng detail modal must match Phòng detail modal in:
 
 ### 4.2 Header content
 
-Recommended structure:
-- title: room name
-- supporting bill context shown directly below or near the title:
-  - Hóa đơn tháng MM/YYYY
+Use a compact one-line header in this format:
+- `Phòng 201 • Tên người thuê • Hóa đơn tháng 05/2026 • [Nháp]`
 
-Do not use a completely different header style from Phòng.
+Rules:
+- room name is visually strongest
+- tenant + bill month are lighter secondary text
+- status is shown as a badge/chip
+- keep header compact/smaller in height
+- keep only one close button
 
 ### 4.3 Left column structure
 
 Required section order:
-1. Thông tin bill / phòng / khách thuê
-2. Nhập chỉ số
-3. Chi tiết bill
+1. Tổng hợp hóa đơn
 
-These sections must use the same visual section family as Phòng.
+Do NOT keep a separate top `Thông tin phòng` block.
+Do NOT keep a separate `Chi tiết hóa đơn` block above if it duplicates edit behavior already available in the table.
 
-### 4.4 Nhập chỉ số
+### 4.4 Edit surface rule (IMPORTANT)
 
-Do not use floating raw inputs.
+The monthly table is the primary edit surface for electricity/water input.
 
-Required grouping:
-- Nhập điện
-  - Số đầu điện
-  - Số cuối điện
-- Nhập nước
-  - Nước (m³)
+Therefore, the Chốt tháng detail modal must NOT duplicate a second primary edit surface for the same values.
 
-If tầng 1 uses fixed electricity:
-- show explicit helper text
-- do not make the field look broken or missing
+Rules:
+- do not keep editable electricity/water inputs both in the table and in the modal by default
+- the modal should primarily review bill details and support bill actions
+- if a future explicit edit mode is ever added, it must be intentional and secondary, not the default state
 
-### 4.5 Bill detail section
+### 4.5 Tổng hợp hóa đơn section
 
-This section should use the same label-left / value-right row pattern as other data sections.
+This section is read-only.
 
-Preferred rows:
+It must include:
 - Tiền thuê
 - Điện
+- Số đầu
+- Số cuối
 - Nước
+- Số m³
 - Wifi
 - Vệ sinh
-- Phụ phí
-- Tổng cộng
+- Phụ phí khác
+- Tổng
 - Đã thu
 - Còn thiếu
-- Trạng thái bill
+
+Rules:
+- use one label-left / value-right row pattern
+- align all numeric values to the right
+- allow `Số đầu`, `Số cuối`, and `Số m³` to have an explicit small edit affordance at the right side of their rows if product chooses to support quick inline correction from the summary section
+- if quick edit is supported, it should happen from this summary area only, not from a separate duplicate bill-detail form above
+- `Tổng hợp hóa đơn` remains the single main body section on the left
 
 ### 4.6 Right action panel
 
@@ -198,10 +205,11 @@ The Chốt tháng right column should stay visually aligned with Phòng's right 
 Allowed action types:
 - primary: Thu tiền or Chốt bill depending on state
 - secondary: the remaining normal bill action
-- utility: PDF, Đóng
+- utility: PDF
 
 Forbidden:
 - duplicated primary actions
+- extra `Đóng` button when the modal already has a header close button
 - action hierarchy that differs wildly from Phòng modal
 
 ---
@@ -229,6 +237,8 @@ Avoid:
 - two modals in the same module feeling like different products
 - duplicate close buttons
 - blank modal shells
+- duplicate edit surfaces for the same electricity/water fields
+- nested card-inside-card bill edit UI in Chốt tháng
 
 ---
 
@@ -239,6 +249,7 @@ AI must:
 - use navigation instead of direct payment in Phòng
 - preserve shared modal shell consistency across Phòng and Chốt tháng
 - keep section cards and row patterns aligned across both modals
+- avoid duplicating electricity/water edit UI across table and modal
 
 ---
 
@@ -248,3 +259,4 @@ Phòng = quản lý
 Chốt tháng = thanh toán
 
 The action ownership differs, but the modal UI language must stay unified.
+The Chốt tháng table remains the default edit surface for electricity/water, while the modal focuses on bill review and bill actions.
