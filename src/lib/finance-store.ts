@@ -323,16 +323,12 @@ class FinanceStore {
 
   /* ─── rooms ─────────────────────────────────────────────── */
 
-  addRoom(name: string, rent: number) {
-    if (!this.userId) return;
-    const tempId = uid();
-    const room: RentalRoom = { id: tempId, name, rent, occupied: false };
+  async addRoom(name: string, rent: number): Promise<RentalRoom> {
+    if (!this.userId) throw new Error("Not logged in");
+    const row = await cloud.insertRoom(this.userId, name, rent);
+    const room: RentalRoom = { id: row.id, name: row.name, rent: Number(row.rent ?? rent), occupied: row.occupied ?? false };
     this.mutateRental({ rooms: [...this.state.rental.rooms, room] });
-    void cloud.insertRoom(this.userId, name, rent)
-      .then((row) => {
-        this.mutateRental({ rooms: this.state.rental.rooms.map((r) => (r.id === tempId ? { ...r, id: row.id } : r)) }, false);
-      })
-      .catch(() => { toast.error("Không lưu được phòng"); this.refetchSilent(); });
+    return room;
   }
 
   updateRoom(id: string, patch: Partial<RentalRoom>) {

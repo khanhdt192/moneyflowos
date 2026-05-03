@@ -368,7 +368,6 @@ export const cloud = {
     if (patch.name !== undefined) dbPatch.name = patch.name;
     if (patch.rent !== undefined) dbPatch.rent = patch.rent;
     if (patch.occupied !== undefined) dbPatch.occupied = patch.occupied;
-    if (patch.tenant !== undefined) dbPatch.tenant = patch.tenant ?? null;
     if (patch.floor !== undefined) dbPatch.floor = patch.floor ?? null;
     const { error } = await supabase.from("rental_rooms").update(dbPatch).eq("id", id);
     if (error) throw error;
