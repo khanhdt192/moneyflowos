@@ -42,7 +42,7 @@ function detectFloorFromRoomName(name: string): number | null {
   return Number.isNaN(firstDigit) ? null : firstDigit;
 }
 
-export function Phong() {
+export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string, cycleId: string) => void }) {
   const state = useFinance();
   const actions = useFinanceActions();
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -210,6 +210,7 @@ export function Phong() {
         cycleId={cycleId}
         onClose={() => setSelectedRoomId(null)}
         debtMap={debtMap}
+        onOpenBillDetail={onOpenBillDetail}
       />
     </div>
   );
@@ -220,11 +221,13 @@ function RoomModal({
   cycleId,
   onClose,
   debtMap,
+  onOpenBillDetail,
 }: {
   roomId: string | null;
   cycleId: string;
   onClose: () => void;
   debtMap: Record<string, number>;
+  onOpenBillDetail?: (roomId: string, cycleId: string) => void;
 }) {
   const state = useFinance();
   const actions = useFinanceActions();
@@ -309,13 +312,18 @@ function RoomModal({
       >
         {room && (
           <>
-            <DialogHeader className="mb-6">
-              <DialogTitle className="text-lg font-bold">{room.name}</DialogTitle>
+            <DialogHeader className="-mx-6 -mt-6 mb-4 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-3 backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <DialogTitle className="text-lg font-bold">{room.name}</DialogTitle>
+                <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </DialogHeader>
 
               <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
                 <div className="space-y-5">
-                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-3">
+                  <div className="text-sm space-y-3">
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thông tin phòng</h4>
                     {editing ? (
                       <>
@@ -332,9 +340,7 @@ function RoomModal({
                           <button type="button" onClick={() => { actions.updateRoom(room.id, { name, rent: parseFloat(rent) || room.rent }); setEditing(false); toast.success("Đã cập nhật phòng"); }} className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background">Lưu</button>
                         </div>
                       </>
-                    ) : (
-                      <InfoGrid rows={[{ label: "Giá thuê", value: formatMoney(room.rent) }, { label: "Trạng thái", value: isRoomOccupied(room) ? "Đang thuê" : "Trống" }]} />
-                    )}
+                    ) : <InfoGrid rows={[{ label: "Giá thuê", value: formatMoney(room.rent) }, { label: "Trạng thái", value: isRoomOccupied(room) ? "Đang thuê" : "Trống" }]} />}
                   </div>
 
                 <div>
@@ -451,12 +457,16 @@ function RoomModal({
                   </div>
                 </div>
 
-                {bill && (
-                  <div>
+                <div>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Hóa đơn tháng này
+                      Hóa đơn tháng {cycleId.split("-")[1]}/{cycleId.split("-")[0]}
                     </h4>
+                  {bill ? (
                     <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2 text-sm">
+                      <Row
+                        label="Trạng thái"
+                        value={bill.status === "draft" ? "Nháp" : bill.status === "paid" ? "Đã thu" : "Chưa thu"}
+                      />
                       <Row label="Tiền thuê" value={formatMoney(bill.rentAmount)} />
                       <Row label="Tiền điện" value={formatMoney(bill.electricityAmount)} />
                       <Row label="Nước" value={formatMoney(bill.waterAmount)} />
@@ -470,27 +480,24 @@ function RoomModal({
                         <Row label="Còn thiếu" value={formatMoney(debt)} className="text-rose-600 font-semibold" />
                       )}
                     </div>
+                  ) : <p className="text-sm text-muted-foreground">Chưa có hóa đơn</p>}
                   </div>
-                )}
 
                 </div>
 
                 <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
                   <button type="button" onClick={() => setEditing(true)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Sửa phòng</button>
-                  {bill && debt > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        actions.markRoomBillPaid(bill.id, bill.totalAmount);
-                        toast.success(`${room.name}: Đã thu đủ tiền`);
-                        onClose();
-                      }}
-                      className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
-                    >
-                      Đánh dấu đã thu đủ
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenBillDetail?.(room.id, cycleId);
+                    }}
+                    className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
+                  >
+                    Thông tin hoá đơn
+                  </button>
                   {room.tenantInfo ? (
                     <>
                       <button type="button" onClick={() => setTenantMode("edit")} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Sửa người thuê</button>

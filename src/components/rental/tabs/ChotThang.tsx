@@ -90,7 +90,7 @@ function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData)
 
 /* ─── component ───────────────────────────────────────────── */
 
-export function ChotThang() {
+export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; cycleId: string; nonce: number } | null }) {
   const state   = useFinance();
   const actions = useFinanceActions();
   const now     = new Date();
@@ -116,6 +116,7 @@ export function ChotThang() {
   const debounceTimers              = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [highlightedRoomId, setHighlightedRoomId] = useState<string | null>(null);
 
   /* payment form — single shared state; cleared when a new row expands */
   const [payInput, setPayInput]   = useState("");
@@ -127,7 +128,21 @@ export function ChotThang() {
     setRows({});
     setSaveStates({});
     setSelectedRoomId(null);
+    setHighlightedRoomId(null);
   }, [month, year]);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+    const [yStr, mStr] = focusRequest.cycleId.split("-");
+    const y = Number.parseInt(yStr, 10);
+    const m = Number.parseInt(mStr, 10);
+    if (!Number.isNaN(y) && !Number.isNaN(m)) {
+      setYear(y);
+      setMonth(m);
+    }
+    setHighlightedRoomId(focusRequest.roomId);
+    setSelectedRoomId(focusRequest.roomId);
+  }, [focusRequest?.nonce]);
 
   /* ─── local store maps ──────────────────────────────────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
@@ -351,9 +366,13 @@ export function ChotThang() {
                   : null;
 
               function openModal() {
-                if (!occupied || !hasBill) return;
+                if (!occupied || !hasBill) {
+                  setHighlightedRoomId(room.id);
+                  return;
+                }
                 setPayInput("");
                 setPayNote("");
+                setHighlightedRoomId(room.id);
                 setSelectedRoomId(room.id);
               }
 
@@ -368,7 +387,7 @@ export function ChotThang() {
                         ? "cursor-pointer hover:bg-muted/40"
                         : "bg-card",
                       !occupied ? "opacity-50" : "",
-                      selectedRoomId === room.id ? "bg-muted/30 border-l-4 border-indigo-400" : "border-l-4 border-transparent",
+                      selectedRoomId === room.id || highlightedRoomId === room.id ? "bg-muted/30 border-l-4 border-indigo-400" : "border-l-4 border-transparent",
                     ].join(" ")}
                   >
                     {/* Detail chevron */}
@@ -514,10 +533,11 @@ export function ChotThang() {
               const storeBill = storeBillMap[selectedRoomId];
               const reading = getRow(selectedRoomId);
               const occupied = room ? isRoomOccupied(room) : false;
+              const hasBill = !!apiRow?.bill_id || !!storeBill;
               const status = room ? getDisplayStatus(room, apiRow?.bill_status ?? storeBill?.status ?? null, !!readingMap[selectedRoomId], cycleId) : "empty";
               const canConfirm = apiRow?.ui?.can_confirm ?? (storeBill?.status === "draft");
               const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
-              if (!room) return null;
+              if (!room || !occupied || !hasBill) return null;
               return (
                 <div className="space-y-4">
                   <DialogHeader>
