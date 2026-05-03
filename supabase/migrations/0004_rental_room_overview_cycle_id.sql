@@ -4,8 +4,9 @@ select
   c.id as cycle_id,
   r.id as room_id,
   r.name,
-  r.tenant,
   r.floor,
+  t.full_name as tenant,
+  r.tenant_id,
   b.id as bill_id,
   b.status as bill_status,
   b.total_amount,
@@ -17,6 +18,8 @@ select
 from public.rental_billing_cycles c
 join public.rental_rooms r
   on r.user_id = c.user_id
+left join public.rental_tenants t
+  on r.tenant_id = t.id
 left join public.rental_room_bills b
   on b.cycle_id = c.id
  and b.room_id = r.id
