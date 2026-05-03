@@ -78,7 +78,24 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     supabase.from("transactions").select("*").eq("user_id", userId).order("transaction_date", { ascending: false }),
     supabase.from("budget_items").select("*").eq("user_id", userId).order("sort", { ascending: true }),
     supabase.from("goals").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
-    supabase.from("rental_rooms").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+    (supabase as any)
+      .from("rental_rooms")
+      .select(`
+        id,
+        name,
+        rent,
+        occupied,
+        floor,
+        tenant_id,
+        tenant:rental_tenants (
+          id,
+          full_name,
+          phone,
+          address
+        )
+      `)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true }),
     supabase.from("rental_settings").select("*").eq("user_id", userId).maybeSingle(),
     supabase.from("rental_billing_cycles").select("*").eq("user_id", userId).order("year", { ascending: false }).order("month", { ascending: false }),
     supabase.from("rental_room_bills").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
@@ -131,7 +148,7 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     floor: r.floor ?? undefined,
     rent: num(r.rent),
     occupied: r.occupied,
-    tenant: r.tenant ?? undefined,
+    tenant: r.tenant?.full_name ?? undefined,
   }));
 
   // Settings - merge DB row over defaults
