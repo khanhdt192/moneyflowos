@@ -50,13 +50,17 @@ function isT1(room: RentalRoom) {
 
 type RowData = { start: string; end: string; water: string };
 
+function isRoomOccupied(room: RentalRoom): boolean {
+  return !!(room.tenantInfo?.id || room.tenant_id || room.occupied);
+}
+
 function getDisplayStatus(
   room: RentalRoom,
   apiBillStatus: string | null,
   hasReading: boolean,
   cycleId: string,
 ): BillStatus {
-  if (!room.occupied) return "empty";
+  if (!isRoomOccupied(room)) return "empty";
   if (!apiBillStatus) return hasReading ? "has_reading" : "no_reading";
   if (apiBillStatus === "paid") return "paid";
   if (apiBillStatus === "partial_paid") return "partial_paid";
@@ -139,7 +143,7 @@ export function ChotThang() {
   );
 
   const allRooms      = state.rental.rooms;
-  const occupiedRooms = allRooms.filter((r) => r.occupied);
+  const occupiedRooms = allRooms.filter((r) => isRoomOccupied(r));
 
   /* KPI from API data */
   const allApiBills    = Object.values(apiBillMap).filter((r) => r.bill_id);
@@ -314,6 +318,7 @@ export function ChotThang() {
               </tr>
             )}
             {allRooms.map((room) => {
+              const occupied     = isRoomOccupied(room);
               const apiRow       = apiBillMap[room.id];
               const reading      = readingMap[room.id];
               const row          = getRow(room.id);
@@ -342,12 +347,12 @@ export function ChotThang() {
               /* live total: DB value when available, else estimate */
               const liveTotal = apiRow?.total_amount != null
                 ? apiRow.total_amount
-                : room.occupied && (reading || hasLocalEdit)
+                : occupied && (reading || hasLocalEdit)
                   ? calcLiveTotal(room, settings, row)
                   : null;
 
               function toggleExpand() {
-                if (!room.occupied || !hasBill) return;
+                if (!occupied || !hasBill) return;
                 setExpandedRoomId((prev) => {
                   const next = prev === room.id ? null : room.id;
                   if (next !== null) { setPayInput(""); setPayNote(""); }
@@ -362,10 +367,10 @@ export function ChotThang() {
                     onClick={toggleExpand}
                     className={[
                       "transition-colors",
-                      room.occupied && hasBill
+                      occupied && hasBill
                         ? "cursor-pointer hover:bg-muted/40"
                         : "bg-card",
-                      !room.occupied ? "opacity-50" : "",
+                      !occupied ? "opacity-50" : "",
                       isExpanded
                         ? "bg-muted/30 border-l-4 border-indigo-400"
                         : "border-l-4 border-transparent",
@@ -373,7 +378,7 @@ export function ChotThang() {
                   >
                     {/* Expand chevron */}
                     <td className="w-8 px-2 py-3 text-center text-muted-foreground">
-                      {room.occupied && hasBill && (
+                      {occupied && hasBill && (
                         <ChevronDown
                           className={`h-3.5 w-3.5 mx-auto transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`}
                         />
@@ -383,7 +388,7 @@ export function ChotThang() {
                     {/* Phòng */}
                     <td className="px-4 py-3">
                       <p className="font-medium leading-tight">{room.name}</p>
-                      {room.occupied && hasBill && (
+                      {occupied && hasBill && (
                         <p className="text-[10px] text-muted-foreground/60 mt-0.5">
                           Nhấn để xem chi tiết
                         </p>
@@ -404,7 +409,7 @@ export function ChotThang() {
                           type="number"
                           value={row.start}
                           onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
-                          disabled={!room.occupied}
+                          disabled={!occupied}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
                         />
@@ -420,7 +425,7 @@ export function ChotThang() {
                           type="number"
                           value={row.end}
                           onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
-                          disabled={!room.occupied}
+                          disabled={!occupied}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
                         />
@@ -433,7 +438,7 @@ export function ChotThang() {
                         type="number"
                         value={row.water}
                         onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
-                        disabled={!room.occupied}
+                        disabled={!occupied}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder="0"
                       />
@@ -478,7 +483,7 @@ export function ChotThang() {
 
                     {/* Row actions */}
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {room.occupied && hasBill ? (
+                      {occupied && hasBill ? (
                         <div className="flex items-center justify-center gap-1">
                           <RowBtn
                             icon={<CheckCircle2 className="h-3.5 w-3.5" />}
