@@ -90,7 +90,13 @@ function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData)
 
 /* ─── component ───────────────────────────────────────────── */
 
-export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; cycleId: string; nonce: number } | null }) {
+export function ChotThang({
+  focusRequest,
+  onFocusRequestConsumed,
+}: {
+  focusRequest?: { roomId: string; cycleId: string; nonce: number } | null;
+  onFocusRequestConsumed?: () => void;
+}) {
   const state   = useFinance();
   const actions = useFinanceActions();
   const now     = new Date();
@@ -142,7 +148,8 @@ export function ChotThang({ focusRequest }: { focusRequest?: { roomId: string; c
     }
     setHighlightedRoomId(focusRequest.roomId);
     setSelectedRoomId(focusRequest.roomId);
-  }, [focusRequest?.nonce]);
+    onFocusRequestConsumed?.();
+  }, [focusRequest?.nonce, onFocusRequestConsumed]);
 
   /* ─── local store maps ──────────────────────────────────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
