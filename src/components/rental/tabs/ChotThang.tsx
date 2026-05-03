@@ -128,6 +128,7 @@ export function ChotThang({
   const [payInput, setPayInput]   = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [payNote, setPayNote]     = useState("");
+  const [inlineEdit, setInlineEdit] = useState<{ roomId: string; start: string; end: string; water: string } | null>(null);
 
   /* clear local rows and collapse expansion when month changes */
   useEffect(() => {
@@ -379,6 +380,7 @@ export function ChotThang({
                 }
                 setPayInput("");
                 setPayNote("");
+                setInlineEdit(null);
                 setHighlightedRoomId(room.id);
                 setSelectedRoomId(room.id);
               }
@@ -555,7 +557,7 @@ export function ChotThang({
               const remaining = storeBill ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount) : 0;
               return (
                 <div className="space-y-4">
-                  <DialogHeader className="-mx-6 -mt-6 mb-1 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1.5 backdrop-blur">
+                  <DialogHeader className="-mx-6 -mt-6 mb-1 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1 backdrop-blur">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 flex items-center gap-2 text-sm">
                         <DialogTitle className="shrink-0 text-base font-semibold text-foreground">{room.name}</DialogTitle>
@@ -565,49 +567,55 @@ export function ChotThang({
                         <span className="truncate text-muted-foreground">Hóa đơn tháng {String(month).padStart(2, "0")}/{year}</span>
                       </div>
                       <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
-                      <button type="button" onClick={() => setSelectedRoomId(null)} className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
+                      <button type="button" onClick={() => { setInlineEdit(null); setSelectedRoomId(null); }} className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
                         <X className="h-5 w-5" />
                       </button>
                     </div>
                   </DialogHeader>
                   <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
                     <div className="space-y-4">
-                      <SectionCard title="Chi tiết hóa đơn">
-                        <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Điện</p>
-                          {isT1(room) ? (
-                            <p className="text-sm text-muted-foreground">Điện tầng 1 tính cố định</p>
-                          ) : (
-                            <>
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <div>
-                                  <label className="mb-1 block text-xs text-muted-foreground">Số đầu điện</label>
-                                  <input type="number" value={reading.start} onChange={(e) => onReadingChange(room.id, "start", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                                </div>
-                                <div>
-                                  <label className="mb-1 block text-xs text-muted-foreground">Số cuối điện</label>
-                                  <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                                </div>
-                              </div>
-                            </>
-                          )}
-                          <Row label="Tiêu thụ" value={`${kwh} kWh`} />
-                          <Row label="Tiền điện" value={formatMoney(electricityAmount)} />
-                        </div>
-                        <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước</p>
-                          <div>
-                            <label className="mb-1 block text-xs text-muted-foreground">Số m³</label>
-                            <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                          </div>
-                          <Row label="Tiền nước" value={formatMoney(waterAmount)} />
-                        </div>
-                      </SectionCard>
                       {storeBill ? (
                         <SectionCard title="Tổng hợp hóa đơn">
                           <Row label="Tiền thuê" value={formatMoney(storeBill.rentAmount)} />
                           <Row label="Điện" value={formatMoney(storeBill.electricityAmount)} />
+                          {!isT1(room) && (
+                            <InlineEditRow
+                              label="Số đầu / Số cuối"
+                              value={`${reading.start || 0} / ${reading.end || 0}`}
+                              editing={inlineEdit?.roomId === room.id}
+                              onEdit={() => setInlineEdit({ roomId: room.id, start: reading.start, end: reading.end, water: reading.water })}
+                              onCancel={() => setInlineEdit(null)}
+                              onSave={() => {
+                                if (!inlineEdit) return;
+                                onReadingChange(room.id, "start", inlineEdit.start);
+                                onReadingChange(room.id, "end", inlineEdit.end);
+                                onReadingChange(room.id, "water", inlineEdit.water);
+                                setInlineEdit(null);
+                              }}
+                            >
+                              <div className="grid grid-cols-2 gap-2">
+                                <input type="number" value={inlineEdit?.start ?? ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, start: e.target.value } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.end ?? ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, end: e.target.value } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                              </div>
+                            </InlineEditRow>
+                          )}
                           <Row label="Nước" value={formatMoney(storeBill.waterAmount)} />
+                          <InlineEditRow
+                            label="Số m3 nước"
+                            value={reading.water || "0"}
+                            editing={inlineEdit?.roomId === room.id}
+                            onEdit={() => setInlineEdit({ roomId: room.id, start: reading.start, end: reading.end, water: reading.water })}
+                            onCancel={() => setInlineEdit(null)}
+                            onSave={() => {
+                              if (!inlineEdit) return;
+                              onReadingChange(room.id, "start", inlineEdit.start);
+                              onReadingChange(room.id, "end", inlineEdit.end);
+                              onReadingChange(room.id, "water", inlineEdit.water);
+                              setInlineEdit(null);
+                            }}
+                          >
+                            <input type="number" value={inlineEdit?.water ?? ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, water: e.target.value } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                          </InlineEditRow>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
                           <Row label="Vệ sinh" value={formatMoney(storeBill.cleaningAmount)} />
                           <Row label="Phụ phí khác" value={formatMoney(storeBill.otherAmount)} />
@@ -696,6 +704,38 @@ function SectionCard({ title, children }: { title: string; children: React.React
     <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-3">
       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h4>
       {children}
+    </div>
+  );
+}
+
+function InlineEditRow({
+  label, value, editing, onEdit, onSave, onCancel, children,
+}: {
+  label: string;
+  value: string;
+  editing: boolean;
+  onEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2 border-t border-border pt-2">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        {!editing ? (
+          <div className="flex items-center gap-3">
+            <span className="font-medium tabular-nums">{value}</span>
+            <button type="button" onClick={onEdit} className="text-xs font-medium text-indigo-600 hover:underline">Sửa</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onSave} className="rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background">Lưu</button>
+            <button type="button" onClick={onCancel} className="rounded-md border border-border px-2 py-1 text-xs font-medium">Huỷ</button>
+          </div>
+        )}
+      </div>
+      {editing ? children : null}
     </div>
   );
 }
