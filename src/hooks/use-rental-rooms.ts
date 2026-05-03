@@ -180,7 +180,8 @@ export function useRentalRooms(currentCycleId: string | null | undefined) {
 
     const { data, error: fetchError } = await supabase
       .from("rental_room_overview")
-      .select("*");
+      .select("*")
+      .eq("cycle_id", cycleId);
 
     if (fetchError) {
         setError(fetchError.message);
