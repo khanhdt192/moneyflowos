@@ -547,14 +547,24 @@ export function ChotThang({
               const status = room ? getDisplayStatus(room, apiRow?.bill_status ?? storeBill?.status ?? null, !!readingMap[selectedRoomId], cycleId) : "empty";
               const canConfirm = apiRow?.ui?.can_confirm ?? (storeBill?.status === "draft");
               const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
+              const kwh = Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0);
+              const electricityAmount = isT1(room)
+                ? settings.t1ElectricityBill
+                : kwh * settings.defaultElectricityRate;
+              const waterAmount = (parseFloat(reading.water) || 0) * settings.waterRatePerM3;
+              const remaining = storeBill ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount) : 0;
               return (
                 <div className="space-y-4">
-                  <DialogHeader className="-mx-6 -mt-6 mb-1 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-2 backdrop-blur">
+                  <DialogHeader className="-mx-6 -mt-6 mb-1 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1.5 backdrop-blur">
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <DialogTitle className="text-base font-semibold">{room.name}</DialogTitle>
-                        <p className="text-xs text-muted-foreground">Tháng {String(month).padStart(2, "0")}/{year}</p>
+                      <div className="min-w-0 flex items-center gap-2 text-sm">
+                        <DialogTitle className="shrink-0 text-base font-semibold text-foreground">{room.name}</DialogTitle>
+                        <span className="shrink-0 text-muted-foreground">•</span>
+                        <span className="truncate text-muted-foreground">{room.tenant || "Trống"}</span>
+                        <span className="shrink-0 text-muted-foreground">•</span>
+                        <span className="truncate text-muted-foreground">Hóa đơn tháng {String(month).padStart(2, "0")}/{year}</span>
                       </div>
+                      <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
                       <button type="button" onClick={() => setSelectedRoomId(null)} className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
                         <X className="h-5 w-5" />
                       </button>
@@ -562,16 +572,9 @@ export function ChotThang({
                   </DialogHeader>
                   <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
                     <div className="space-y-4">
-                      <SectionCard title="Thông tin phòng">
-                        <Row label="Khách thuê" value={room.tenant || "Trống"} />
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Trạng thái bill</span>
-                          <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
-                        </div>
-                      </SectionCard>
-                      <SectionCard title="Nhập điện nước">
+                      <SectionCard title="Chi tiết hóa đơn">
                         <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập điện</p>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Điện</p>
                           {isT1(room) ? (
                             <p className="text-sm text-muted-foreground">Điện tầng 1 tính cố định</p>
                           ) : (
@@ -586,19 +589,35 @@ export function ChotThang({
                                   <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
                                 </div>
                               </div>
-                              <p className="text-xs text-muted-foreground">Tiêu thụ: {Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0)} kWh</p>
                             </>
                           )}
+                          <Row label="Tiêu thụ" value={`${kwh} kWh`} />
+                          <Row label="Tiền điện" value={formatMoney(electricityAmount)} />
                         </div>
                         <div className="space-y-2 rounded-lg border border-border/80 bg-muted/20 p-3">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nhập nước</p>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước</p>
                           <div>
-                            <label className="mb-1 block text-xs text-muted-foreground">Nước (m³)</label>
+                            <label className="mb-1 block text-xs text-muted-foreground">Số m³</label>
                             <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" />
                           </div>
+                          <Row label="Tiền nước" value={formatMoney(waterAmount)} />
                         </div>
                       </SectionCard>
-                      {storeBill ? <BillBreakdown bill={storeBill} settings={settings} /> : null}
+                      {storeBill ? (
+                        <SectionCard title="Tổng hợp hóa đơn">
+                          <Row label="Tiền thuê" value={formatMoney(storeBill.rentAmount)} />
+                          <Row label="Điện" value={formatMoney(storeBill.electricityAmount)} />
+                          <Row label="Nước" value={formatMoney(storeBill.waterAmount)} />
+                          <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
+                          <Row label="Vệ sinh" value={formatMoney(storeBill.cleaningAmount)} />
+                          <Row label="Phụ phí khác" value={formatMoney(storeBill.otherAmount)} />
+                          <div className="border-t border-border pt-2">
+                            <Row label="Tổng" value={formatMoney(storeBill.totalAmount)} className="font-semibold" />
+                          </div>
+                          <Row label="Đã thu" value={formatMoney(storeBill.paidAmount)} />
+                          <Row label="Còn thiếu" value={formatMoney(remaining)} className="font-semibold text-rose-600" />
+                        </SectionCard>
+                      ) : null}
                     </div>
                     <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
@@ -608,12 +627,6 @@ export function ChotThang({
                         <button type="button" onClick={() => handleConfirmSingle(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Chốt bill</button>
                       ) : null}
                       <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
-                      <button type="button" onClick={() => setSelectedRoomId(null)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Đóng</button>
-                      <SectionCard title="Chi tiết bill">
-                        <Row label="Số đầu" value={reading.start || "0"} />
-                        <Row label="Số cuối" value={reading.end || "0"} />
-                        <Row label="Nước (m³)" value={reading.water || "0"} />
-                      </SectionCard>
                       {storeBill && canPay ? (
                         <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
                       ) : null}
@@ -683,48 +696,6 @@ function SectionCard({ title, children }: { title: string; children: React.React
     <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-3">
       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h4>
       {children}
-    </div>
-  );
-}
-
-function BillBreakdown({
-  bill, settings,
-}: {
-  bill: RentalRoomBill;
-  settings: RentalSettings;
-}) {
-  const items = [
-    { label: "Tiền thuê",  amount: bill.rentAmount },
-    { label: "Điện",       amount: bill.electricityAmount },
-    { label: "Nước",       amount: bill.waterAmount },
-    { label: "Wifi",       amount: bill.wifiAmount },
-    { label: "Vệ sinh",    amount: bill.cleaningAmount },
-    { label: settings.otherName || "Phụ phí", amount: bill.otherAmount },
-  ].filter((r) => r.amount > 0);
-
-  return (
-    <div className="rounded-xl border border-border overflow-hidden">
-      <p className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/20 border-b border-border">
-        Chi tiết hóa đơn
-      </p>
-      <table className="w-full text-sm">
-        <tbody>
-          {items.map((r) => (
-            <tr key={r.label} className="border-b border-border last:border-0">
-              <td className="px-4 py-2.5 text-muted-foreground">{r.label}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(r.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-border bg-muted/20">
-            <td className="px-4 py-3 text-base font-semibold text-foreground">Tổng cộng</td>
-            <td className="px-4 py-3 text-right text-base font-semibold tabular-nums text-foreground">
-              {formatMoney(bill.totalAmount)}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
     </div>
   );
 }
