@@ -40,6 +40,7 @@ export interface Goal {
 }
 
 export interface RentalTenantInfo {
+  id: string;
   fullName: string;
   phone?: string;
   address?: string;

@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { roomService } from "@/services/room.service";
-import { tenantService, type CreateTenantInput, type UpdateTenantInput } from "@/services/tenant.service";
+import { tenantService, type CreateTenantInput, type Tenant, type UpdateTenantInput } from "@/services/tenant.service";
 
 type RefetchRooms = () => Promise<unknown>;
 
@@ -46,13 +46,12 @@ export function useTenant(refetchRooms: RefetchRooms) {
     [refetchRooms],
   );
 
-  const remove = useCallback(
-    async (roomId: string, tenantId: string) => {
+  const removeFromRoom = useCallback(
+    async (roomId: string) => {
       setIsLoading(true);
       setError(null);
       try {
         await roomService.removeTenant(roomId);
-        await tenantService.deleteTenant(tenantId);
         await refetchRooms();
       } catch (err) {
         setError(err);
@@ -64,10 +63,33 @@ export function useTenant(refetchRooms: RefetchRooms) {
     [refetchRooms],
   );
 
+  const assignExisting = useCallback(
+    async (roomId: string, tenantId: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await roomService.assignTenant(roomId, tenantId);
+        await refetchRooms();
+      } catch (err) {
+        setError(err);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [refetchRooms],
+  );
+
+  const listTenants = useCallback(async (userId: string): Promise<Tenant[]> => {
+    return tenantService.listTenantsByCurrentUser(userId);
+  }, []);
+
   return {
     createAndAssign,
     update,
-    remove,
+    removeFromRoom,
+    assignExisting,
+    listTenants,
     isLoading,
     error,
   };
