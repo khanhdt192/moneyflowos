@@ -53,6 +53,7 @@ export interface RentalRoom {
   rent: number;
   occupied: boolean;
   tenant?: string;
+  tenant_id?: string | null;
   tenantInfo?: RentalTenantInfo;
   occupants?: number;
   allocationWeight?: number;

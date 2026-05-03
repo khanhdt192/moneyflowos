@@ -13,7 +13,7 @@ export const roomService = {
   async assignTenant(roomId: string, tenantId: string): Promise<void> {
     const { error } = await (supabase as any)
       .from("rental_rooms")
-      .update({ tenant_id: tenantId })
+      .update({ tenant_id: tenantId, occupied: true })
       .eq("id", roomId);
 
     if (error) throw error;
@@ -22,7 +22,7 @@ export const roomService = {
   async removeTenant(roomId: string): Promise<void> {
     const { error } = await (supabase as any)
       .from("rental_rooms")
-      .update({ tenant_id: null })
+      .update({ tenant_id: null, occupied: false })
       .eq("id", roomId);
 
     if (error) throw error;
