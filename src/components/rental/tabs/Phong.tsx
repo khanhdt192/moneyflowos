@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, X, Check, Trash2, ChevronRight, Home, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
+import { useTenant } from "@/hooks/useTenant";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -26,6 +27,9 @@ export function Phong() {
   const actions = useFinanceActions();
   const [selectedRoom, setSelectedRoom] = useState<RentalRoom | null>(null);
   const [adding, setAdding] = useState(false);
+  const { createAndAssign } = useTenant(async () => {
+    await actions.refetch();
+  });
 
   const now = new Date();
   const cycleId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -55,10 +59,25 @@ export function Phong() {
       {adding && (
         <AddRoomForm
           onCancel={() => setAdding(false)}
-          onCreate={(name, rent) => {
-            actions.addRoom(name, rent);
-            setAdding(false);
-            toast.success(`Đã thêm phòng ${name}`);
+          onCreate={async ({ name, rent, addTenantNow, tenantFullName, tenantPhone, tenantAddress }) => {
+            try {
+              const room = await actions.addRoom(name, rent);
+
+              if (addTenantNow) {
+                await createAndAssign(room.id, {
+                  fullName: tenantFullName,
+                  phone: tenantPhone,
+                  address: tenantAddress,
+                });
+              }
+
+              await actions.refetch();
+              setAdding(false);
+              toast.success(`Đã thêm phòng ${name}`);
+            } catch (error) {
+              console.error("[add-room] failed", error);
+              toast.error(addTenantNow ? "Không thể thêm phòng và người thuê. Vui lòng thử lại." : "Không thể thêm phòng. Vui lòng thử lại.");
+            }
           }}
         />
       )}
@@ -254,7 +273,6 @@ function RoomDrawer({
                       actions.updateRoom(room.id, {
                         name,
                         rent: parseFloat(rent) || room.rent,
-                        tenant: tenant.trim() || undefined,
                       });
                       setEditing(false);
                       toast.success("Đã cập nhật phòng");
@@ -384,12 +402,23 @@ function AddRoomForm({
   onCreate,
 }: {
   onCancel: () => void;
-  onCreate: (name: string, rent: number) => void;
+  onCreate: (payload: {
+    name: string;
+    rent: number;
+    addTenantNow: boolean;
+    tenantFullName: string;
+    tenantPhone?: string;
+    tenantAddress?: string;
+  }) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [rent, setRent] = useState("");
-  const [tenant, setTenant] = useState("");
-  const valid = name.trim() && parseFloat(rent) > 0;
+  const [addTenantNow, setAddTenantNow] = useState(false);
+  const [tenantFullName, setTenantFullName] = useState("");
+  const [tenantPhone, setTenantPhone] = useState("");
+  const [tenantAddress, setTenantAddress] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const valid = Boolean(name.trim()) && parseFloat(rent) > 0 && (!addTenantNow || Boolean(tenantFullName.trim()));
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -399,7 +428,7 @@ function AddRoomForm({
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="text-xs font-medium text-muted-foreground">Tên phòng *</label>
           <input
@@ -421,15 +450,43 @@ function AddRoomForm({
           />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Khách thuê</label>
-          <input
-            value={tenant}
-            onChange={(e) => setTenant(e.target.value)}
-            placeholder="Tuỳ chọn"
-            className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-          />
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <input type="checkbox" checked={addTenantNow} onChange={(e) => setAddTenantNow(e.target.checked)} />
+            Thêm người thuê ngay
+          </label>
         </div>
       </div>
+      {addTenantNow && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Họ tên người thuê *</label>
+            <input
+              value={tenantFullName}
+              onChange={(e) => setTenantFullName(e.target.value)}
+              placeholder="VD: Nguyễn Văn A"
+              className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Số điện thoại</label>
+            <input
+              value={tenantPhone}
+              onChange={(e) => setTenantPhone(e.target.value)}
+              placeholder="VD: 090..."
+              className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Địa chỉ</label>
+            <input
+              value={tenantAddress}
+              onChange={(e) => setTenantAddress(e.target.value)}
+              placeholder="Tuỳ chọn"
+              className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </div>
+        </div>
+      )}
       <div className="mt-3 flex gap-2 justify-end">
         <button
           type="button"
@@ -440,11 +497,25 @@ function AddRoomForm({
         </button>
         <button
           type="button"
-          disabled={!valid}
-          onClick={() => onCreate(name.trim(), parseFloat(rent))}
+          disabled={!valid || submitting}
+          onClick={async () => {
+            setSubmitting(true);
+            try {
+              await onCreate({
+                name: name.trim(),
+                rent: parseFloat(rent),
+                addTenantNow,
+                tenantFullName: tenantFullName.trim(),
+                tenantPhone: tenantPhone.trim() || undefined,
+                tenantAddress: tenantAddress.trim() || undefined,
+              });
+            } finally {
+              setSubmitting(false);
+            }
+          }}
           className="rounded-lg bg-foreground px-4 py-1.5 text-sm font-semibold text-background disabled:opacity-50"
         >
-          Thêm phòng
+          {submitting ? "Đang lưu..." : "Thêm phòng"}
         </button>
       </div>
     </div>

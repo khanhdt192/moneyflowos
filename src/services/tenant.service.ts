@@ -21,7 +21,13 @@ export type UpdateTenantInput = {
 
 export const tenantService = {
   async createTenant(input: CreateTenantInput): Promise<Tenant> {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    const userId = authData.user?.id;
+    if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
+
     const payload = {
+      user_id: userId,
       full_name: input.fullName,
       phone: input.phone ?? null,
       address: input.address ?? null,
