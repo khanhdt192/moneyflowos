@@ -32,13 +32,18 @@ Columns:
 - `rent numeric`
 - `occupied boolean` default `false`
 - `created_at timestamptz`
-- `floor integer` default `1`
+- `floor integer`
 - `tenant_id uuid nullable` FK -> `public.rental_tenants.id`
 
 Important notes:
 - `rental_rooms` does **not** have `tenant` text column.
 - `occupied` exists, but may become stale if not synced after tenant assignment changes.
 - App logic should prefer tenant assignment (`tenant_id` / tenant relation) over raw `occupied` for display decisions when they conflict.
+- `floor` must not be implicitly treated as `1` for new rooms.
+- Current business direction is:
+  - auto-detect `floor` from room name in Add Room flow
+  - still allow manual override in UI
+  - avoid silent DB defaults that turn `Phòng 201` into `floor = 1`
 
 ---
 
@@ -213,16 +218,33 @@ AI should avoid touching these unless the task is explicitly outside rental flow
 
 ## 3.1 Add room
 Expected app behavior:
-1. Create room in `rental_rooms`
-2. If user chose “Thêm người thuê ngay”:
+1. User enters room name and rent
+2. App auto-detects `floor` from room name when possible
+3. UI shows visible field `Tầng`
+4. User may manually override detected `floor`
+5. Create room in `rental_rooms`
+6. If user chose “Thêm người thuê ngay”:
    - create tenant in `rental_tenants`
    - assign `tenant_id` to room
-3. Refetch room data
-4. If tenant creation fails after room creation, app should rollback/delete the just-created room so user does not see partial success.
+7. Refetch room data
+8. If tenant creation fails after room creation, app should rollback/delete the just-created room so user does not see partial success.
 
 Important rules:
 - Do not use a tenant string field in `rental_rooms`.
 - Tenant creation must include `user_id`.
+- `floor` should be passed explicitly during room creation when available.
+- Do not rely on DB default `floor = 1` for new rooms.
+
+### Floor auto-detect rule
+Current business rule for room-name-based detection:
+- `Tầng 1` or `Phòng tầng 1` -> `floor = 1`
+- If room name contains a numeric token with at least 3 digits:
+  - use the first digit as floor
+  - examples:
+    - `Phòng 201` -> `2`
+    - `Phòng 305` -> `3`
+    - `Phòng 503` -> `5`
+- If detection is unreliable -> use `null` and let user set manually
 
 ---
 
@@ -338,6 +360,7 @@ Never do these in MoneyFlowOS:
 - Filter a view by a column that the view does not actually expose
 - Infer tenant ID from `full_name + phone + address` text matching
 - Treat local UI state as database truth after mutation without refetch
+- Assume unnamed/new rooms should default to `floor = 1`
 
 ---
 
@@ -350,5 +373,6 @@ Before changing rental code, verify all of the following:
 4. Is tenant data relational (`tenant_id`) or string-based?
 5. Does the view/query actually expose the fields being filtered on?
 6. After mutation, is there a refetch or equivalent sync?
+7. If room creation is being changed, does the flow preserve floor detection + manual override behavior?
 
 If any assumption is unsupported by this file or live schema, stop and say so.
