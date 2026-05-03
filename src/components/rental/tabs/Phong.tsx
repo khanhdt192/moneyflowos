@@ -123,7 +123,14 @@ export function Phong() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {room.tenant || <span className="italic text-muted-foreground/50">—</span>}
+                    {room.tenantInfo ? (
+                      <div className="leading-tight">
+                        <div className="font-medium text-foreground">{room.tenantInfo.fullName}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{room.tenantInfo.phone || "—"}</div>
+                      </div>
+                    ) : (
+                      <span className="italic text-muted-foreground/50">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
                     {formatMoney(room.rent)}
@@ -188,7 +195,6 @@ function RoomDrawer({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [rent, setRent] = useState("");
-  const [tenant, setTenant] = useState("");
 
   const bill = room ? state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId) : null;
 
@@ -196,7 +202,6 @@ function RoomDrawer({
     if (r) {
       setName(r.name);
       setRent(String(r.rent));
-      setTenant(r.tenant ?? "");
       setEditing(false);
     }
   };
@@ -250,15 +255,6 @@ function RoomDrawer({
                     className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Tên khách thuê</label>
-                  <input
-                    value={tenant}
-                    onChange={(e) => setTenant(e.target.value)}
-                    placeholder="Tuỳ chọn"
-                    className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                  />
-                </div>
                 <div className="flex gap-2 pt-2">
                   <button
                     type="button"
@@ -300,7 +296,6 @@ function RoomDrawer({
               <div className="space-y-5">
                 <InfoGrid
                   rows={[
-                    { label: "Khách thuê", value: room.tenant || "—" },
                     { label: "Giá thuê", value: formatMoney(room.rent) },
                     {
                       label: "Trạng thái",
@@ -308,6 +303,26 @@ function RoomDrawer({
                     },
                   ]}
                 />
+
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</h4>
+                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
+                    {room.tenantInfo ? (
+                      <div className="space-y-2">
+                        <Row label="Họ tên" value={room.tenantInfo.fullName} />
+                        <Row label="Số điện thoại" value={room.tenantInfo.phone || "—"} />
+                        <Row label="Địa chỉ" value={room.tenantInfo.address || "—"} />
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <Row label="Họ tên" value="—" />
+                        <Row label="Số điện thoại" value="—" />
+                        <Row label="Địa chỉ" value="—" />
+                        <p className="pt-1 text-xs text-muted-foreground/80">Chưa có thông tin khách thuê cho phòng này.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {bill && (
                   <div>
