@@ -21,7 +21,22 @@ The rental module should feel like one system.
 
 ## 3. Tab Phòng
 
-### 3.1 Tenant edit UX (UPDATED)
+### 3.1 Header UX (NEW)
+
+Phòng detail modal must use a sticky header:
+- left: room name
+- right: close button
+- header has its own background
+- header has bottom border
+
+Close button:
+- larger click area
+- neutral light-gray background
+- not destructive (not red)
+
+---
+
+### 3.2 Tenant edit UX (UPDATED)
 
 When editing tenant:
 - Must edit directly inside Khách thuê section
@@ -30,77 +45,106 @@ When editing tenant:
   - Số điện thoại
   - Địa chỉ
 
-Forbidden:
-- placeholder-only inputs
-- detached form appearing outside section
-
 ---
 
-### 3.2 Tenant action rules (UPDATED)
+### 3.3 Thông tin phòng (NEW)
 
-#### Room-level guard
-If current room bill is unpaid:
-- disable:
-  - Đổi người thuê
-  - Xóa người thuê
-- show helper text:
-  "Chỉ thao tác người thuê khi hóa đơn tháng này đã thanh toán đủ"
-
-#### Tenant-level global guard
-When selecting tenant to assign/change:
-- tenants with unpaid bills must be:
-  - disabled in UI
-  - clearly marked
-
-Recommended labels:
-- "Đang nợ bill"
-- "Còn nợ bill phòng khác"
+Must match Khách thuê UI pattern:
+- same section title
+- same padding
+- label-left / value-right rows
 
 Forbidden:
-- allowing user to assign a tenant that still has unpaid bills
+- nested box layout
 
 ---
 
-### 3.3 Form consistency rule
+### 3.4 Tenant action rules (UPDATED)
 
-All edit forms must:
-- use label + input pattern
-- match Sửa phòng style
+Room-level guard:
+- unpaid bill → disable change/remove tenant
+
+Tenant-level guard:
+- tenant with unpaid bill → cannot be assigned
 
 ---
 
-## 4. Button hierarchy (unchanged)
+### 3.5 Bill section (NEW)
+
+Title format:
+- Hóa đơn tháng MM/YYYY
+
+Status badge:
+- draft → Nháp
+- confirmed/partial_paid → Chưa thu
+- paid → Đã thu
+
+If no bill:
+- show "Chưa có hóa đơn"
+
+---
+
+### 3.6 Bill actions (NEW)
+
+Phòng tab is VIEW ONLY for billing.
+
+Forbidden:
+- payment actions
+- confirm bill actions
+
+Use navigation button:
+- "Thông tin hoá đơn"
+
+---
+
+### 3.7 Navigation to Chốt tháng (NEW)
+
+Click "Thông tin hoá đơn":
+- close Phòng modal
+- switch to Chốt tháng
+- open SAME room + SAME cycle detail
+
+Fallback:
+- still switch tab
+- highlight correct room
+
+---
+
+### 3.8 Form consistency rule
+
+All forms:
+- label + input pattern
+
+---
+
+## 4. Button hierarchy
 
 - Primary: main action
 - Secondary: normal actions
 - Destructive: red actions
-- Utility: light actions
 
 ---
 
-## 5. Anti-patterns (UPDATED)
+## 5. Anti-patterns
 
 Avoid:
-- stale form data after mutation
-- hidden action logic not reflected in UI
-- allowing invalid tenant assignment (debt bypass)
+- stale UI
+- invalid tenant assignment
+- payment actions in Phòng
 
 ---
 
-## 6. AI UI rules (UPDATED)
+## 6. AI UI rules
 
 AI must:
-- follow label + input pattern
-- enforce tenant debt guard visually
-- sync UI state after mutation
+- keep payment in Chốt tháng
+- use navigation instead of direct payment
 
 ---
 
 ## 7. Summary
 
-UI must reflect:
-- real tenant state
-- real payment state
-- business rules (debt guard)
+Phòng = quản lý
+Chốt tháng = thanh toán
 
-If UI allows an action that backend should not allow, it is a bug.
+UI must respect this separation.
