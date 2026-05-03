@@ -65,4 +65,15 @@ export const tenantService = {
 
     if (error) throw error;
   },
+
+  async listTenantsByCurrentUser(userId: string): Promise<Tenant[]> {
+    const { data, error } = await (supabase as any)
+      .from("rental_tenants")
+      .select("id, full_name, phone, address")
+      .eq("user_id", userId)
+      .order("full_name", { ascending: true });
+
+    if (error) throw error;
+    return (data ?? []) as Tenant[];
+  },
 };
