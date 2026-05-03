@@ -566,7 +566,6 @@ export function ChotThang() {
                     ) : canConfirm ? (
                       <button type="button" onClick={() => handleConfirmSingle(room.id)} className="rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background">Chốt bill</button>
                     ) : null}
-                    <button type="button" onClick={() => handleConfirmSingle(room.id)} disabled={!canConfirm} className="rounded-lg border border-border px-4 py-2 text-sm font-medium disabled:opacity-40">Chốt bill</button>
                     <button type="button" onClick={() => handleExportSingle(room.id)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">PDF</button>
                     <button type="button" onClick={() => setSelectedRoomId(null)} className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground">Đóng</button>
                   </div>
