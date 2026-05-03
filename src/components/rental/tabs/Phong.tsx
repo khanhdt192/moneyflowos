@@ -12,8 +12,12 @@ import { Badge } from "@/components/ui/badge";
 
 type Status = "occupied" | "empty" | "debt";
 
+function isRoomOccupied(room: RentalRoom): boolean {
+  return Boolean(room.tenantInfo?.id || room.tenant_id);
+}
+
 function getRoomStatus(room: RentalRoom, hasDebt: boolean): Status {
-  if (!room.occupied) return "empty";
+  if (!isRoomOccupied(room)) return "empty";
   if (hasDebt) return "debt";
   return "occupied";
 }
@@ -46,7 +50,7 @@ export function Phong() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {state.rental.rooms.length} phòng · {state.rental.rooms.filter((r) => r.occupied).length} đang thuê
+          {state.rental.rooms.length} phòng · {state.rental.rooms.filter((r) => isRoomOccupied(r)).length} đang thuê
         </p>
         <button
           type="button"
@@ -339,7 +343,7 @@ function RoomDrawer({
                     { label: "Giá thuê", value: formatMoney(room.rent) },
                     {
                       label: "Trạng thái",
-                      value: room.occupied ? "Đang thuê" : "Trống",
+                      value: isRoomOccupied(room) ? "Đang thuê" : "Trống",
                     },
                   ]}
                 />
