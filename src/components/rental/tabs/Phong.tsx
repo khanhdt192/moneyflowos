@@ -7,7 +7,7 @@ import { roomService } from "@/services/room.service";
 import type { Tenant } from "@/services/tenant.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
 type Status = "occupied" | "empty" | "debt";
@@ -206,7 +206,7 @@ export function Phong() {
         </table>
       </div>
 
-      <RoomDrawer
+      <RoomModal
         room={selectedRoom}
         cycleId={cycleId}
         onClose={() => setSelectedRoom(null)}
@@ -216,7 +216,7 @@ export function Phong() {
   );
 }
 
-function RoomDrawer({
+function RoomModal({
   room,
   cycleId,
   onClose,
@@ -266,23 +266,23 @@ function RoomDrawer({
   };
 
   return (
-    <Sheet
+    <Dialog
       open={!!room}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
-      <SheetContent
-        className="w-full max-w-md overflow-y-auto"
+      <DialogContent
+        className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto"
         onOpenAutoFocus={() => {
           if (room) handleOpen(room);
         }}
       >
         {room && (
           <>
-            <SheetHeader className="mb-6">
+            <DialogHeader className="mb-6">
               <div className="flex items-center justify-between">
-                <SheetTitle className="text-lg font-bold">{room.name}</SheetTitle>
+                <DialogTitle className="text-lg font-bold">{room.name}</DialogTitle>
                 {!editing && (
                   <button
                     type="button"
@@ -293,7 +293,7 @@ function RoomDrawer({
                   </button>
                 )}
               </div>
-            </SheetHeader>
+            </DialogHeader>
 
             {editing ? (
               <div className="space-y-4">
@@ -545,8 +545,8 @@ function RoomDrawer({
             )}
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 

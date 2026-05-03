@@ -16,6 +16,7 @@ import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-t
 import { formatMoney } from "@/utils/format";
 import { exportSingleInvoice } from "@/lib/rental-pdf";
 import { useRentalRooms, type RentalRoomUiModel } from "@/hooks/use-rental-rooms";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /* ─── types ───────────────────────────────────────────────── */
 
@@ -114,8 +115,7 @@ export function ChotThang() {
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
   const debounceTimers              = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  /* expanded row (replaces drawer) */
-  const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
   /* payment form — single shared state; cleared when a new row expands */
   const [payInput, setPayInput]   = useState("");
@@ -126,7 +126,7 @@ export function ChotThang() {
   useEffect(() => {
     setRows({});
     setSaveStates({});
-    setExpandedRoomId(null);
+    setSelectedRoomId(null);
   }, [month, year]);
 
   /* ─── local store maps ──────────────────────────────────── */
@@ -224,7 +224,7 @@ export function ChotThang() {
       await actions.recordPayment(bill.id, amount, payMethod, payNote || undefined);
       setPayInput(""); setPayNote("");
       toast.success("Đã ghi nhận thanh toán");
-      setExpandedRoomId(null);
+      setSelectedRoomId(null);
     } catch {
       toast.error("Không ghi nhận được thanh toán");
     } finally {
@@ -325,7 +325,6 @@ export function ChotThang() {
               const ground       = isT1(room);
               const ss           = saveStates[room.id] ?? "idle";
               const hasLocalEdit = !!rows[room.id];
-              const isExpanded   = expandedRoomId === room.id;
 
               // storeBill is always up-to-date: store.refetch() runs inside
               // upsertElectricityReading, so it reflects DB state immediately.
@@ -351,36 +350,32 @@ export function ChotThang() {
                   ? calcLiveTotal(room, settings, row)
                   : null;
 
-              function toggleExpand() {
+              function openModal() {
                 if (!occupied || !hasBill) return;
-                setExpandedRoomId((prev) => {
-                  const next = prev === room.id ? null : room.id;
-                  if (next !== null) { setPayInput(""); setPayNote(""); }
-                  return next;
-                });
+                setPayInput("");
+                setPayNote("");
+                setSelectedRoomId(room.id);
               }
 
               return (
                 <Fragment key={room.id}>
                   {/* ── Main data row ── */}
                   <tr
-                    onClick={toggleExpand}
+                    onClick={openModal}
                     className={[
                       "transition-colors",
                       occupied && hasBill
                         ? "cursor-pointer hover:bg-muted/40"
                         : "bg-card",
                       !occupied ? "opacity-50" : "",
-                      isExpanded
-                        ? "bg-muted/30 border-l-4 border-indigo-400"
-                        : "border-l-4 border-transparent",
+                      selectedRoomId === room.id ? "bg-muted/30 border-l-4 border-indigo-400" : "border-l-4 border-transparent",
                     ].join(" ")}
                   >
-                    {/* Expand chevron */}
+                    {/* Detail chevron */}
                     <td className="w-8 px-2 py-3 text-center text-muted-foreground">
                       {occupied && hasBill && (
                         <ChevronDown
-                          className={`h-3.5 w-3.5 mx-auto transition-transform duration-200 ${isExpanded ? "rotate-0" : "-rotate-90"}`}
+                          className="h-3.5 w-3.5 mx-auto -rotate-90"
                         />
                       )}
                     </td>
@@ -503,42 +498,57 @@ export function ChotThang() {
                     </td>
                   </tr>
 
-                  {/* ── Expanded detail row ── */}
-                  {isExpanded && (
-                    <tr>
-                      <td colSpan={9} className="p-0">
-                        <div className="border-t border-border bg-muted/5 px-6 py-5 space-y-4">
-                          {storeBill ? (
-                            <>
-                              <BillBreakdown bill={storeBill} settings={settings} />
-                              {canPay && (
-                                <PaymentSection
-                                  bill={storeBill}
-                                  payInput={payInput}
-                                  setPayInput={setPayInput}
-                                  payMethod={payMethod}
-                                  setPayMethod={setPayMethod}
-                                  payNote={payNote}
-                                  setPayNote={setPayNote}
-                                  onPay={() => handlePay(room.id)}
-                                />
-                              )}
-                            </>
-                          ) : (
-                            <p className="py-4 text-center text-sm text-muted-foreground">
-                              Chưa có hóa đơn cho phòng này tháng {month}/{year}.
-                            </p>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                 </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      <Dialog open={!!selectedRoomId} onOpenChange={(open) => !open && setSelectedRoomId(null)}>
+        <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
+          {selectedRoomId && (
+            (() => {
+              const room = roomMap[selectedRoomId];
+              const apiRow = apiBillMap[selectedRoomId];
+              const storeBill = storeBillMap[selectedRoomId];
+              const reading = getRow(selectedRoomId);
+              const occupied = room ? isRoomOccupied(room) : false;
+              const status = room ? getDisplayStatus(room, apiRow?.bill_status ?? storeBill?.status ?? null, !!readingMap[selectedRoomId], cycleId) : "empty";
+              const canConfirm = apiRow?.ui?.can_confirm ?? (storeBill?.status === "draft");
+              const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
+              if (!room) return null;
+              return (
+                <div className="space-y-4">
+                  <DialogHeader>
+                    <DialogTitle>{room.name} · Tháng {String(month).padStart(2, "0")}/{year}</DialogTitle>
+                  </DialogHeader>
+                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1">
+                    <Row label="Khách thuê" value={room.tenant || "Trống"} />
+                    <Row label="Trạng thái bill" value={STATUS_CFG[status].label} />
+                    <Row label="Số đầu" value={reading.start || "0"} />
+                    <Row label="Số cuối" value={reading.end || "0"} />
+                    <Row label="Nước (m³)" value={reading.water || "0"} />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <input type="number" value={reading.start} onChange={(e) => onReadingChange(room.id, "start", e.target.value)} disabled={!occupied || isT1(room)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Số đầu" />
+                    <input type="number" value={reading.end} onChange={(e) => onReadingChange(room.id, "end", e.target.value)} disabled={!occupied || isT1(room)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Số cuối" />
+                    <input type="number" value={reading.water} onChange={(e) => onReadingChange(room.id, "water", e.target.value)} disabled={!occupied} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Nước (m³)" />
+                  </div>
+                  <div className="flex gap-2">
+                    <RowBtn icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Chốt" onClick={() => handleConfirmSingle(room.id)} color="indigo" disabled={!canConfirm} />
+                    <RowBtn icon={<Download className="h-3.5 w-3.5" />} label="PDF" onClick={() => handleExportSingle(room.id)} color="rose" />
+                  </div>
+                  {storeBill ? <BillBreakdown bill={storeBill} settings={settings} /> : null}
+                  {storeBill && canPay ? (
+                    <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
+                  ) : null}
+                </div>
+              );
+            })()
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
@@ -710,6 +720,15 @@ function WorkflowStep({ n, title, desc }: { n: number; title: string; desc: stri
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
       </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium tabular-nums">{value}</span>
     </div>
   );
 }
