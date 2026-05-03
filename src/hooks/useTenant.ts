@@ -18,6 +18,7 @@ export function useTenant(refetchRooms: RefetchRooms) {
         await refetchRooms();
         return tenant;
       } catch (err) {
+        console.error("[useTenant.createAndAssign] failed", err);
         setError(err);
         throw err;
       } finally {

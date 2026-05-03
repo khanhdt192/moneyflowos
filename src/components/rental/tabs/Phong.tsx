@@ -3,6 +3,7 @@ import { Plus, X, Check, Trash2, ChevronRight, Home, Pencil } from "lucide-react
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { useTenant } from "@/hooks/useTenant";
+import { roomService } from "@/services/room.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -60,11 +61,17 @@ export function Phong() {
         <AddRoomForm
           onCancel={() => setAdding(false)}
           onCreate={async ({ name, rent, addTenantNow, tenantFullName, tenantPhone, tenantAddress }) => {
+            let createdRoomId: string | null = null;
             try {
               const room = await actions.addRoom(name, rent);
+              createdRoomId = room.id;
 
               if (addTenantNow) {
+                const userId = actions.getUserId();
+                if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
+
                 await createAndAssign(room.id, {
+                  userId,
                   fullName: tenantFullName,
                   phone: tenantPhone,
                   address: tenantAddress,
@@ -76,7 +83,17 @@ export function Phong() {
               toast.success(`Đã thêm phòng ${name}`);
             } catch (error) {
               console.error("[add-room] failed", error);
-              toast.error(addTenantNow ? "Không thể thêm phòng và người thuê. Vui lòng thử lại." : "Không thể thêm phòng. Vui lòng thử lại.");
+
+              if (addTenantNow && createdRoomId) {
+                try {
+                  await roomService.deleteRoom(createdRoomId);
+                } catch (rollbackError) {
+                  console.error("[add-room] rollback failed", rollbackError);
+                }
+                await actions.refetch();
+              }
+
+              toast.error(addTenantNow ? "Không thể thêm phòng và người thuê. Đã hoàn tác phòng vừa tạo." : "Không thể thêm phòng. Vui lòng thử lại.");
             }
           }}
         />
