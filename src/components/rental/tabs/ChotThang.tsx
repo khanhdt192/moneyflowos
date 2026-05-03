@@ -128,7 +128,11 @@ export function ChotThang({
   const [payInput, setPayInput]   = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [payNote, setPayNote]     = useState("");
-  const [inlineEdit, setInlineEdit] = useState<{ roomId: string; start: string; end: string; water: string } | null>(null);
+  const [inlineEdit, setInlineEdit] = useState<{
+    roomId: string;
+    mode: "electricity" | "water";
+    value: { start?: string; end?: string; water?: string };
+  } | null>(null);
 
   /* clear local rows and collapse expansion when month changes */
   useEffect(() => {
@@ -602,22 +606,22 @@ export function ChotThang({
                             <InlineEditRow
                               label="Số đầu / Số cuối"
                               value={`${reading.start || 0} / ${reading.end || 0}`}
-                              editing={inlineEdit?.roomId === room.id}
-                              onEdit={() => setInlineEdit({ roomId: room.id, start: reading.start, end: reading.end, water: reading.water })}
+                              editing={inlineEdit?.roomId === room.id && inlineEdit?.mode === "electricity"}
+                              onEdit={() => setInlineEdit({ roomId: room.id, mode: "electricity", value: { start: reading.start, end: reading.end } })}
                               onCancel={() => setInlineEdit(null)}
                               onSave={async () => {
-                                if (!inlineEdit) return;
+                                if (!inlineEdit || inlineEdit.mode !== "electricity") return;
                                 await saveInlineReading(room.id, {
-                                  start: inlineEdit.start,
-                                  end: inlineEdit.end,
-                                  water: inlineEdit.water,
+                                  start: inlineEdit.value.start ?? reading.start,
+                                  end: inlineEdit.value.end ?? reading.end,
+                                  water: reading.water,
                                 });
                                 setInlineEdit(null);
                               }}
                             >
                               <div className="grid grid-cols-2 gap-2">
-                                <input type="number" value={inlineEdit?.start ?? ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, start: e.target.value } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
-                                <input type="number" value={inlineEdit?.end ?? ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, end: e.target.value } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                               </div>
                             </InlineEditRow>
                           )}
@@ -627,20 +631,20 @@ export function ChotThang({
                           <InlineEditRow
                             label="Số m3 nước"
                             value={reading.water || "0"}
-                            editing={inlineEdit?.roomId === room.id}
-                            onEdit={() => setInlineEdit({ roomId: room.id, start: reading.start, end: reading.end, water: reading.water })}
+                            editing={inlineEdit?.roomId === room.id && inlineEdit?.mode === "water"}
+                            onEdit={() => setInlineEdit({ roomId: room.id, mode: "water", value: { water: reading.water } })}
                             onCancel={() => setInlineEdit(null)}
                             onSave={async () => {
-                              if (!inlineEdit) return;
+                              if (!inlineEdit || inlineEdit.mode !== "water") return;
                               await saveInlineReading(room.id, {
-                                start: inlineEdit.start,
-                                end: inlineEdit.end,
-                                water: inlineEdit.water,
+                                start: reading.start,
+                                end: reading.end,
+                                water: inlineEdit.value.water ?? reading.water,
                               });
                               setInlineEdit(null);
                             }}
                           >
-                            <input type="number" value={inlineEdit?.water ?? ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, water: e.target.value } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                           </InlineEditRow>
                           </div>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
