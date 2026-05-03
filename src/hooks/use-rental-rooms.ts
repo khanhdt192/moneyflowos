@@ -155,15 +155,14 @@ export function useRentalRooms(currentCycleId: string | null | undefined) {
         .eq("user_id", userId)
         .eq("year", year)
         .eq("month", month)
-        .single();
+        .maybeSingle();
       if (cycleError) {
-        // PGRST116 = no rows — cycle not yet created; treat as empty, not an error
-        if (cycleError.code === "PGRST116") {
-          setRooms([]);
-          setLoading(false);
-          return;
-        }
         setError(cycleError.message);
+        setRooms([]);
+        setLoading(false);
+        return;
+      }
+      if (!cycleRow) {
         setRooms([]);
         setLoading(false);
         return;
@@ -180,9 +179,8 @@ export function useRentalRooms(currentCycleId: string | null | undefined) {
     }
 
     const { data, error: fetchError } = await supabase
-        .from("rental_room_overview")
-        .select("*")
-        .eq("cycle_id", cycleId);
+      .from("rental_room_overview")
+      .select("*");
 
     if (fetchError) {
         setError(fetchError.message);
