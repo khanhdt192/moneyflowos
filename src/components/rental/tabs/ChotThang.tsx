@@ -2,9 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  CheckCircle2,
-  Download,
+  Home,
   Loader2,
   Check,
   X,
@@ -127,7 +125,6 @@ export function ChotThang({
   /* payment form — single shared state; cleared when a new row expands */
   const [payInput, setPayInput]   = useState("");
   const [payMethod, setPayMethod] = useState("cash");
-  const [payNote, setPayNote]     = useState("");
   const [inlineEdit, setInlineEdit] = useState<{
     roomId: string;
     mode: "electricity" | "water";
@@ -267,9 +264,26 @@ export function ChotThang({
       return;
     }
     try {
-      await actions.recordPayment(bill.id, amount, payMethod, payNote || undefined);
-      setPayInput(""); setPayNote("");
+      await actions.recordPayment(bill.id, amount, payMethod, undefined);
+      setPayInput("");
       toast.success("Đã ghi nhận thanh toán");
+      setSelectedRoomId(null);
+    } catch {
+      toast.error("Không ghi nhận được thanh toán");
+    } finally {
+      await apiRefetch();
+    }
+  }
+
+  async function handlePayRemaining(roomId: string) {
+    const bill = storeBillMap[roomId];
+    if (!bill) return;
+    const remaining = bill.totalAmount - bill.paidAmount;
+    if (remaining <= 0) return;
+    try {
+      await actions.recordPayment(bill.id, remaining, payMethod, undefined);
+      setPayInput("");
+      toast.success("Đã ghi nhận thanh toán đủ");
       setSelectedRoomId(null);
     } catch {
       toast.error("Không ghi nhận được thanh toán");
@@ -330,21 +344,23 @@ export function ChotThang({
       </div>
 
       {/* ── KPI summary ── */}
-      {allApiBills.length > 0 && (
+      <div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryCard label="Tổng hóa đơn"    value={formatMoney(totalBilled)} />
           <SummaryCard label="Đã thu"           value={formatMoney(totalPaid)} accent="emerald" />
           <SummaryCard label="Còn lại"          value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
           <SummaryCard label="Đã chốt / Đã thu" value={`${confirmedCount} / ${paidCount} phòng`} />
         </div>
-      )}
+        {allApiBills.length === 0 && (
+          <p className="mt-2 text-sm text-muted-foreground">Chưa có hóa đơn tháng này</p>
+        )}
+      </div>
 
       {/* ── Main table ── */}
       <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="w-8 px-2 py-3" />
               <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
               <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Số đầu</th>
@@ -352,13 +368,13 @@ export function ChotThang({
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước (m³)</th>
               <th className="px-4 py-3 text-right  text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng bill</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trạng thái</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hóa đơn</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {allRooms.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   Chưa có phòng nào — thêm phòng trong tab Phòng
                 </td>
               </tr>
@@ -384,11 +400,6 @@ export function ChotThang({
 
               /* Action availability: prefer API view flags; fall back to store */
               const hasBill    = !!apiRow?.bill_id || !!storeBill;
-              const canConfirm = apiRow?.ui?.can_confirm
-                ?? (storeBill?.status === "draft");
-              const canPay     = apiRow?.ui?.can_pay
-                ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
-
               /* live total: DB value when available, else estimate */
               const liveTotal = apiRow?.total_amount != null
                 ? apiRow.total_amount
@@ -402,7 +413,6 @@ export function ChotThang({
                   return;
                 }
                 setPayInput("");
-                setPayNote("");
                 setInlineEdit(null);
                 setHighlightedRoomId(room.id);
                 setSelectedRoomId(room.id);
@@ -414,31 +424,28 @@ export function ChotThang({
                   <tr
                     onClick={openModal}
                     className={[
-                      "transition-colors",
+                      "bg-card transition-all",
                       occupied && hasBill
-                        ? "cursor-pointer hover:bg-muted/40"
+                        ? "cursor-pointer hover:bg-muted/40 hover:shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.45)]"
                         : "bg-card",
                       !occupied ? "opacity-50" : "",
-                      selectedRoomId === room.id || highlightedRoomId === room.id ? "bg-muted/30 border-l-4 border-indigo-400" : "border-l-4 border-transparent",
                     ].join(" ")}
                   >
-                    {/* Detail chevron */}
-                    <td className="w-8 px-2 py-3 text-center text-muted-foreground">
-                      {occupied && hasBill && (
-                        <ChevronDown
-                          className="h-3.5 w-3.5 mx-auto -rotate-90"
-                        />
-                      )}
-                    </td>
-
                     {/* Phòng */}
                     <td className="px-4 py-3">
-                      <p className="font-medium leading-tight">{room.name}</p>
-                      {occupied && hasBill && (
-                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                          Nhấn để xem chi tiết
-                        </p>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground">
+                          <Home className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold leading-tight text-foreground">{room.name}</p>
+                          {occupied && hasBill && (
+                            <p className="mt-0.5 text-[10px] text-muted-foreground/60">
+                              Nhấn để xem chi tiết
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
 
                     {/* Khách thuê */}
@@ -529,23 +536,16 @@ export function ChotThang({
 
                     {/* Row actions */}
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {occupied && hasBill ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <RowBtn
-                            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                            label="Chốt"
-                            onClick={() => handleConfirmSingle(room.id)}
-                            color="indigo"
-                            disabled={!canConfirm}
-                          />
-                          <RowBtn
-                            icon={<Download className="h-3.5 w-3.5" />}
-                            label="PDF"
-                            onClick={() => handleExportSingle(room.id)}
-                            color="rose"
-                          />
-                        </div>
-                      ) : null}
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={openModal}
+                          disabled={!occupied || !hasBill}
+                          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          Chi tiết
+                        </button>
+                      </div>
                     </td>
                   </tr>
 
@@ -588,8 +588,8 @@ export function ChotThang({
                         <span className="truncate text-muted-foreground">{room.tenant || "Trống"}</span>
                         <span className="shrink-0 text-muted-foreground">•</span>
                         <span className="truncate text-muted-foreground">Hóa đơn tháng {String(month).padStart(2, "0")}/{year}</span>
+                        <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
                       </div>
-                      <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
                       <button type="button" onClick={() => { setInlineEdit(null); setSelectedRoomId(null); }} className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
                         <X className="h-5 w-5" />
                       </button>
@@ -661,13 +661,20 @@ export function ChotThang({
                     <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
                       {storeBill && canPay ? (
-                        <button type="button" onClick={() => handlePay(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Thu tiền</button>
+                        <button type="button" onClick={() => handlePayRemaining(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Đánh dấu đã thu đủ</button>
                       ) : canConfirm ? (
-                        <button type="button" onClick={() => handleConfirmSingle(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Chốt bill</button>
+                        <>
+                          <button type="button" onClick={() => handleConfirmSingle(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Chốt hóa đơn</button>
+                          <p className="text-xs text-muted-foreground">
+                            Sau khi chốt hóa đơn, bạn có thể thu tiền và xuất PDF.
+                          </p>
+                        </>
                       ) : null}
-                      <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                      {storeBill && ["confirmed", "partial_paid", "paid"].includes(storeBill.status) && (
+                        <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                      )}
                       {storeBill && canPay ? (
-                        <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
+                        <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} onPay={() => handlePay(room.id)} />
                       ) : null}
                     </div>
                   </div>
@@ -681,43 +688,15 @@ export function ChotThang({
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
-        <WorkflowStep n={1} title="Nhập chỉ số"   desc="Điền số đầu/cuối — tự động lưu sau 0.6s" />
-        <WorkflowStep n={2} title="Chốt hóa đơn"  desc='Bấm "Chốt" để xác nhận chi phí tháng' />
-        <WorkflowStep n={3} title="Thu tiền"       desc="Click vào hàng để mở chi tiết và thu tiền" />
+        <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu, số cuối và nước ngay trên bảng" />
+        <WorkflowStep n={2} title="Xem chi tiết hóa đơn" desc="Mở chi tiết để kiểm tra tiền thuê, điện, nước và phụ phí" />
+        <WorkflowStep n={3} title="Chốt bill và thu tiền" desc="Thực hiện xác nhận bill, ghi nhận thanh toán và xuất PDF trong màn chi tiết" />
       </div>
     </div>
   );
 }
 
 /* ─── sub-components ──────────────────────────────────────── */
-
-const ROW_BTN_COLORS: Record<string, string> = {
-  indigo:  "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm",
-  emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shadow-sm",
-  slate:   "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 shadow-sm",
-  rose:    "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm",
-};
-
-function RowBtn({
-  icon, label, onClick, color, disabled,
-}: {
-  icon: React.ReactNode; label: string; onClick: () => void; color: string; disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      disabled={disabled}
-      className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors
-        ${ROW_BTN_COLORS[color] ?? ""}
-        disabled:opacity-35 disabled:pointer-events-none`}
-    >
-      {icon}
-      <span className="hidden lg:inline">{label}</span>
-    </button>
-  );
-}
 
 function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: "emerald" | "rose" }) {
   const color =
@@ -772,18 +751,17 @@ function InlineEditRow({
 }
 
 function PaymentSection({
-  bill, payInput, setPayInput, payMethod, setPayMethod, payNote, setPayNote, onPay,
+  bill, payInput, setPayInput, payMethod, setPayMethod, onPay,
 }: {
   bill: RentalRoomBill;
   payInput: string;   setPayInput: (v: string) => void;
   payMethod: string;  setPayMethod: (v: string) => void;
-  payNote: string;    setPayNote: (v: string) => void;
   onPay: () => void;
 }) {
   const remaining = Math.max(0, bill.totalAmount - bill.paidAmount);
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
-      <p className="text-sm font-semibold">Thu tiền</p>
+      <p className="text-sm font-semibold">Thu tiền một phần</p>
 
       {/* Payment summary */}
       <div className="flex items-center gap-6 text-sm">
@@ -797,43 +775,32 @@ function PaymentSection({
         </div>
       </div>
 
-      {/* Primary action row: amount + button side-by-side */}
-      <div className="flex gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <input
           type="number"
           value={payInput}
           onChange={(e) => setPayInput(e.target.value)}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"
           autoFocus
         />
-        <button
-          type="button"
-          onClick={onPay}
-          className="shrink-0 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/30 transition-colors"
-        >
-          Ghi nhận
-        </button>
-      </div>
-
-      {/* Secondary options */}
-      <div className="flex gap-2">
         <select
           value={payMethod}
           onChange={(e) => setPayMethod(e.target.value)}
-          className="w-36 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="cash">Tiền mặt</option>
           <option value="transfer">Chuyển khoản</option>
         </select>
-        <input
-          type="text"
-          value={payNote}
-          onChange={(e) => setPayNote(e.target.value)}
-          placeholder="Ghi chú (tùy chọn)"
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
-        />
       </div>
+
+      <button
+        type="button"
+        onClick={onPay}
+        className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background"
+      >
+        Ghi nhận
+      </button>
     </div>
   );
 }

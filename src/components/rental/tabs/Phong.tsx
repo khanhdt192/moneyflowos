@@ -125,9 +125,7 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Giá thuê</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng bill</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thanh toán</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nợ</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Công nợ</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trạng thái</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"></th>
             </tr>
@@ -135,7 +133,7 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
           <tbody className="divide-y divide-border">
             {state.rental.rooms.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   Chưa có phòng nào — thêm phòng đầu tiên
                 </td>
               </tr>
@@ -144,11 +142,13 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
               const debt = debtMap[room.id] ?? 0;
               const status = getRoomStatus(room, debt > 0);
               const cfg = STATUS_CONFIG[status];
+              const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
+              const occupied = isRoomOccupied(room);
               return (
                 <tr
                   key={room.id}
                   onClick={() => setSelectedRoomId(room.id)}
-                  className="cursor-pointer bg-card hover:bg-muted/20 transition-colors"
+                  className="cursor-pointer bg-card transition-all hover:bg-muted/20 hover:shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.45)]"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
@@ -171,23 +171,13 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
                   <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
                     {formatMoney(room.rent)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                    {(() => {
-                      const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
-                      return bill ? <span className="font-medium text-foreground">{formatMoney(bill.totalAmount)}</span> : <span className="opacity-40">—</span>;
-                    })()}
-                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {(() => {
-                      const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
-                      return bill ? <span className="text-emerald-600">{formatMoney(bill.paidAmount)}</span> : <span className="opacity-40">—</span>;
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {debt > 0 ? (
+                    {!occupied || !bill ? (
+                      <span className="text-muted-foreground/40">—</span>
+                    ) : debt > 0 ? (
                       <span className="font-semibold text-rose-600">{formatMoney(debt)}</span>
                     ) : (
-                      <span className="text-muted-foreground/40">—</span>
+                      <span className="font-semibold text-emerald-600">Không nợ</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-center">
