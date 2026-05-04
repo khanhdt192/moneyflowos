@@ -276,6 +276,24 @@ export function ChotThang({
     }
   }
 
+  async function handlePayRemaining(roomId: string) {
+    const bill = storeBillMap[roomId];
+    if (!bill) return;
+    const remaining = bill.totalAmount - bill.paidAmount;
+    if (remaining <= 0) return;
+    try {
+      await actions.recordPayment(bill.id, remaining, payMethod, payNote || undefined);
+      setPayInput("");
+      setPayNote("");
+      toast.success("Đã ghi nhận thanh toán đủ");
+      setSelectedRoomId(null);
+    } catch {
+      toast.error("Không ghi nhận được thanh toán");
+    } finally {
+      await apiRefetch();
+    }
+  }
+
   function handleExportSingle(roomId: string) {
     const room = roomMap[roomId];
     const bill = storeBillMap[roomId];
@@ -573,8 +591,8 @@ export function ChotThang({
                         <span className="truncate text-muted-foreground">{room.tenant || "Trống"}</span>
                         <span className="shrink-0 text-muted-foreground">•</span>
                         <span className="truncate text-muted-foreground">Hóa đơn tháng {String(month).padStart(2, "0")}/{year}</span>
+                        <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
                       </div>
-                      <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
                       <button type="button" onClick={() => { setInlineEdit(null); setSelectedRoomId(null); }} className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
                         <X className="h-5 w-5" />
                       </button>
@@ -646,11 +664,18 @@ export function ChotThang({
                     <div className="space-y-2 lg:sticky lg:top-2 lg:self-start rounded-xl border border-border bg-card p-3">
                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác nhanh</h4>
                       {storeBill && canPay ? (
-                        <button type="button" onClick={() => handlePay(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Thu tiền</button>
+                        <button type="button" onClick={() => handlePayRemaining(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Đánh dấu đã thu đủ</button>
                       ) : canConfirm ? (
-                        <button type="button" onClick={() => handleConfirmSingle(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Chốt bill</button>
+                        <>
+                          <button type="button" onClick={() => handleConfirmSingle(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Chốt hóa đơn</button>
+                          <p className="text-xs text-muted-foreground">
+                            Sau khi chốt hóa đơn, bạn có thể thu tiền và xuất PDF.
+                          </p>
+                        </>
                       ) : null}
-                      <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                      {storeBill && ["confirmed", "partial_paid", "paid"].includes(storeBill.status) && (
+                        <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                      )}
                       {storeBill && canPay ? (
                         <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
                       ) : null}
@@ -740,7 +765,7 @@ function PaymentSection({
   const remaining = Math.max(0, bill.totalAmount - bill.paidAmount);
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
-      <p className="text-sm font-semibold">Thu tiền</p>
+      <p className="text-sm font-semibold">Thu tiền một phần</p>
 
       {/* Payment summary */}
       <div className="flex items-center gap-6 text-sm">
@@ -755,30 +780,30 @@ function PaymentSection({
       </div>
 
       {/* Primary action row: amount + button side-by-side */}
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="number"
           value={payInput}
           onChange={(e) => setPayInput(e.target.value)}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"
           autoFocus
         />
         <button
           type="button"
           onClick={onPay}
-          className="shrink-0 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted/30 transition-colors"
+          className="w-full shrink-0 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/30 sm:w-auto"
         >
           Ghi nhận
         </button>
       </div>
 
       {/* Secondary options */}
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <select
           value={payMethod}
           onChange={(e) => setPayMethod(e.target.value)}
-          className="w-36 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none sm:w-36"
         >
           <option value="cash">Tiền mặt</option>
           <option value="transfer">Chuyển khoản</option>
