@@ -79,6 +79,23 @@ function getDisplayStatus(
   return "draft";
 }
 
+
+function sanitizeDigitsInput(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function isDigitsOnly(value: string): boolean {
+  return /^\d*$/.test(value);
+}
+
+function parseNonNegativeInteger(value: string): number | null {
+  if (!isDigitsOnly(value)) return null;
+  if (value === "") return 0;
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
 function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
   const ground = isT1(room);
   const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
@@ -199,6 +216,11 @@ export function ChotThang({
   }
 
   function onReadingChange(roomId: string, field: keyof RowData, value: string) {
+    if (!isDigitsOnly(value)) {
+      toast.error("Chỉ được nhập số hợp lệ");
+      return;
+    }
+
     const room = roomMap[roomId];
     const occupied = room ? isRoomOccupied(room) : false;
     const apiBillStatus = apiBillMap[roomId]?.bill_status ?? storeBillMap[roomId]?.status ?? null;
@@ -207,15 +229,22 @@ export function ChotThang({
       return;
     }
 
-    const newRow = { ...getRow(roomId), [field]: value };
+    const newRow = { ...getRow(roomId), [field]: sanitizeDigitsInput(value) };
     setRows((p) => ({ ...p, [roomId]: newRow }));
 
     clearTimeout(debounceTimers.current[roomId]);
     debounceTimers.current[roomId] = setTimeout(async () => {
-      const start = parseFloat(newRow.start) || 0;
-      const end   = parseFloat(newRow.end)   || 0;
-      const water = parseFloat(newRow.water) || 0;
-      if (end < start) return;
+      const start = parseNonNegativeInteger(newRow.start);
+      const end   = parseNonNegativeInteger(newRow.end);
+      const water = parseNonNegativeInteger(newRow.water);
+      if (start == null || end == null || water == null) {
+        toast.error("Chỉ được nhập số hợp lệ");
+        return;
+      }
+      if (end < start) {
+        toast.error("Số cuối phải lớn hơn hoặc bằng số đầu");
+        return;
+      }
       setSaveState(roomId, "saving");
       try {
         await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
@@ -241,10 +270,22 @@ export function ChotThang({
       return;
     }
 
-    const start = parseFloat(rowData.start) || 0;
-    const end   = parseFloat(rowData.end)   || 0;
-    const water = parseFloat(rowData.water) || 0;
-    if (end < start) return;
+    if (!isDigitsOnly(rowData.start) || !isDigitsOnly(rowData.end) || !isDigitsOnly(rowData.water)) {
+      toast.error("Chỉ được nhập số hợp lệ");
+      return;
+    }
+
+    const start = parseNonNegativeInteger(rowData.start);
+    const end   = parseNonNegativeInteger(rowData.end);
+    const water = parseNonNegativeInteger(rowData.water);
+    if (start == null || end == null || water == null) {
+      toast.error("Không được nhập số âm");
+      return;
+    }
+    if (end < start) {
+      toast.error("Số cuối phải lớn hơn hoặc bằng số đầu");
+      return;
+    }
 
     setRows((p) => ({ ...p, [roomId]: rowData }));
     setSaveState(roomId, "saving");
@@ -277,7 +318,8 @@ export function ChotThang({
   async function handlePay(roomId: string) {
     const bill = storeBillMap[roomId];
     if (!bill) return;
-    const amount = parseFloat(payInput.replace(/[^\d.]/g, ""));
+    if (!isDigitsOnly(payInput)) { toast.error("Chỉ được nhập số hợp lệ"); return; }
+    const amount = Number.parseInt(payInput, 10);
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = bill.totalAmount - bill.paidAmount;
     if (amount > remaining + 0.5) {
@@ -483,7 +525,7 @@ export function ChotThang({
                         <input
                           type="number"
                           value={row.start}
-                          onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
+                          onChange={(e) => onReadingChange(room.id, "start", sanitizeDigitsInput(e.target.value))}
                           disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
@@ -499,7 +541,7 @@ export function ChotThang({
                         <input
                           type="number"
                           value={row.end}
-                          onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
+                          onChange={(e) => onReadingChange(room.id, "end", sanitizeDigitsInput(e.target.value))}
                           disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
@@ -512,7 +554,7 @@ export function ChotThang({
                       <input
                         type="number"
                         value={row.water}
-                        onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
+                        onChange={(e) => onReadingChange(room.id, "water", sanitizeDigitsInput(e.target.value))}
                         disabled={!canEditBillInputs}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder="0"
@@ -651,8 +693,8 @@ export function ChotThang({
                               canEdit={canEditBillInputs}
                             >
                               <div className="grid grid-cols-2 gap-2">
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                               </div>
                             </InlineEditRow>
                           )}
@@ -682,7 +724,7 @@ export function ChotThang({
                             }}
                             canEdit={canEditBillInputs}
                           >
-                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                           </InlineEditRow>
                           </div>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
@@ -820,7 +862,7 @@ function PaymentSection({
         <input
           type="number"
           value={payInput}
-          onChange={(e) => setPayInput(e.target.value)}
+          onChange={(e) => setPayInput(sanitizeDigitsInput(e.target.value))}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"
           autoFocus
