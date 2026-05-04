@@ -148,7 +148,7 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
                 <tr
                   key={room.id}
                   onClick={() => setSelectedRoomId(room.id)}
-                  className="cursor-pointer bg-card hover:bg-muted/20 transition-colors"
+                  className="cursor-pointer bg-card transition-all hover:bg-muted/20 hover:shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.45)]"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">

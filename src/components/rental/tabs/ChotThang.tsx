@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
+  Home,
   Loader2,
   Check,
   X,
@@ -345,7 +345,6 @@ export function ChotThang({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="w-8 px-2 py-3" />
               <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
               <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Số đầu</th>
@@ -359,7 +358,7 @@ export function ChotThang({
           <tbody className="divide-y divide-border">
             {allRooms.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   Chưa có phòng nào — thêm phòng trong tab Phòng
                 </td>
               </tr>
@@ -410,31 +409,28 @@ export function ChotThang({
                   <tr
                     onClick={openModal}
                     className={[
-                      "transition-colors",
+                      "bg-card transition-all",
                       occupied && hasBill
-                        ? "cursor-pointer hover:bg-muted/40"
+                        ? "cursor-pointer hover:bg-muted/40 hover:shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.45)]"
                         : "bg-card",
                       !occupied ? "opacity-50" : "",
-                      selectedRoomId === room.id || highlightedRoomId === room.id ? "bg-muted/30 border-l-4 border-indigo-400" : "border-l-4 border-transparent",
                     ].join(" ")}
                   >
-                    {/* Detail chevron */}
-                    <td className="w-8 px-2 py-3 text-center text-muted-foreground">
-                      {occupied && hasBill && (
-                        <ChevronDown
-                          className="h-3.5 w-3.5 mx-auto -rotate-90"
-                        />
-                      )}
-                    </td>
-
                     {/* Phòng */}
                     <td className="px-4 py-3">
-                      <p className="font-medium leading-tight">{room.name}</p>
-                      {occupied && hasBill && (
-                        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                          Nhấn để xem chi tiết
-                        </p>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground">
+                          <Home className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold leading-tight text-foreground">{room.name}</p>
+                          {occupied && hasBill && (
+                            <p className="mt-0.5 text-[10px] text-muted-foreground/60">
+                              Nhấn để xem chi tiết
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
 
                     {/* Khách thuê */}
