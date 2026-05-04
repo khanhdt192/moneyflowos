@@ -125,7 +125,6 @@ export function ChotThang({
   /* payment form — single shared state; cleared when a new row expands */
   const [payInput, setPayInput]   = useState("");
   const [payMethod, setPayMethod] = useState("cash");
-  const [payNote, setPayNote]     = useState("");
   const [inlineEdit, setInlineEdit] = useState<{
     roomId: string;
     mode: "electricity" | "water";
@@ -265,8 +264,8 @@ export function ChotThang({
       return;
     }
     try {
-      await actions.recordPayment(bill.id, amount, payMethod, payNote || undefined);
-      setPayInput(""); setPayNote("");
+      await actions.recordPayment(bill.id, amount, payMethod, undefined);
+      setPayInput("");
       toast.success("Đã ghi nhận thanh toán");
       setSelectedRoomId(null);
     } catch {
@@ -282,9 +281,8 @@ export function ChotThang({
     const remaining = bill.totalAmount - bill.paidAmount;
     if (remaining <= 0) return;
     try {
-      await actions.recordPayment(bill.id, remaining, payMethod, payNote || undefined);
+      await actions.recordPayment(bill.id, remaining, payMethod, undefined);
       setPayInput("");
-      setPayNote("");
       toast.success("Đã ghi nhận thanh toán đủ");
       setSelectedRoomId(null);
     } catch {
@@ -415,7 +413,6 @@ export function ChotThang({
                   return;
                 }
                 setPayInput("");
-                setPayNote("");
                 setInlineEdit(null);
                 setHighlightedRoomId(room.id);
                 setSelectedRoomId(room.id);
@@ -677,7 +674,7 @@ export function ChotThang({
                         <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
                       )}
                       {storeBill && canPay ? (
-                        <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} payNote={payNote} setPayNote={setPayNote} onPay={() => handlePay(room.id)} />
+                        <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} onPay={() => handlePay(room.id)} />
                       ) : null}
                     </div>
                   </div>
@@ -754,12 +751,11 @@ function InlineEditRow({
 }
 
 function PaymentSection({
-  bill, payInput, setPayInput, payMethod, setPayMethod, payNote, setPayNote, onPay,
+  bill, payInput, setPayInput, payMethod, setPayMethod, onPay,
 }: {
   bill: RentalRoomBill;
   payInput: string;   setPayInput: (v: string) => void;
   payMethod: string;  setPayMethod: (v: string) => void;
-  payNote: string;    setPayNote: (v: string) => void;
   onPay: () => void;
 }) {
   const remaining = Math.max(0, bill.totalAmount - bill.paidAmount);
@@ -779,8 +775,7 @@ function PaymentSection({
         </div>
       </div>
 
-      {/* Primary action row: amount + button side-by-side */}
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <input
           type="number"
           value={payInput}
@@ -789,33 +784,23 @@ function PaymentSection({
           placeholder="Số tiền thu"
           autoFocus
         />
-        <button
-          type="button"
-          onClick={onPay}
-          className="w-full shrink-0 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/30 sm:w-auto"
-        >
-          Ghi nhận
-        </button>
-      </div>
-
-      {/* Secondary options */}
-      <div className="flex flex-col gap-2 sm:flex-row">
         <select
           value={payMethod}
           onChange={(e) => setPayMethod(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none sm:w-36"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="cash">Tiền mặt</option>
           <option value="transfer">Chuyển khoản</option>
         </select>
-        <input
-          type="text"
-          value={payNote}
-          onChange={(e) => setPayNote(e.target.value)}
-          placeholder="Ghi chú (tùy chọn)"
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none"
-        />
       </div>
+
+      <button
+        type="button"
+        onClick={onPay}
+        className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background"
+      >
+        Ghi nhận
+      </button>
     </div>
   );
 }
