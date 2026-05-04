@@ -18,9 +18,17 @@ export function useTenant(refetchRooms: RefetchRooms) {
     async (roomId: string, payload: CreateTenantInput, deposit?: DepositInput) => {
       setIsLoading(true);
       setError(null);
+
+      let createdTenantId: string | null = null;
+      let assigned = false;
+
       try {
         const tenant = await tenantService.createTenant(payload);
+        createdTenantId = tenant.id;
+
         await roomService.assignTenant(roomId, tenant.id);
+        assigned = true;
+
         if (deposit && deposit.amount >= 0) {
           await depositService.createDeposit({
             tenantId: tenant.id,
@@ -29,10 +37,28 @@ export function useTenant(refetchRooms: RefetchRooms) {
             note: deposit.note,
           });
         }
+
         await refetchRooms();
         return tenant;
       } catch (err) {
         console.error("[useTenant.createAndAssign] failed", err);
+
+        if (assigned) {
+          try {
+            await roomService.removeTenant(roomId);
+          } catch (rollbackErr) {
+            console.error("[useTenant.createAndAssign] rollback removeTenant failed", rollbackErr);
+          }
+        }
+
+        if (createdTenantId) {
+          try {
+            await tenantService.deleteTenant(createdTenantId);
+          } catch (rollbackErr) {
+            console.error("[useTenant.createAndAssign] rollback deleteTenant failed", rollbackErr);
+          }
+        }
+
         setError(err);
         throw err;
       } finally {
@@ -81,8 +107,16 @@ export function useTenant(refetchRooms: RefetchRooms) {
     async (roomId: string, tenantId: string, deposit?: DepositInput) => {
       setIsLoading(true);
       setError(null);
+
+      let previous: { tenantId: string | null } | null = null;
+      let assigned = false;
+
       try {
+        previous = await roomService.getTenantAssignment(roomId);
+
         await roomService.assignTenant(roomId, tenantId);
+        assigned = true;
+
         if (deposit && deposit.amount >= 0) {
           await depositService.createDeposit({
             tenantId,
@@ -91,8 +125,19 @@ export function useTenant(refetchRooms: RefetchRooms) {
             note: deposit.note,
           });
         }
+
         await refetchRooms();
       } catch (err) {
+        console.error("[useTenant.assignExisting] failed", err);
+
+        if (assigned && previous) {
+          try {
+            await roomService.restoreTenantAssignment(roomId, previous.tenantId);
+          } catch (rollbackErr) {
+            console.error("[useTenant.assignExisting] rollback restoreTenantAssignment failed", rollbackErr);
+          }
+        }
+
         setError(err);
         throw err;
       } finally {
