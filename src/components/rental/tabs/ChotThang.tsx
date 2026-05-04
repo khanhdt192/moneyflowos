@@ -3,8 +3,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  CheckCircle2,
-  Download,
   Loader2,
   Check,
   X,
@@ -330,14 +328,17 @@ export function ChotThang({
       </div>
 
       {/* ── KPI summary ── */}
-      {allApiBills.length > 0 && (
+      <div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryCard label="Tổng hóa đơn"    value={formatMoney(totalBilled)} />
           <SummaryCard label="Đã thu"           value={formatMoney(totalPaid)} accent="emerald" />
           <SummaryCard label="Còn lại"          value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
           <SummaryCard label="Đã chốt / Đã thu" value={`${confirmedCount} / ${paidCount} phòng`} />
         </div>
-      )}
+        {allApiBills.length === 0 && (
+          <p className="mt-2 text-sm text-muted-foreground">Chưa có hóa đơn tháng này</p>
+        )}
+      </div>
 
       {/* ── Main table ── */}
       <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
@@ -352,7 +353,7 @@ export function ChotThang({
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước (m³)</th>
               <th className="px-4 py-3 text-right  text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng bill</th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trạng thái</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thao tác</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hóa đơn</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -384,11 +385,6 @@ export function ChotThang({
 
               /* Action availability: prefer API view flags; fall back to store */
               const hasBill    = !!apiRow?.bill_id || !!storeBill;
-              const canConfirm = apiRow?.ui?.can_confirm
-                ?? (storeBill?.status === "draft");
-              const canPay     = apiRow?.ui?.can_pay
-                ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
-
               /* live total: DB value when available, else estimate */
               const liveTotal = apiRow?.total_amount != null
                 ? apiRow.total_amount
@@ -529,23 +525,16 @@ export function ChotThang({
 
                     {/* Row actions */}
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {occupied && hasBill ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <RowBtn
-                            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                            label="Chốt"
-                            onClick={() => handleConfirmSingle(room.id)}
-                            color="indigo"
-                            disabled={!canConfirm}
-                          />
-                          <RowBtn
-                            icon={<Download className="h-3.5 w-3.5" />}
-                            label="PDF"
-                            onClick={() => handleExportSingle(room.id)}
-                            color="rose"
-                          />
-                        </div>
-                      ) : null}
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={openModal}
+                          disabled={!occupied || !hasBill}
+                          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-100 disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          Chi tiết
+                        </button>
+                      </div>
                     </td>
                   </tr>
 
@@ -681,43 +670,15 @@ export function ChotThang({
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
-        <WorkflowStep n={1} title="Nhập chỉ số"   desc="Điền số đầu/cuối — tự động lưu sau 0.6s" />
-        <WorkflowStep n={2} title="Chốt hóa đơn"  desc='Bấm "Chốt" để xác nhận chi phí tháng' />
-        <WorkflowStep n={3} title="Thu tiền"       desc="Click vào hàng để mở chi tiết và thu tiền" />
+        <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu, số cuối và nước ngay trên bảng" />
+        <WorkflowStep n={2} title="Xem chi tiết hóa đơn" desc="Mở chi tiết để kiểm tra tiền thuê, điện, nước và phụ phí" />
+        <WorkflowStep n={3} title="Chốt bill và thu tiền" desc="Thực hiện xác nhận bill, ghi nhận thanh toán và xuất PDF trong màn chi tiết" />
       </div>
     </div>
   );
 }
 
 /* ─── sub-components ──────────────────────────────────────── */
-
-const ROW_BTN_COLORS: Record<string, string> = {
-  indigo:  "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm",
-  emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shadow-sm",
-  slate:   "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 shadow-sm",
-  rose:    "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm",
-};
-
-function RowBtn({
-  icon, label, onClick, color, disabled,
-}: {
-  icon: React.ReactNode; label: string; onClick: () => void; color: string; disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      disabled={disabled}
-      className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors
-        ${ROW_BTN_COLORS[color] ?? ""}
-        disabled:opacity-35 disabled:pointer-events-none`}
-    >
-      {icon}
-      <span className="hidden lg:inline">{label}</span>
-    </button>
-  );
-}
 
 function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: "emerald" | "rose" }) {
   const color =
