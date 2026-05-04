@@ -1,20 +1,34 @@
 import { useCallback, useState } from "react";
 import { roomService } from "@/services/room.service";
+import { depositService } from "@/services/deposit.service";
 import { tenantService, type CreateTenantInput, type Tenant, type UpdateTenantInput } from "@/services/tenant.service";
 
 type RefetchRooms = () => Promise<unknown>;
+
+type DepositInput = {
+  amount: number;
+  note?: string;
+};
 
 export function useTenant(refetchRooms: RefetchRooms) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   const createAndAssign = useCallback(
-    async (roomId: string, payload: CreateTenantInput) => {
+    async (roomId: string, payload: CreateTenantInput, deposit?: DepositInput) => {
       setIsLoading(true);
       setError(null);
       try {
         const tenant = await tenantService.createTenant(payload);
         await roomService.assignTenant(roomId, tenant.id);
+        if (deposit && deposit.amount >= 0) {
+          await depositService.createDeposit({
+            tenantId: tenant.id,
+            roomId,
+            amount: deposit.amount,
+            note: deposit.note,
+          });
+        }
         await refetchRooms();
         return tenant;
       } catch (err) {
@@ -64,11 +78,19 @@ export function useTenant(refetchRooms: RefetchRooms) {
   );
 
   const assignExisting = useCallback(
-    async (roomId: string, tenantId: string) => {
+    async (roomId: string, tenantId: string, deposit?: DepositInput) => {
       setIsLoading(true);
       setError(null);
       try {
         await roomService.assignTenant(roomId, tenantId);
+        if (deposit && deposit.amount >= 0) {
+          await depositService.createDeposit({
+            tenantId,
+            roomId,
+            amount: deposit.amount,
+            note: deposit.note,
+          });
+        }
         await refetchRooms();
       } catch (err) {
         setError(err);
