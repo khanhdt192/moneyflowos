@@ -13,3 +13,7 @@ create table if not exists public.rental_deposits (
 create index if not exists rental_deposits_tenant_id_idx on public.rental_deposits(tenant_id);
 create index if not exists rental_deposits_room_id_idx on public.rental_deposits(room_id);
 create index if not exists rental_deposits_status_idx on public.rental_deposits(status);
+
+create unique index if not exists rental_deposits_one_active_per_room_idx
+on public.rental_deposits(room_id)
+where status = 'active';
