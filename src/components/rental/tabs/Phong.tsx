@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, X, Check, Trash2, ChevronRight, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { useTenant } from "@/hooks/useTenant";
 import { roomService } from "@/services/room.service";
+import { depositService, type RentalDeposit } from "@/services/deposit.service";
 import type { Tenant } from "@/services/tenant.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
@@ -79,7 +80,7 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
       {adding && (
         <AddRoomForm
           onCancel={() => setAdding(false)}
-          onCreate={async ({ name, rent, floor, addTenantNow, tenantFullName, tenantPhone, tenantAddress }) => {
+          onCreate={async ({ name, rent, floor, addTenantNow, tenantFullName, tenantPhone, tenantAddress, depositAmount, depositNote }) => {
             let createdRoomId: string | null = null;
             try {
               const room = await actions.addRoom(name, rent, floor);
@@ -94,6 +95,9 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
                   fullName: tenantFullName,
                   phone: tenantPhone,
                   address: tenantAddress,
+                }, {
+                  amount: depositAmount,
+                  note: depositNote,
                 });
               }
 
@@ -236,11 +240,33 @@ function RoomModal({
   const [blockedTenantIds, setBlockedTenantIds] = useState<Set<string>>(new Set());
   const [blockedTenantReason, setBlockedTenantReason] = useState<Record<string, string>>({});
   const [selectedTenantId, setSelectedTenantId] = useState("");
+  const [activeDepositsByRoomId, setActiveDepositsByRoomId] = useState<Record<string, RentalDeposit>>({});
+  const [tenantDepositAmount, setTenantDepositAmount] = useState("");
+  const [tenantDepositNote, setTenantDepositNote] = useState("");
+
+  useEffect(() => {
+    const loadDeposits = async () => {
+      try {
+        const deposits = await depositService.listActiveDepositsByRoomIds(state.rental.rooms.map((r) => r.id));
+        const byRoom = deposits.reduce<Record<string, RentalDeposit>>((acc, item) => {
+          if (!acc[item.room_id]) acc[item.room_id] = item;
+          return acc;
+        }, {});
+        setActiveDepositsByRoomId(byRoom);
+      } catch (error) {
+        console.error("[room-modal] load deposit failed", error);
+      }
+    };
+    void loadDeposits();
+  }, [state.rental.rooms]);
 
   const room = roomId ? state.rental.rooms.find((r) => r.id === roomId) ?? null : null;
   const debt = room ? (debtMap[room.id] ?? 0) : 0;
   const bill = room ? state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId) : null;
   const canChangeTenant = !bill || bill.paidAmount >= bill.totalAmount;
+  const activeDeposit = room ? activeDepositsByRoomId[room.id] : undefined;
+  const blockedByDeposit = Boolean(activeDeposit && room?.tenantInfo);
+  const canMutateTenant = canChangeTenant && !blockedByDeposit;
 
   const handleOpen = (r: RentalRoom | null) => {
     if (r) {
@@ -285,6 +311,8 @@ function RoomModal({
     setTenantAddress(room.tenantInfo?.address || "");
     setAddTenantMode("new");
     setSelectedTenantId("");
+    setTenantDepositAmount(room?.rent ? String(room.rent) : "");
+    setTenantDepositNote("");
   }, [roomId, room?.tenantInfo?.id, room?.tenantInfo?.fullName, room?.tenantInfo?.phone, room?.tenantInfo?.address, room]);
 
   return (
@@ -380,6 +408,19 @@ function RoomModal({
                             </select>
                           </>
                         )}
+                        {tenantMode === "add" && (
+                          <div className="space-y-2">
+                            <div>
+                              <label className="mb-1 block text-xs text-muted-foreground">Tiền cọc *</label>
+                              <input type="number" min={0} value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(e.target.value)} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                              <p className="mt-1 text-xs text-muted-foreground">Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.</p>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs text-muted-foreground">Ghi chú tiền cọc</label>
+                              <input value={tenantDepositNote} onChange={(e) => setTenantDepositNote(e.target.value)} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                            </div>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
                           <button type="button" onClick={async () => {
@@ -387,15 +428,20 @@ function RoomModal({
                               if (!room) return;
                               if (tenantMode === "edit" && room.tenantInfo) await update(room.tenantInfo.id, { fullName: tenantName.trim(), phone: tenantPhone.trim(), address: tenantAddress.trim() });
                               if (tenantMode === "add") {
+                                const parsedDepositAmount = Number.parseFloat(tenantDepositAmount);
+                                if (Number.isNaN(parsedDepositAmount) || parsedDepositAmount < 0) {
+                                  toast.error("Vui lòng nhập tiền cọc hợp lệ");
+                                  return;
+                                }
                                 if (addTenantMode === "existing") {
                                   if (!selectedTenantId || blockedTenantIds.has(selectedTenantId)) {
                                     toast.error("Người thuê đang nợ bill, không thể gán phòng");
                                     return;
                                   }
-                                  await assignExisting(room.id, selectedTenantId);
+                                  await assignExisting(room.id, selectedTenantId, { amount: parsedDepositAmount, note: tenantDepositNote.trim() || undefined });
                                 } else {
                                   const userId = actions.getUserId(); if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
-                                  await createAndAssign(room.id, { userId, fullName: tenantName.trim(), phone: tenantPhone.trim() || undefined, address: tenantAddress.trim() || undefined });
+                                  await createAndAssign(room.id, { userId, fullName: tenantName.trim(), phone: tenantPhone.trim() || undefined, address: tenantAddress.trim() || undefined }, { amount: parsedDepositAmount, note: tenantDepositNote.trim() || undefined });
                                 }
                               }
                               setTenantName(room.tenantInfo?.fullName || "");
@@ -417,6 +463,10 @@ function RoomModal({
                           ))}
                         </select>
                         <p className="text-xs text-muted-foreground">Người thuê đang nợ bill sẽ không thể chọn.</p>
+                        <div>
+                          <label className="mb-1 block text-xs text-muted-foreground">Tiền cọc *</label>
+                          <input type="number" min={0} value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(e.target.value)} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                        </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
                           <button type="button" onClick={async () => {
@@ -426,7 +476,12 @@ function RoomModal({
                                 toast.error("Không thể đổi người thuê đang nợ bill");
                                 return;
                               }
-                              await assignExisting(room.id, selectedTenantId);
+                              const parsedDepositAmount = Number.parseFloat(tenantDepositAmount);
+                              if (Number.isNaN(parsedDepositAmount) || parsedDepositAmount < 0) {
+                                toast.error("Vui lòng nhập tiền cọc hợp lệ");
+                                return;
+                              }
+                              await assignExisting(room.id, selectedTenantId, { amount: parsedDepositAmount, note: tenantDepositNote.trim() || undefined });
                               setTenantName(room.tenantInfo?.fullName || "");
                               setTenantPhone(room.tenantInfo?.phone || "");
                               setTenantAddress(room.tenantInfo?.address || "");
@@ -450,6 +505,13 @@ function RoomModal({
                         <p className="pt-1 text-xs text-muted-foreground/80">Chưa có thông tin khách thuê cho phòng này.</p>
                       </div>
                     )}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tiền cọc</h4>
+                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1">
+                    <Row label="Tiền cọc" value={activeDeposit ? formatMoney(activeDeposit.amount) : "—"} />
+                    <Row label="Trạng thái" value={activeDeposit ? "Đang giữ" : "—"} />
                   </div>
                 </div>
 
@@ -506,7 +568,8 @@ function RoomModal({
                         type="button"
                         onClick={async () => {
                           if (!confirm("Xóa người thuê khỏi phòng này?")) return;
-                          if (!canChangeTenant) {
+                          if (!canMutateTenant) {
+                            if (blockedByDeposit) toast.error("Cần xử lý tiền cọc trước khi đổi hoặc xóa người thuê.");
                             toast.error("Chỉ xóa người thuê khi hóa đơn tháng này đã thanh toán đủ");
                             return;
                           }
@@ -520,13 +583,16 @@ function RoomModal({
                             toast.error("Không thể xóa người thuê khỏi phòng");
                           }
                         }}
-                        disabled={!canChangeTenant}
+                        disabled={!canMutateTenant}
                         className="w-full rounded-lg border border-destructive/40 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
                       >Xóa người thuê khỏi phòng</button>
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!canChangeTenant) return;
+                          if (!canMutateTenant) {
+                            if (blockedByDeposit) toast.error("Cần xử lý tiền cọc trước khi đổi hoặc xóa người thuê.");
+                            return;
+                          }
                           try {
                             await loadTenants();
                             setTenantMode("change");
@@ -534,11 +600,11 @@ function RoomModal({
                             toast.error("Không tải được danh sách người thuê");
                           }
                         }}
-                        disabled={!canChangeTenant}
+                        disabled={!canMutateTenant}
                       className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30 disabled:opacity-50"
                       >Đổi người thuê</button>
-                      {!canChangeTenant && (
-                        <p className="text-xs text-muted-foreground">Chỉ thao tác người thuê khi hóa đơn tháng này đã thanh toán đủ</p>
+                      {!canMutateTenant && (
+                        <p className="text-xs text-muted-foreground">{blockedByDeposit ? "Cần xử lý tiền cọc trước khi đổi hoặc xóa người thuê." : "Chỉ thao tác người thuê khi hóa đơn tháng này đã thanh toán đủ"}</p>
                       )}
                     </>
                   ) : (
@@ -607,6 +673,8 @@ function AddRoomForm({
     tenantFullName: string;
     tenantPhone?: string;
     tenantAddress?: string;
+    depositAmount: number;
+    depositNote?: string;
   }) => Promise<void>;
 }) {
   const [name, setName] = useState("");
@@ -617,9 +685,14 @@ function AddRoomForm({
   const [tenantFullName, setTenantFullName] = useState("");
   const [tenantPhone, setTenantPhone] = useState("");
   const [tenantAddress, setTenantAddress] = useState("");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositNote, setDepositNote] = useState("");
+  const [isDepositManual, setIsDepositManual] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const parsedFloor = floor.trim() === "" ? null : Number.parseInt(floor, 10);
-  const valid = Boolean(name.trim()) && parseFloat(rent) > 0 && (!addTenantNow || Boolean(tenantFullName.trim()));
+  const parsedRent = parseFloat(rent);
+  const parsedDeposit = parseFloat(depositAmount);
+  const valid = Boolean(name.trim()) && parsedRent > 0 && (!addTenantNow || (Boolean(tenantFullName.trim()) && !Number.isNaN(parsedDeposit) && parsedDeposit >= 0));
 
   const onRoomNameChange = (value: string) => {
     setName(value);
@@ -628,6 +701,13 @@ function AddRoomForm({
     const detectedFloor = detectFloorFromRoomName(value);
     setFloor(detectedFloor === null ? "" : String(detectedFloor));
   };
+
+  useEffect(() => {
+    if (!addTenantNow) return;
+    if (!isDepositManual) {
+      setDepositAmount(rent);
+    }
+  }, [rent, addTenantNow, isDepositManual]);
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -638,6 +718,9 @@ function AddRoomForm({
         </button>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thông tin phòng</h4>
+        </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Tên phòng *</label>
           <input
@@ -680,7 +763,9 @@ function AddRoomForm({
         </div>
       </div>
       {addTenantNow && (
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="mt-3 space-y-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thông tin người thuê</h4>
+          <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground">Họ tên người thuê *</label>
             <input
@@ -708,6 +793,19 @@ function AddRoomForm({
               className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
             />
           </div>
+          </div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tiền cọc</h4>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Tiền cọc *</label>
+              <input type="number" min={0} value={depositAmount} onChange={(e) => { setIsDepositManual(true); setDepositAmount(e.target.value); }} className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+              <p className="mt-1 text-xs text-muted-foreground">Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Ghi chú tiền cọc</label>
+              <input value={depositNote} onChange={(e) => setDepositNote(e.target.value)} placeholder="Tuỳ chọn" className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+            </div>
+          </div>
         </div>
       )}
       <div className="mt-3 flex gap-2 justify-end">
@@ -732,6 +830,8 @@ function AddRoomForm({
                 tenantFullName: tenantFullName.trim(),
                 tenantPhone: tenantPhone.trim() || undefined,
                 tenantAddress: tenantAddress.trim() || undefined,
+                depositAmount: Number.isNaN(parsedDeposit) ? 0 : parsedDeposit,
+                depositNote: depositNote.trim() || undefined,
               });
             } finally {
               setSubmitting(false);
