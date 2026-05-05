@@ -716,11 +716,20 @@ export function ChotThang({
                               <>
                                 {!isT1(room) && (
                                   <div className="grid grid-cols-2 gap-2">
-                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.start} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, start: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" placeholder="Số đầu" />
-                                    <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.end} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, end: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" placeholder="Số cuối" />
+                                    <label className="space-y-1 text-xs text-muted-foreground">
+                                      <span>Số đầu</span>
+                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.start} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, start: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground" />
+                                    </label>
+                                    <label className="space-y-1 text-xs text-muted-foreground">
+                                      <span>Số cuối</span>
+                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.end} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, end: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground" />
+                                    </label>
                                   </div>
                                 )}
-                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.water} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, water: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" placeholder="Số m3 nước" />
+                                <label className="space-y-1 text-xs text-muted-foreground">
+                                  <span>Số m3 nước</span>
+                                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.water} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, water: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground" />
+                                </label>
                                 <div className="grid grid-cols-2 gap-2">
                                   <button type="button" onClick={async () => { await saveInlineReading(room.id, reading); setMeterEditingRoomId(null); }} disabled={!canEditBillInputs} className="rounded-lg bg-foreground py-2 text-sm font-semibold text-background disabled:opacity-40">Lưu</button>
                                   <button type="button" onClick={() => { const origin = readingMap[room.id]; setRows((p) => ({ ...p, [room.id]: { start: origin?.startIndex != null ? String(origin.startIndex) : "", end: origin?.endIndex != null ? String(origin.endIndex) : "", water: origin?.waterM3 != null ? String(origin.waterM3) : "" } })); setMeterEditingRoomId(null); }} className="rounded-lg border border-border py-2 text-sm font-medium">Huỷ</button>
@@ -732,14 +741,17 @@ export function ChotThang({
                         {storeBill && canPay && ["confirmed", "partial_paid"].includes(effectiveBillStatus ?? "") && (
                           <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} onPay={() => handlePay(room.id)} />
                         )}
-                        <SectionCard title="Hành động khác">
-                          {storeBill && canPay && ["confirmed", "partial_paid"].includes(effectiveBillStatus ?? "") && (
+                        {storeBill && canPay && ["confirmed", "partial_paid"].includes(effectiveBillStatus ?? "") ? (
+                          <SectionCard title="Hành động khác">
                             <button type="button" onClick={() => handlePayRemaining(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Đánh dấu đã thu đủ</button>
-                          )}
-                          {storeBill && ["confirmed", "partial_paid", "paid"].includes(storeBill.status) && (
-                            <button type="button" onClick={() => handleExportSingle(room.id)} className="mt-2 w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
-                          )}
-                        </SectionCard>
+                            {storeBill && ["confirmed", "partial_paid", "paid"].includes(storeBill.status) && (
+                              <button type="button" onClick={() => handleExportSingle(room.id)} className="mt-2 w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                            )}
+                          </SectionCard>
+                        ) : null}
+                        {storeBill && storeBill.status === "paid" ? (
+                          <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
