@@ -3,11 +3,8 @@
 Project: MoneyFlowOS (rental module)
 
 Current focus:
-- Refactor Chốt tháng modal (UI/UX + validation)
-
-Status:
-- PR 45 has been rejected due to bad UX
-- Need to redesign right-side panel cleanly
+- Chốt tháng modal UI/UX refactor
+- numeric input system (IME-safe + money formatting)
 
 ==================================================
 UI/UX DIRECTION
@@ -30,133 +27,91 @@ LEFT SIDE (must always contain):
 
 Rules:
 - read-only only
-- no inline "Sửa"
 - no inputs
+- no inline "Sửa"
 
 --------------------------------------------------
 
 RIGHT SIDE = 3 sections
 
 1. Nhập điện nước
-- ONLY show when bill status = null / draft
-- HIDE completely when:
-  - confirmed
-  - partial_paid
-  - paid
-  - cancelled
-
-- Default: read-only
-- Click "Sửa" → editable
-- Save / Cancel
+- ONLY when bill = null / draft
+- hidden for confirmed / partial_paid / paid / cancelled
+- default read-only
+- click "Sửa" → editable
 
 2. Thu tiền
-- show when bill supports payment
-- includes:
-  - Đã thu
-  - Còn thiếu
-  - Số tiền thu
-  - Phương thức
-  - Ghi nhận
+- Đã thu
+- Còn thiếu
+- Số tiền thu
+- Phương thức
+- Ghi nhận
 
 3. Hành động khác
 - Đánh dấu đã thu đủ
 - Xuất PDF
-- must be separate from payment
-
---------------------------------------------------
 
 Panel rule:
-- Left and right must have equal visual height
+- left and right must have equal height
 
 ==================================================
 VALIDATION RULE
 ==================================================
 
-All numeric inputs:
-- digits only
-- no letters
-- no special characters
-- no +, -, e, E
-- must handle IME (Mac Vietnamese keyboard)
-
-Use:
-- type="text"
-- inputMode="numeric"
-- sanitizeDigitsInput(value.replace(/\\D/g, ""))
-
-Fields:
-- điện, nước
-- tiền thuê
-- tiền cọc
-- số tiền thu
+Digits-only fields:
+- điện
+- nước
 - SĐT
 
+Money fields:
+- giá thuê
+- tiền cọc
+- số tiền thu
+- use formatMoneyInput / parseMoneyInput
+
+IME rule:
+- must work with Vietnamese keyboard
+
 ==================================================
-WORKFLOW RULE (IMPORTANT)
+WORKFLOW RULE
 ==================================================
 
-You (ChatGPT):
+ChatGPT:
 - design logic
 - write Codex prompts
 - review PRs
 
 User:
 - run Codex
-- run SQL on Supabase
+- run SQL
 - verify UI
 
 Codex:
-- implement code changes
-- follow prompt strictly
-- do not invent logic
+- implement exactly per prompt
+- no guessing
 
 Supabase:
-- only changed via explicit SQL
-- never auto-modified
+- only modified via explicit SQL
 
 ==================================================
-CODEX PROMPT FORMAT (MANDATORY)
+PROMPT RULE
 ==================================================
 
-Every prompt must follow:
-
-1. Read these files first:
-- docs/database-contract.md
-- docs/moneyflowos-ai-rules.md
-- docs/rental-ui-ux-spec.md
-- docs/rental-validation-rules.md
-
-2. IMPORTANT section:
-- no schema change
-- no business logic change
-- no docs update
-
-3. Clear sections:
-- GOAL
-- CURRENT PROBLEM
-- REQUIRED FIX
-- RULES
-- SCOPE
-- EXPECTED RESULT
-
-4. No vague wording:
-- no "improve UI"
-- must specify exact behavior
-
-5. Always state:
-- what to change
-- what NOT to change
+Every prompt must:
+- be explicit
+- define scope
+- define what NOT to change
 
 ==================================================
-CURRENT ISSUE
+CURRENT STATE
 ==================================================
 
-- Need to redesign ChotThang modal right panel
-- Fix IME numeric input bug (Mac Vietnamese keyboard)
-- Ensure validation is robust
+- PR45 rejected (bad UX)
+- PR46 merged (numeric + money input fixed)
+- next step: refine Chốt tháng right panel UI
 
 ==================================================
-HANDOVER INSTRUCTION
+HANDOVER
 ==================================================
 
 Confirm you understand this context before continuing.
