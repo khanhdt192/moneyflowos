@@ -358,7 +358,7 @@ export function ChotThang({
     }
     try {
       await actions.recordPayment(bill.id, amount, payMethod, undefined);
-    setPayInput("");
+      setPayInput("");
       toast.success("Đã ghi nhận thanh toán");
       setSelectedRoomId(null);
     } catch {
