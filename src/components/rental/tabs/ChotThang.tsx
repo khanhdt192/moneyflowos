@@ -84,6 +84,20 @@ function sanitizeDigitsInput(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function formatMoneyInput(value: string): string {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return "";
+  return Number.parseInt(digits, 10).toLocaleString("vi-VN");
+}
+
+function parseMoneyInput(value: string): number | null {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return null;
+  const parsed = Number.parseInt(digits, 10);
+  if (Number.isNaN(parsed)) return null;
+  return parsed;
+}
+
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
 }
@@ -334,8 +348,8 @@ export function ChotThang({
   async function handlePay(roomId: string) {
     const bill = storeBillMap[roomId];
     if (!bill) return;
-    if (!isDigitsOnly(payInput)) { toast.error("Chỉ được nhập số hợp lệ"); return; }
-    const amount = Number.parseInt(payInput, 10);
+    const amount = parseMoneyInput(payInput);
+    if (amount == null) { toast.error("Chỉ được nhập số hợp lệ"); return; }
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = bill.totalAmount - bill.paidAmount;
     if (amount > remaining + 0.5) {
@@ -344,7 +358,7 @@ export function ChotThang({
     }
     try {
       await actions.recordPayment(bill.id, amount, payMethod, undefined);
-      setPayInput("");
+    setPayInput("");
       toast.success("Đã ghi nhận thanh toán");
       setSelectedRoomId(null);
     } catch {
@@ -894,7 +908,7 @@ function PaymentSection({
           value={payInput}
           onKeyDown={preventInvalidNumberKeyDown}
           onPaste={preventInvalidNumberPaste}
-          onChange={(e) => setPayInput(sanitizeDigitsInput(e.target.value))}
+          onChange={(e) => setPayInput(formatMoneyInput(e.target.value))}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"
           autoFocus
