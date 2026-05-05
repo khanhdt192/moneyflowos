@@ -374,7 +374,7 @@ function RoomModal({
                         </div>
                         <div>
                           <label className="text-xs text-muted-foreground">Giá thuê / tháng</label>
-                          <input type="number" value={rent} onChange={(e) => setRent(sanitizeDigitsInput(e.target.value))} className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" value={rent} onChange={(e) => setRent(sanitizeDigitsInput(e.target.value))} className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => { setEditing(false); setName(room.name); setRent(String(room.rent)); }} className="flex-1 rounded-lg border border-border py-2 text-sm font-medium">Huỷ</button>
@@ -409,7 +409,7 @@ function RoomModal({
                             </div>
                             <div>
                               <label className="mb-1 block text-xs text-muted-foreground">Số điện thoại</label>
-                              <input value={tenantPhone} onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                              <input type="text" inputMode="numeric" pattern="[0-9]*" value={tenantPhone} onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
                             </div>
                             <div>
                               <label className="mb-1 block text-xs text-muted-foreground">Địa chỉ</label>
@@ -435,7 +435,7 @@ function RoomModal({
                           <div className="space-y-2">
                             <div>
                               <label className="mb-1 block text-xs text-muted-foreground">Tiền cọc *</label>
-                              <input type="number" min={0} value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(sanitizeDigitsInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                              <input type="text" inputMode="numeric" pattern="[0-9]*" value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(sanitizeDigitsInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
                               <p className="mt-1 text-xs text-muted-foreground">Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.</p>
                             </div>
                             <div>
@@ -503,7 +503,7 @@ function RoomModal({
                         <p className="text-xs text-muted-foreground">Người thuê đang nợ bill sẽ không thể chọn.</p>
                         <div>
                           <label className="mb-1 block text-xs text-muted-foreground">Tiền cọc *</label>
-                          <input type="number" min={0} value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(sanitizeDigitsInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(sanitizeDigitsInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
@@ -776,7 +776,9 @@ function AddRoomForm({
         <div>
           <label className="text-xs font-medium text-muted-foreground">Giá thuê *</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={rent}
             onChange={(e) => setRent(sanitizeDigitsInput(e.target.value))}
             placeholder="VD: 4000000"
@@ -820,6 +822,9 @@ function AddRoomForm({
           <div>
             <label className="text-xs font-medium text-muted-foreground">Số điện thoại</label>
             <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={tenantPhone}
               onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))}
               placeholder="VD: 090..."
@@ -840,7 +845,7 @@ function AddRoomForm({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="text-xs font-medium text-muted-foreground">Tiền cọc *</label>
-              <input type="number" min={0} value={depositAmount} onChange={(e) => { setIsDepositManual(true); setDepositAmount(sanitizeDigitsInput(e.target.value)); }} className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+              <input type="text" inputMode="numeric" pattern="[0-9]*" value={depositAmount} onChange={(e) => { setIsDepositManual(true); setDepositAmount(sanitizeDigitsInput(e.target.value)); }} className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
               <p className="mt-1 text-xs text-muted-foreground">Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.</p>
             </div>
             <div>

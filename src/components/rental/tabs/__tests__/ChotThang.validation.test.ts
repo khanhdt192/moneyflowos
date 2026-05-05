@@ -67,10 +67,12 @@ test("invalid characters rejected and valid numeric strings accepted", () => {
 });
 
 test("sanitize numeric input behavior", () => {
+  assert.equal(sanitizeDigitsInput("6gg"), "6");
   assert.equal(sanitizeDigitsInput("abc"), "");
   assert.equal(sanitizeDigitsInput("10a"), "10");
   assert.equal(sanitizeDigitsInput("1e5"), "15");
   assert.equal(sanitizeDigitsInput("-10"), "10");
+  assert.equal(sanitizeDigitsInput("+10"), "10");
 });
 
 test("empty / NaN rejected", () => {

@@ -539,7 +539,9 @@ export function ChotThang({
                         <span className="text-xs text-muted-foreground italic">—</span>
                       ) : (
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.start}
                           onKeyDown={preventInvalidNumberKeyDown}
                           onPaste={preventInvalidNumberPaste}
@@ -557,7 +559,9 @@ export function ChotThang({
                         <span className="text-xs text-muted-foreground italic">—</span>
                       ) : (
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.end}
                           onKeyDown={preventInvalidNumberKeyDown}
                           onPaste={preventInvalidNumberPaste}
@@ -572,7 +576,9 @@ export function ChotThang({
                     {/* Nước */}
                     <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={row.water}
                         onKeyDown={preventInvalidNumberKeyDown}
                         onPaste={preventInvalidNumberPaste}
@@ -715,8 +721,8 @@ export function ChotThang({
                               canEdit={canEditBillInputs}
                             >
                               <div className="grid grid-cols-2 gap-2">
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                               </div>
                             </InlineEditRow>
                           )}
@@ -746,7 +752,7 @@ export function ChotThang({
                             }}
                             canEdit={canEditBillInputs}
                           >
-                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                            <input type="text" inputMode="numeric" pattern="[0-9]*" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                           </InlineEditRow>
                           </div>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
@@ -882,7 +888,9 @@ function PaymentSection({
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <input
-          type="number"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           value={payInput}
           onKeyDown={preventInvalidNumberKeyDown}
           onPaste={preventInvalidNumberPaste}
