@@ -96,6 +96,22 @@ function parseNonNegativeInteger(value: string): number | null {
   return parsed;
 }
 
+const INVALID_NUMERIC_KEYS = new Set(["+", "-", "e", "E"]);
+
+function preventInvalidNumberKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  if (INVALID_NUMERIC_KEYS.has(event.key)) {
+    event.preventDefault();
+  }
+}
+
+function preventInvalidNumberPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+  const pasted = event.clipboardData.getData("text");
+  if (!isDigitsOnly(pasted)) {
+    event.preventDefault();
+  }
+}
+
+
 function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
   const ground = isT1(room);
   const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
@@ -525,6 +541,8 @@ export function ChotThang({
                         <input
                           type="number"
                           value={row.start}
+                          onKeyDown={preventInvalidNumberKeyDown}
+                          onPaste={preventInvalidNumberPaste}
                           onChange={(e) => onReadingChange(room.id, "start", sanitizeDigitsInput(e.target.value))}
                           disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
@@ -541,6 +559,8 @@ export function ChotThang({
                         <input
                           type="number"
                           value={row.end}
+                          onKeyDown={preventInvalidNumberKeyDown}
+                          onPaste={preventInvalidNumberPaste}
                           onChange={(e) => onReadingChange(room.id, "end", sanitizeDigitsInput(e.target.value))}
                           disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
@@ -554,6 +574,8 @@ export function ChotThang({
                       <input
                         type="number"
                         value={row.water}
+                        onKeyDown={preventInvalidNumberKeyDown}
+                        onPaste={preventInvalidNumberPaste}
                         onChange={(e) => onReadingChange(room.id, "water", sanitizeDigitsInput(e.target.value))}
                         disabled={!canEditBillInputs}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
@@ -693,8 +715,8 @@ export function ChotThang({
                               canEdit={canEditBillInputs}
                             >
                               <div className="grid grid-cols-2 gap-2">
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                               </div>
                             </InlineEditRow>
                           )}
@@ -724,7 +746,7 @@ export function ChotThang({
                             }}
                             canEdit={canEditBillInputs}
                           >
-                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                           </InlineEditRow>
                           </div>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
@@ -862,6 +884,8 @@ function PaymentSection({
         <input
           type="number"
           value={payInput}
+          onKeyDown={preventInvalidNumberKeyDown}
+          onPaste={preventInvalidNumberPaste}
           onChange={(e) => setPayInput(sanitizeDigitsInput(e.target.value))}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"

@@ -58,10 +58,10 @@ test("electricity range validation", () => {
 });
 
 test("invalid characters rejected and valid numeric strings accepted", () => {
-  for (const invalid of ["abc", "10a", "1e5", "-10"]) {
+  for (const invalid of ["abc", "10a", "1e5", "-10", "+10"]) {
     assert.equal(isDigitsOnly(invalid), false);
   }
-  for (const valid of ["0", "100"]) {
+  for (const valid of ["0", "10", "100"]) {
     assert.equal(isDigitsOnly(valid), true);
   }
 });
