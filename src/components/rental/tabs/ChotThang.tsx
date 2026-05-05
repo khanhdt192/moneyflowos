@@ -53,6 +53,11 @@ function isRoomOccupied(room: RentalRoom): boolean {
   return !!(room.tenantInfo?.id || room.tenant_id || room.occupied);
 }
 
+function canEditBillingInputs(occupied: boolean, billStatus: string | null | undefined): boolean {
+  if (!occupied) return false;
+  return !billStatus || billStatus === "draft";
+}
+
 function getDisplayStatus(
   room: RentalRoom,
   apiBillStatus: string | null,
@@ -73,6 +78,39 @@ function getDisplayStatus(
   if (apiBillStatus === "cancelled") return "cancelled";
   return "draft";
 }
+
+
+function sanitizeDigitsInput(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function isDigitsOnly(value: string): boolean {
+  return /^\d*$/.test(value);
+}
+
+function parseNonNegativeInteger(value: string): number | null {
+  if (!isDigitsOnly(value)) return null;
+  if (value === "") return 0;
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+const INVALID_NUMERIC_KEYS = new Set(["+", "-", "e", "E"]);
+
+function preventInvalidNumberKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  if (INVALID_NUMERIC_KEYS.has(event.key)) {
+    event.preventDefault();
+  }
+}
+
+function preventInvalidNumberPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+  const pasted = event.clipboardData.getData("text");
+  if (!isDigitsOnly(pasted)) {
+    event.preventDefault();
+  }
+}
+
 
 function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
   const ground = isT1(room);
@@ -194,15 +232,35 @@ export function ChotThang({
   }
 
   function onReadingChange(roomId: string, field: keyof RowData, value: string) {
-    const newRow = { ...getRow(roomId), [field]: value };
+    if (!isDigitsOnly(value)) {
+      toast.error("Chỉ được nhập số hợp lệ");
+      return;
+    }
+
+    const room = roomMap[roomId];
+    const occupied = room ? isRoomOccupied(room) : false;
+    const apiBillStatus = apiBillMap[roomId]?.bill_status ?? storeBillMap[roomId]?.status ?? null;
+    if (!canEditBillingInputs(occupied, apiBillStatus)) {
+      toast.error("Hóa đơn đã chốt/đã thu, không thể chỉnh sửa");
+      return;
+    }
+
+    const newRow = { ...getRow(roomId), [field]: sanitizeDigitsInput(value) };
     setRows((p) => ({ ...p, [roomId]: newRow }));
 
     clearTimeout(debounceTimers.current[roomId]);
     debounceTimers.current[roomId] = setTimeout(async () => {
-      const start = parseFloat(newRow.start) || 0;
-      const end   = parseFloat(newRow.end)   || 0;
-      const water = parseFloat(newRow.water) || 0;
-      if (end < start) return;
+      const start = parseNonNegativeInteger(newRow.start);
+      const end   = parseNonNegativeInteger(newRow.end);
+      const water = parseNonNegativeInteger(newRow.water);
+      if (start == null || end == null || water == null) {
+        toast.error("Chỉ được nhập số hợp lệ");
+        return;
+      }
+      if (end < start) {
+        toast.error("Số cuối phải lớn hơn hoặc bằng số đầu");
+        return;
+      }
       setSaveState(roomId, "saving");
       try {
         await actions.upsertElectricityReading(roomId, cycleId, start, end, water);
@@ -220,10 +278,30 @@ export function ChotThang({
   }
 
   async function saveInlineReading(roomId: string, rowData: RowData) {
-    const start = parseFloat(rowData.start) || 0;
-    const end   = parseFloat(rowData.end)   || 0;
-    const water = parseFloat(rowData.water) || 0;
-    if (end < start) return;
+    const room = roomMap[roomId];
+    const occupied = room ? isRoomOccupied(room) : false;
+    const apiBillStatus = apiBillMap[roomId]?.bill_status ?? storeBillMap[roomId]?.status ?? null;
+    if (!canEditBillingInputs(occupied, apiBillStatus)) {
+      toast.error("Hóa đơn đã chốt/đã thu, không thể chỉnh sửa");
+      return;
+    }
+
+    if (!isDigitsOnly(rowData.start) || !isDigitsOnly(rowData.end) || !isDigitsOnly(rowData.water)) {
+      toast.error("Chỉ được nhập số hợp lệ");
+      return;
+    }
+
+    const start = parseNonNegativeInteger(rowData.start);
+    const end   = parseNonNegativeInteger(rowData.end);
+    const water = parseNonNegativeInteger(rowData.water);
+    if (start == null || end == null || water == null) {
+      toast.error("Không được nhập số âm");
+      return;
+    }
+    if (end < start) {
+      toast.error("Số cuối phải lớn hơn hoặc bằng số đầu");
+      return;
+    }
 
     setRows((p) => ({ ...p, [roomId]: rowData }));
     setSaveState(roomId, "saving");
@@ -256,7 +334,8 @@ export function ChotThang({
   async function handlePay(roomId: string) {
     const bill = storeBillMap[roomId];
     if (!bill) return;
-    const amount = parseFloat(payInput.replace(/[^\d.]/g, ""));
+    if (!isDigitsOnly(payInput)) { toast.error("Chỉ được nhập số hợp lệ"); return; }
+    const amount = Number.parseInt(payInput, 10);
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = bill.totalAmount - bill.paidAmount;
     if (amount > remaining + 0.5) {
@@ -395,6 +474,7 @@ export function ChotThang({
 
               /* Bill status: prefer API view; fall back to local store */
               const apiBillStatus = apiRow?.bill_status ?? storeBill?.status ?? null;
+              const canEditBillInputs = canEditBillingInputs(occupied, apiBillStatus);
               const displayStatus = getDisplayStatus(room, apiBillStatus, !!reading, cycleId);
               const cfg           = STATUS_CFG[displayStatus];
 
@@ -461,8 +541,10 @@ export function ChotThang({
                         <input
                           type="number"
                           value={row.start}
-                          onChange={(e) => onReadingChange(room.id, "start", e.target.value)}
-                          disabled={!occupied}
+                          onKeyDown={preventInvalidNumberKeyDown}
+                          onPaste={preventInvalidNumberPaste}
+                          onChange={(e) => onReadingChange(room.id, "start", sanitizeDigitsInput(e.target.value))}
+                          disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
                         />
@@ -477,8 +559,10 @@ export function ChotThang({
                         <input
                           type="number"
                           value={row.end}
-                          onChange={(e) => onReadingChange(room.id, "end", e.target.value)}
-                          disabled={!occupied}
+                          onKeyDown={preventInvalidNumberKeyDown}
+                          onPaste={preventInvalidNumberPaste}
+                          onChange={(e) => onReadingChange(room.id, "end", sanitizeDigitsInput(e.target.value))}
+                          disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
                         />
@@ -490,8 +574,10 @@ export function ChotThang({
                       <input
                         type="number"
                         value={row.water}
-                        onChange={(e) => onReadingChange(room.id, "water", e.target.value)}
-                        disabled={!occupied}
+                        onKeyDown={preventInvalidNumberKeyDown}
+                        onPaste={preventInvalidNumberPaste}
+                        onChange={(e) => onReadingChange(room.id, "water", sanitizeDigitsInput(e.target.value))}
+                        disabled={!canEditBillInputs}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder="0"
                       />
@@ -569,7 +655,9 @@ export function ChotThang({
             <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden">
               {(() => {
                 const reading = getRow(selectedRoomId);
-              const status = room ? getDisplayStatus(room, apiRow?.bill_status ?? storeBill?.status ?? null, !!readingMap[selectedRoomId], cycleId) : "empty";
+              const effectiveBillStatus = apiRow?.bill_status ?? storeBill?.status ?? null;
+              const canEditBillInputs = canEditBillingInputs(occupied, effectiveBillStatus);
+              const status = room ? getDisplayStatus(room, effectiveBillStatus, !!readingMap[selectedRoomId], cycleId) : "empty";
               const canConfirm = apiRow?.ui?.can_confirm ?? (storeBill?.status === "draft");
               const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
               const kwh = Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0);
@@ -607,7 +695,13 @@ export function ChotThang({
                               label="Số đầu / Số cuối"
                               value={`${reading.start || 0} / ${reading.end || 0}`}
                               editing={inlineEdit?.roomId === room.id && inlineEdit?.mode === "electricity"}
-                              onEdit={() => setInlineEdit({ roomId: room.id, mode: "electricity", value: { start: reading.start, end: reading.end } })}
+                              onEdit={() => {
+                                if (!canEditBillInputs) {
+                                  toast.error("Hóa đơn đã chốt/đã thu, không thể chỉnh sửa");
+                                  return;
+                                }
+                                setInlineEdit({ roomId: room.id, mode: "electricity", value: { start: reading.start, end: reading.end } });
+                              }}
                               onCancel={() => setInlineEdit(null)}
                               onSave={async () => {
                                 if (!inlineEdit || inlineEdit.mode !== "electricity") return;
@@ -618,10 +712,11 @@ export function ChotThang({
                                 });
                                 setInlineEdit(null);
                               }}
+                              canEdit={canEditBillInputs}
                             >
                               <div className="grid grid-cols-2 gap-2">
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                               </div>
                             </InlineEditRow>
                           )}
@@ -632,7 +727,13 @@ export function ChotThang({
                             label="Số m3 nước"
                             value={reading.water || "0"}
                             editing={inlineEdit?.roomId === room.id && inlineEdit?.mode === "water"}
-                            onEdit={() => setInlineEdit({ roomId: room.id, mode: "water", value: { water: reading.water } })}
+                            onEdit={() => {
+                              if (!canEditBillInputs) {
+                                toast.error("Hóa đơn đã chốt/đã thu, không thể chỉnh sửa");
+                                return;
+                              }
+                              setInlineEdit({ roomId: room.id, mode: "water", value: { water: reading.water } });
+                            }}
                             onCancel={() => setInlineEdit(null)}
                             onSave={async () => {
                               if (!inlineEdit || inlineEdit.mode !== "water") return;
@@ -643,8 +744,9 @@ export function ChotThang({
                               });
                               setInlineEdit(null);
                             }}
+                            canEdit={canEditBillInputs}
                           >
-                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: e.target.value } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                           </InlineEditRow>
                           </div>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
@@ -719,7 +821,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 function InlineEditRow({
-  label, value, editing, onEdit, onSave, onCancel, children,
+  label, value, editing, onEdit, onSave, onCancel, children, canEdit = true,
 }: {
   label: string;
   value: string;
@@ -728,6 +830,7 @@ function InlineEditRow({
   onSave: () => void;
   onCancel: () => void;
   children: React.ReactNode;
+  canEdit?: boolean;
 }) {
   return (
     <div className="space-y-2 border-t border-border pt-2">
@@ -736,7 +839,9 @@ function InlineEditRow({
         {!editing ? (
           <div className="flex items-center gap-3">
             <span className="font-medium tabular-nums">{value}</span>
-            <button type="button" onClick={onEdit} className="text-xs font-medium text-indigo-600 hover:underline">Sửa</button>
+            {canEdit ? (
+              <button type="button" onClick={onEdit} className="text-xs font-medium text-indigo-600 hover:underline">Sửa</button>
+            ) : null}
           </div>
         ) : (
           <div className="flex items-center gap-2">
@@ -779,7 +884,9 @@ function PaymentSection({
         <input
           type="number"
           value={payInput}
-          onChange={(e) => setPayInput(e.target.value)}
+          onKeyDown={preventInvalidNumberKeyDown}
+          onPaste={preventInvalidNumberPaste}
+          onChange={(e) => setPayInput(sanitizeDigitsInput(e.target.value))}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"
           autoFocus
