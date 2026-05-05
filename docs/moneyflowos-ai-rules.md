@@ -1,262 +1,172 @@
 # MoneyFlowOS AI Rules
 
-This file defines strict rules for any AI (Codex, Claude, Replit, etc.) working on MoneyFlowOS.
+This file defines the mandatory working rules for AI tools on MoneyFlowOS.
 
-These rules are mandatory.
-If there is any conflict between code assumptions and these rules, follow these rules.
+If code assumptions conflict with these rules, follow these rules.
 
 ---
 
-## 1. Core philosophy
+## 1. Core rules
 
 - Supabase schema is the source of truth.
-- UI is only a representation layer.
-- Database is the only reliable state.
 - Never guess schema.
 - Never invent columns.
+- Do not change schema unless explicitly requested.
+- Do not change business logic unless explicitly requested.
+- Keep changes minimal and scoped.
 
 ---
 
-## 2. Schema discipline rules
+## 2. Required files to read first
 
-Before writing or modifying code:
-
-You MUST:
-1. Inspect current schema (or read docs/database-contract.md)
-2. List the exact columns you will use
-3. Confirm those columns actually exist
-
-If any column is not confirmed:
-- STOP
-- Do NOT guess
-- Do NOT fabricate fields
+Before any rental task, always read:
+- `docs/database-contract.md`
+- `docs/moneyflowos-ai-rules.md`
+- `docs/rental-ui-ux-spec.md`
+- `docs/rental-validation-rules.md`
+- `docs/rental-handover.md`
 
 ---
 
 ## 3. Rental domain rules
 
 ### 3.1 Tenant model
-
-- rental_rooms does NOT store tenant name
-- rental_rooms uses tenant_id (uuid)
-- tenant name comes from rental_tenants.full_name
-
-Forbidden:
-- using rental_rooms.tenant
-- storing tenant name directly in rental_rooms
-
----
-
-### 3.2 Cycle model
-
-- Billing uses UUID-based cycle_id
-- UI may show YYYY-MM, but backend must convert to UUID
+- `rental_rooms` does NOT store tenant name text.
+- Use `tenant_id`.
+- Tenant display name comes from `rental_tenants.full_name`.
 
 Forbidden:
-- using YYYY-MM as database key
-- bypassing rental_billing_cycles
+- using `rental_rooms.tenant`
+- storing tenant name directly in `rental_rooms`
 
----
+### 3.2 Billing cycle model
+- Billing uses UUID `cycle_id`.
+- UI may show month/year, but backend logic must resolve to `rental_billing_cycles.id`.
+
+Forbidden:
+- using `YYYY-MM` as the final DB key
+- bypassing `rental_billing_cycles`
 
 ### 3.3 Occupancy
+- Canonical occupancy = tenant assigned.
+- Prefer `tenant_id` over raw `occupied` if they conflict.
+- Service layer must keep `occupied` synchronized.
 
-- True occupancy = tenant assigned
-- Use tenant relation (tenant_id) as primary signal
-- occupied column is secondary and must be synced
+### 3.4 Tenant mobility guards
+- Do NOT allow changing/removing tenant when the current room has an unpaid bill.
+- Do NOT allow assigning a tenant who has unpaid bills elsewhere.
+- Active deposit also blocks tenant change/remove in tab `Phòng`.
 
----
+### 3.5 Deposit domain
+- Deposit belongs to `public.rental_deposits`.
+- Deposit is separate from monthly bills and payments.
+- Do NOT net deposit into bill totals.
+- Enforce one active deposit per room.
 
-### 3.4 Billing logic
+### 3.6 Chốt tháng edit lock
+Billing inputs are editable only when:
+- room is occupied
+- effective bill status is `null` or `draft`
 
-- Bills belong to (room_id, cycle_id)
-- Payment belongs to bill_id
-- Electricity readings belong to (room_id, cycle_id)
-
-Forbidden:
-- mixing month string with bill logic
-- writing bill logic without cycle_id
-
----
-
-### 3.5 Floor handling (NEW)
-
-- Floor must NOT default to 1 implicitly
-- Floor should be derived from room name when possible
-- Add Room flow must:
-  - auto-detect floor from room name
-  - show editable field `Tầng`
-  - allow manual override
-
-Forbidden:
-- assuming all new rooms belong to floor 1
-- ignoring detected floor when inserting into DB
+Billing inputs must be locked when status is:
+- `confirmed`
+- `partial_paid`
+- `paid`
+- `cancelled`
 
 ---
 
-### 3.6 Tenant mobility rules (NEW)
+## 4. Validation rules AI must respect
 
-AI must enforce both rules when implementing tenant change / assignment:
+### 4.1 Digits-only fields
+Apply digits-only input rules to:
+- điện
+- nước
+- SĐT
 
-1. Room-level guard:
-- If current room bill exists and is unpaid (paidAmount < totalAmount):
-  - do NOT allow changing tenant
-  - do NOT allow removing tenant
+### 4.2 Money fields
+Apply money-input formatting rules to:
+- giá thuê
+- tiền cọc
+- số tiền thu
 
-2. Tenant-level global guard:
-- A tenant must NOT be assignable to any other room if that tenant has any unpaid bill
-- Unpaid means paidAmount < totalAmount
-- Cancelled bills may be excluded if status exists
+Use shared helpers from the codebase when available.
+Do not re-implement duplicate local helper logic without a reason.
 
-Forbidden:
-- allowing tenant reassignment that bypasses unpaid bills
-- implementing only room-level guard without tenant-level guard
-
----
-
-### 3.7 Deposit (Phase 1)
-
-AI must treat deposit as a separate domain from billing.
-
-Rules:
-- store deposit in `public.rental_deposits`
-- do NOT mix deposit into `rental_room_bills`
-- do NOT net deposit into payment flows
-- enforce one active deposit per room
-
-Behavior:
-- creating tenant assignment + deposit must be atomic or rollback-safe
-- if deposit creation fails, rollback tenant assignment
-- if the tenant was newly created in the same flow, rollback/delete that tenant to avoid partial success
-- active deposit must block tenant change/remove in tab `Phòng`
-
-Phase 1 limitations:
-- no refund flow
-- no settlement UI
-
-Forbidden:
-- auto-deducting deposit into bills
-- creating multiple active deposits for the same room
-- treating deposit as monthly revenue
+### 4.3 Save-level guards
+Do not rely only on input type.
+Keep save-level validation for:
+- no negative values
+- `end >= start`
+- payment amount `> 0`
+- payment amount `<= remaining`
+- bill edit lock
 
 ---
 
-## 4. View & query rules
+## 5. Query and view rules
 
-### 4.1 Never assume view structure
-
-Before using a view:
-- verify which columns it exposes
-
-Forbidden:
-- filtering by a column that does not exist
-- assuming view columns from memory or guess
+- Verify exact columns before using any table or view.
+- Never filter by a column that the view does not expose.
+- Never infer IDs from text matching.
+- Never workaround schema problems in frontend by guessing data shape.
 
 ---
 
-### 4.2 rental_room_overview specific rules
+## 6. Mutation rules
 
-- Must align with database-contract.md
-- Must not reference rental_rooms.tenant
-- Tenant display must come from rental_tenants.full_name
-
-If the view is missing required fields:
-- fix the SQL
-- do not workaround in frontend
-
----
-
-## 5. Mutation rules
-
-After ANY mutation:
-
-You MUST:
+After any successful mutation:
 - refetch data
 OR
 - update state correctly
 
 Forbidden:
-- leaving stale UI state
-- assuming DB updated state is already in UI
+- stale UI after mutation
+- success toast before all required steps succeed
+- swallowing real errors silently
 
 ---
 
-## 6. Error handling rules
+## 7. Prompt rules for Codex
 
-- Always log real Supabase error (console.error)
-- Do not swallow errors silently
-- Do not show success before all steps succeed
+Every Codex prompt must:
+1. start with the required file-reading block
+2. include an `IMPORTANT` block
+3. define:
+   - GOAL
+   - CURRENT PROBLEM
+   - REQUIRED FIX
+   - RULES
+   - SCOPE
+   - EXPECTED RESULT
+4. clearly say what must NOT change
 
----
+Avoid vague instructions like:
+- "improve UI"
+- "clean this up"
 
-## 7. Workflow rules for AI
-
-Every task must follow this order:
-
-Step 1: Inspect schema + relevant files
-- MUST read:
-  - `docs/database-contract.md`
-  - `docs/moneyflowos-ai-rules.md`
-  - `docs/rental-ui-ux-spec.md`
-Step 2: Confirm assumptions
-Step 3: Propose minimal changes
-Step 4: Implement
-Step 5: Ensure refetch / sync logic
-Step 6: Perform DOC IMPACT CHECK
+Be explicit.
 
 ---
 
-## 8. DOC IMPACT CHECK (MANDATORY)
+## 8. DOC IMPACT CHECK
 
-After every task, AI must evaluate:
+After each task, evaluate whether these docs need updates:
+- `docs/database-contract.md`
+- `docs/moneyflowos-ai-rules.md`
+- `docs/rental-ui-ux-spec.md`
+- `docs/rental-validation-rules.md`
+- `docs/rental-handover.md`
 
-1. Does this change affect schema?
-2. Does this change affect business workflow?
-3. Does this change affect frontend ↔ DB contract?
-4. Does this change affect rental UI/UX source of truth?
-
-Then explicitly answer:
-
-- database-contract.md: update needed / not needed
-- moneyflowos-ai-rules.md: update needed / not needed
-- rental-ui-ux-spec.md: update needed / not needed
-
-If update needed:
-- propose exact markdown changes
-
-Forbidden:
-- skipping this step
-- finishing task without checking doc impact
+If no update is needed, say so.
+If update is needed, update the docs explicitly.
 
 ---
 
-## 9. Strict forbidden behaviors
+## 9. When uncertain
 
-AI must NEVER:
+Say one of these clearly:
+- `I cannot verify this`
+- `Schema does not confirm this field`
 
-- invent new DB columns
-- reintroduce deprecated fields
-- infer IDs from text (e.g. match full_name to find id)
-- ignore cycle_id in billing logic
-- remove filters just to avoid errors
-- modify unrelated modules
-
----
-
-## 10. When uncertain
-
-If you are not sure about schema or logic:
-
-You MUST say:
-- "I cannot verify this"
-- "Schema does not confirm this field"
-
-Do NOT guess.
-
----
-
-## 11. Goal of these rules
-
-- Prevent schema drift
-- Prevent data corruption
-- Keep MoneyFlowOS consistent and predictable
-- Enable safe AI-assisted development
+Do not guess.
