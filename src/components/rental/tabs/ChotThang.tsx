@@ -645,14 +645,14 @@ export function ChotThang({
                         <SectionCard title="Tổng hợp hóa đơn">
                           <Row label="Tiền thuê" value={formatMoney(storeBill.rentAmount)} />
                           <Row label="Tiền điện" value={formatMoney(storeBill.electricityAmount)} />
-                          {!isT1(room) && <Row label="Số đầu / Số cuối" value={`${reading.start || 0} / ${reading.end || 0}`} />}
                           <Row label="Tiền nước" value={formatMoney(storeBill.waterAmount)} />
-                          <Row label="Số m3 nước" value={reading.water || "0"} />
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
                           <Row label="Vệ sinh" value={formatMoney(storeBill.cleaningAmount)} />
                           <Row label="Phụ phí khác" value={formatMoney(storeBill.otherAmount)} />
-                          <div className="border-t border-border pt-2">
+                          <div className="border-t border-border pt-2 space-y-2">
                             <Row label="Tổng" value={formatMoney(storeBill.totalAmount)} className="font-semibold" />
+                            <Row label="Đã thu" value={formatMoney(storeBill.paidAmount)} />
+                            <Row label="Còn thiếu" value={formatMoney(remaining)} className="font-semibold text-rose-600" />
                           </div>
                         </SectionCard>
                       ) : null}
