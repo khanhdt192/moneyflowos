@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
+import { formatMoneyInput, parseMoneyInput, sanitizeDigitsInput } from "@/utils/number-input";
 import { exportSingleInvoice } from "@/lib/rental-pdf";
 import { useRentalRooms, type RentalRoomUiModel } from "@/hooks/use-rental-rooms";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -80,23 +81,6 @@ function getDisplayStatus(
 }
 
 
-function sanitizeDigitsInput(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-function formatMoneyInput(value: string): string {
-  const digits = sanitizeDigitsInput(value);
-  if (!digits) return "";
-  return Number.parseInt(digits, 10).toLocaleString("vi-VN");
-}
-
-function parseMoneyInput(value: string): number | null {
-  const digits = sanitizeDigitsInput(value);
-  if (!digits) return null;
-  const parsed = Number.parseInt(digits, 10);
-  if (Number.isNaN(parsed)) return null;
-  return parsed;
-}
 
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);

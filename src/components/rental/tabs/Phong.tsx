@@ -8,6 +8,7 @@ import { depositService, type RentalDeposit } from "@/services/deposit.service";
 import type { Tenant } from "@/services/tenant.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
+import { formatMoneyInput, parseMoneyInput, sanitizeDigitsInput } from "@/utils/number-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Status = "occupied" | "empty" | "debt";
@@ -29,23 +30,6 @@ const STATUS_CONFIG: Record<Status, { label: string; className: string }> = {
 };
 
 
-function sanitizeDigitsInput(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-function formatMoneyInput(value: string): string {
-  const digits = sanitizeDigitsInput(value);
-  if (!digits) return "";
-  return Number.parseInt(digits, 10).toLocaleString("vi-VN");
-}
-
-function parseMoneyInput(value: string): number | null {
-  const digits = sanitizeDigitsInput(value);
-  if (!digits) return null;
-  const parsed = Number.parseInt(digits, 10);
-  if (Number.isNaN(parsed)) return null;
-  return parsed;
-}
 
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
