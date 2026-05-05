@@ -12,6 +12,20 @@ function sanitizeDigitsInput(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function formatMoneyInput(value: string): string {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return "";
+  return Number.parseInt(digits, 10).toLocaleString("vi-VN");
+}
+
+function parseMoneyInput(value: string): number | null {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return null;
+  const parsed = Number.parseInt(digits, 10);
+  if (Number.isNaN(parsed)) return null;
+  return parsed;
+}
+
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
 }
@@ -67,10 +81,25 @@ test("invalid characters rejected and valid numeric strings accepted", () => {
 });
 
 test("sanitize numeric input behavior", () => {
+  assert.equal(sanitizeDigitsInput("6gg"), "6");
   assert.equal(sanitizeDigitsInput("abc"), "");
   assert.equal(sanitizeDigitsInput("10a"), "10");
   assert.equal(sanitizeDigitsInput("1e5"), "15");
   assert.equal(sanitizeDigitsInput("-10"), "10");
+  assert.equal(sanitizeDigitsInput("+10"), "10");
+});
+
+test("formatMoneyInput behavior", () => {
+  assert.equal(formatMoneyInput(""), "");
+  assert.equal(formatMoneyInput("0"), "0");
+  assert.equal(formatMoneyInput("1000"), "1.000");
+  assert.equal(formatMoneyInput("1700000"), "1.700.000");
+});
+
+test("parseMoneyInput behavior", () => {
+  assert.equal(parseMoneyInput("1.700.000"), 1700000);
+  assert.equal(parseMoneyInput("1700000"), 1700000);
+  assert.equal(parseMoneyInput(""), null);
 });
 
 test("empty / NaN rejected", () => {

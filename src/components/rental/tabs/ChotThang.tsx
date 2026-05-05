@@ -84,6 +84,20 @@ function sanitizeDigitsInput(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function formatMoneyInput(value: string): string {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return "";
+  return Number.parseInt(digits, 10).toLocaleString("vi-VN");
+}
+
+function parseMoneyInput(value: string): number | null {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return null;
+  const parsed = Number.parseInt(digits, 10);
+  if (Number.isNaN(parsed)) return null;
+  return parsed;
+}
+
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
 }
@@ -334,8 +348,8 @@ export function ChotThang({
   async function handlePay(roomId: string) {
     const bill = storeBillMap[roomId];
     if (!bill) return;
-    if (!isDigitsOnly(payInput)) { toast.error("Chỉ được nhập số hợp lệ"); return; }
-    const amount = Number.parseInt(payInput, 10);
+    const amount = parseMoneyInput(payInput);
+    if (amount == null) { toast.error("Chỉ được nhập số hợp lệ"); return; }
     if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
     const remaining = bill.totalAmount - bill.paidAmount;
     if (amount > remaining + 0.5) {
@@ -539,7 +553,9 @@ export function ChotThang({
                         <span className="text-xs text-muted-foreground italic">—</span>
                       ) : (
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.start}
                           onKeyDown={preventInvalidNumberKeyDown}
                           onPaste={preventInvalidNumberPaste}
@@ -557,7 +573,9 @@ export function ChotThang({
                         <span className="text-xs text-muted-foreground italic">—</span>
                       ) : (
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.end}
                           onKeyDown={preventInvalidNumberKeyDown}
                           onPaste={preventInvalidNumberPaste}
@@ -572,7 +590,9 @@ export function ChotThang({
                     {/* Nước */}
                     <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={row.water}
                         onKeyDown={preventInvalidNumberKeyDown}
                         onPaste={preventInvalidNumberPaste}
@@ -715,8 +735,8 @@ export function ChotThang({
                               canEdit={canEditBillInputs}
                             >
                               <div className="grid grid-cols-2 gap-2">
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
-                                <input type="number" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.start ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, start: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                                <input type="text" inputMode="numeric" pattern="[0-9]*" value={inlineEdit?.mode === "electricity" ? (inlineEdit.value.end ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, end: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                               </div>
                             </InlineEditRow>
                           )}
@@ -746,7 +766,7 @@ export function ChotThang({
                             }}
                             canEdit={canEditBillInputs}
                           >
-                            <input type="number" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
+                            <input type="text" inputMode="numeric" pattern="[0-9]*" value={inlineEdit?.mode === "water" ? (inlineEdit.value.water ?? "") : ""} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, value: { ...prev.value, water: sanitizeDigitsInput(e.target.value) } } : prev)} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm" />
                           </InlineEditRow>
                           </div>
                           <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
@@ -882,11 +902,13 @@ function PaymentSection({
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <input
-          type="number"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           value={payInput}
           onKeyDown={preventInvalidNumberKeyDown}
           onPaste={preventInvalidNumberPaste}
-          onChange={(e) => setPayInput(sanitizeDigitsInput(e.target.value))}
+          onChange={(e) => setPayInput(formatMoneyInput(e.target.value))}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"
           autoFocus

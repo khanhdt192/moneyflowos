@@ -33,6 +33,20 @@ function sanitizeDigitsInput(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+function formatMoneyInput(value: string): string {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return "";
+  return Number.parseInt(digits, 10).toLocaleString("vi-VN");
+}
+
+function parseMoneyInput(value: string): number | null {
+  const digits = sanitizeDigitsInput(value);
+  if (!digits) return null;
+  const parsed = Number.parseInt(digits, 10);
+  if (Number.isNaN(parsed)) return null;
+  return parsed;
+}
+
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
 }
@@ -288,7 +302,7 @@ function RoomModal({
   const handleOpen = (r: RentalRoom | null) => {
     if (r) {
       setName(r.name);
-      setRent(String(r.rent));
+      setRent(formatMoneyInput(String(r.rent)));
       setEditing(false);
       setTenantMode("none");
       setTenantName(r.tenantInfo?.fullName || "");
@@ -328,7 +342,7 @@ function RoomModal({
     setTenantAddress(room.tenantInfo?.address || "");
     setAddTenantMode("new");
     setSelectedTenantId("");
-    setTenantDepositAmount(room?.rent ? String(room.rent) : "");
+    setTenantDepositAmount(room?.rent ? formatMoneyInput(String(room.rent)) : "");
     setTenantDepositNote("");
   }, [roomId, room?.tenantInfo?.id, room?.tenantInfo?.fullName, room?.tenantInfo?.phone, room?.tenantInfo?.address, room]);
 
@@ -374,15 +388,14 @@ function RoomModal({
                         </div>
                         <div>
                           <label className="text-xs text-muted-foreground">Giá thuê / tháng</label>
-                          <input type="number" value={rent} onChange={(e) => setRent(sanitizeDigitsInput(e.target.value))} className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" value={rent} onChange={(e) => setRent(formatMoneyInput(e.target.value))} className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" />
                         </div>
                         <div className="flex gap-2">
-                          <button type="button" onClick={() => { setEditing(false); setName(room.name); setRent(String(room.rent)); }} className="flex-1 rounded-lg border border-border py-2 text-sm font-medium">Huỷ</button>
+                          <button type="button" onClick={() => { setEditing(false); setName(room.name); setRent(formatMoneyInput(String(room.rent))); }} className="flex-1 rounded-lg border border-border py-2 text-sm font-medium">Huỷ</button>
                           <button type="button" onClick={() => {
                             const trimmedName = name.trim();
                             if (!trimmedName) { toast.error("Tên phòng không được để trống"); return; }
-                            if (!isDigitsOnly(rent)) { toast.error("Chỉ được nhập số hợp lệ"); return; }
-                            const parsedRent = parseNonNegativeNumber(rent);
+                            const parsedRent = parseMoneyInput(rent);
                             if (parsedRent == null) { toast.error("Không được nhập số âm"); return; }
                             actions.updateRoom(room.id, { name: trimmedName, rent: parsedRent }); setEditing(false); toast.success("Đã cập nhật phòng"); }} className="flex-1 rounded-lg bg-foreground py-2 text-sm font-semibold text-background">Lưu</button>
                         </div>
@@ -409,7 +422,7 @@ function RoomModal({
                             </div>
                             <div>
                               <label className="mb-1 block text-xs text-muted-foreground">Số điện thoại</label>
-                              <input value={tenantPhone} onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                              <input type="text" inputMode="numeric" pattern="[0-9]*" value={tenantPhone} onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))} placeholder="Số điện thoại" className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
                             </div>
                             <div>
                               <label className="mb-1 block text-xs text-muted-foreground">Địa chỉ</label>
@@ -435,7 +448,7 @@ function RoomModal({
                           <div className="space-y-2">
                             <div>
                               <label className="mb-1 block text-xs text-muted-foreground">Tiền cọc *</label>
-                              <input type="number" min={0} value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(sanitizeDigitsInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                              <input type="text" inputMode="numeric" pattern="[0-9]*" value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(formatMoneyInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
                               <p className="mt-1 text-xs text-muted-foreground">Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.</p>
                             </div>
                             <div>
@@ -462,11 +475,7 @@ function RoomModal({
                               }
                               if (tenantMode === "edit" && room.tenantInfo) await update(room.tenantInfo.id, { fullName: trimmedTenantName, phone: trimmedTenantPhone || undefined, address: trimmedTenantAddress || undefined });
                               if (tenantMode === "add") {
-                                if (!isDigitsOnly(tenantDepositAmount)) {
-                                  toast.error("Chỉ được nhập số hợp lệ");
-                                  return;
-                                }
-                                const parsedDepositAmount = parseNonNegativeNumber(tenantDepositAmount);
+                                const parsedDepositAmount = parseMoneyInput(tenantDepositAmount);
                                 if (parsedDepositAmount == null) {
                                   toast.error("Không được nhập số âm");
                                   return;
@@ -503,7 +512,7 @@ function RoomModal({
                         <p className="text-xs text-muted-foreground">Người thuê đang nợ bill sẽ không thể chọn.</p>
                         <div>
                           <label className="mb-1 block text-xs text-muted-foreground">Tiền cọc *</label>
-                          <input type="number" min={0} value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(sanitizeDigitsInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" value={tenantDepositAmount} onChange={(e) => setTenantDepositAmount(formatMoneyInput(e.target.value))} className="h-9 w-full rounded-lg border border-border px-3 text-sm" />
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setTenantMode("none")} className="flex-1 rounded-lg border border-border py-2 text-sm">Huỷ</button>
@@ -514,11 +523,7 @@ function RoomModal({
                                 toast.error("Không thể đổi người thuê đang nợ bill");
                                 return;
                               }
-                              if (!isDigitsOnly(tenantDepositAmount)) {
-                                toast.error("Chỉ được nhập số hợp lệ");
-                                return;
-                              }
-                              const parsedDepositAmount = parseNonNegativeNumber(tenantDepositAmount);
+                              const parsedDepositAmount = parseMoneyInput(tenantDepositAmount);
                               if (parsedDepositAmount == null) {
                                 toast.error("Không được nhập số âm");
                                 return;
@@ -732,8 +737,8 @@ function AddRoomForm({
   const [isDepositManual, setIsDepositManual] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const parsedFloor = floor.trim() === "" ? null : Number.parseInt(floor, 10);
-  const parsedRent = parseNonNegativeNumber(rent);
-  const parsedDeposit = parseNonNegativeNumber(depositAmount);
+  const parsedRent = parseMoneyInput(rent);
+  const parsedDeposit = parseMoneyInput(depositAmount);
   const valid = Boolean(name.trim()) && parsedRent !== null && (!addTenantNow || (Boolean(tenantFullName.trim()) && parsedDeposit !== null));
 
   const onRoomNameChange = (value: string) => {
@@ -776,9 +781,11 @@ function AddRoomForm({
         <div>
           <label className="text-xs font-medium text-muted-foreground">Giá thuê *</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={rent}
-            onChange={(e) => setRent(sanitizeDigitsInput(e.target.value))}
+            onChange={(e) => setRent(formatMoneyInput(e.target.value))}
             placeholder="VD: 4000000"
             className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
@@ -820,6 +827,9 @@ function AddRoomForm({
           <div>
             <label className="text-xs font-medium text-muted-foreground">Số điện thoại</label>
             <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={tenantPhone}
               onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))}
               placeholder="VD: 090..."
@@ -840,7 +850,7 @@ function AddRoomForm({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="text-xs font-medium text-muted-foreground">Tiền cọc *</label>
-              <input type="number" min={0} value={depositAmount} onChange={(e) => { setIsDepositManual(true); setDepositAmount(sanitizeDigitsInput(e.target.value)); }} className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
+              <input type="text" inputMode="numeric" pattern="[0-9]*" value={depositAmount} onChange={(e) => { setIsDepositManual(true); setDepositAmount(formatMoneyInput(e.target.value)); }} className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40" />
               <p className="mt-1 text-xs text-muted-foreground">Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.</p>
             </div>
             <div>
@@ -866,12 +876,11 @@ function AddRoomForm({
             const trimmedTenantName = tenantFullName.trim();
             const trimmedPhone = tenantPhone.trim();
             if (!trimmedRoomName) { toast.error("Tên phòng không được để trống"); return; }
-            if (!isDigitsOnly(rent)) { toast.error("Chỉ được nhập số hợp lệ"); return; }
             if (parsedRent === null) { toast.error("Không được nhập số âm"); return; }
             if (addTenantNow) {
               if (!trimmedTenantName) { toast.error("Họ tên người thuê không được để trống"); return; }
               if (trimmedPhone && !isDigitsOnly(trimmedPhone)) { toast.error("Số điện thoại chỉ được chứa chữ số"); return; }
-              if (!isDigitsOnly(depositAmount) || parsedDeposit === null) { toast.error("Vui lòng nhập tiền cọc hợp lệ"); return; }
+              if (parsedDeposit === null) { toast.error("Vui lòng nhập tiền cọc hợp lệ"); return; }
             }
             setSubmitting(true);
             try {
