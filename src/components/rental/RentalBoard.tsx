@@ -3,7 +3,8 @@ import { TongQuan } from "./tabs/TongQuan";
 import { Phong } from "./tabs/Phong";
 import { ChotThang } from "./tabs/ChotThang";
 import { BaoCao } from "./tabs/BaoCao";
-import { CaiDat } from "./tabs/CaiDat";
+import { ChiPhiKhac } from "./tabs/ChiPhiKhac";
+import { MauHoaDon } from "./tabs/MauHoaDon";
 
 type Tab = "tongquan" | "phong" | "chotthang" | "chiphikhac" | "mauhoadon" | "baocao";
 
@@ -47,7 +48,7 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
       </div>
 
       <div>
-        {activeTab === "tongquan"  && <TongQuan onNavigate={setActiveTab} />}
+        {activeTab === "tongquan"  && <TongQuan onNavigate={(tab) => { if (tab !== "caidat") setActiveTab(tab); }} />}
         {activeTab === "phong"     && (
           <Phong
             onOpenBillDetail={(roomId, cycleId) => {
@@ -62,8 +63,8 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
             onFocusRequestConsumed={() => setChotThangFocus(null)}
           />
         )}
-        {activeTab === "chiphikhac" && <CaiDat key="chiphi" initialSection="chiphi" />}
-        {activeTab === "mauhoadon" && <CaiDat key="thanhtoan" initialSection="thanhtoan" />}
+        {activeTab === "chiphikhac" && <ChiPhiKhac />}
+        {activeTab === "mauhoadon" && <MauHoaDon />}
         {activeTab === "baocao"    && <BaoCao />}
       </div>
     </div>
