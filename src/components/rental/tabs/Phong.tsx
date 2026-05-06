@@ -564,26 +564,17 @@ function RoomModal({
                 </div>
                 <div>
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tiền cọc</h4>
-                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1">
-                    <Row label="Tiền cọc" value={activeDeposit ? formatMoney(activeDeposit.amount) : "—"} />
+                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1.5">
+                    <Row label="Đã cọc" value={activeDeposit ? formatMoney(depositSummary.totalDeposited) : "—"} />
+                    <Row label="Đã hoàn" value={activeDeposit ? formatMoney(depositSummary.totalRefunded) : "—"} />
+                    <Row label="Đã trừ" value={activeDeposit ? formatMoney(depositSummary.totalOffset) : "—"} />
+                    <Row label="Đã giữ lại" value={activeDeposit ? formatMoney(depositSummary.totalForfeit) : "—"} />
+                    <div className="border-t border-border pt-2 font-semibold text-emerald-700">
+                      <Row label="Còn giữ" value={activeDeposit ? formatMoney(depositSummary.remainingHeld) : "—"} />
+                    </div>
                     <Row label="Trạng thái" value={activeDeposit ? "Đang giữ" : "—"} />
                   </div>
                 </div>
-
-                {activeDeposit && (
-                  <div>
-                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng hợp cọc</h4>
-                    <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1.5">
-                      <Row label="Đã cọc" value={formatMoney(depositSummary.totalDeposited)} />
-                      <Row label="Đã hoàn" value={formatMoney(depositSummary.totalRefunded)} />
-                      <Row label="Đã offset" value={formatMoney(depositSummary.totalOffset)} />
-                      <Row label="Đã giữ lại" value={formatMoney(depositSummary.totalForfeit)} />
-                      <div className="border-t border-border pt-2 font-semibold text-emerald-700">
-                        <Row label="Còn giữ" value={formatMoney(depositSummary.remainingHeld)} />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 <DepositTimelineSection
                   error={depositTimeline.error}

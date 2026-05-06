@@ -41,6 +41,8 @@ export const depositService = {
     try {
       await depositTransactionService.createDepositTransaction({
         depositId: deposit.id,
+        roomId: deposit.room_id,
+        tenantId: deposit.tenant_id,
         transactionType: "create",
         amount: deposit.amount,
         note: deposit.note ?? undefined,

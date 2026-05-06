@@ -1,10 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type DepositTransactionType = "create" | "refund" | "offset" | "forfeit";
+export type DepositTransactionType = "create" | "adjust" | "partial_refund" | "refund" | "forfeit" | "offset";
 
 export type RentalDepositTransaction = {
   id: string;
   deposit_id: string;
+  room_id: string;
+  tenant_id: string;
   transaction_type: DepositTransactionType;
   amount: number;
   note: string | null;
@@ -13,6 +15,8 @@ export type RentalDepositTransaction = {
 
 export type CreateDepositTransactionInput = {
   depositId: string;
+  roomId: string;
+  tenantId: string;
   transactionType: DepositTransactionType;
   amount: number;
   note?: string;
@@ -28,6 +32,8 @@ export type DepositSummary = {
 
 const TRANSACTION_TYPE_LABELS: Record<DepositTransactionType, string> = {
   create: "Tạo cọc",
+  adjust: "Điều chỉnh cọc",
+  partial_refund: "Hoàn một phần",
   refund: "Hoàn cọc",
   offset: "Trừ công nợ",
   forfeit: "Giữ lại",
@@ -49,7 +55,8 @@ export function getDepositTransactionLabel(type: DepositTransactionType): string
 
 export function getDepositTransactionSignedAmount(transaction: Pick<RentalDepositTransaction, "transaction_type" | "amount">): number {
   const amount = absoluteMoney(transaction.amount);
-  return transaction.transaction_type === "create" ? amount : -amount;
+  if (transaction.transaction_type === "create" || transaction.transaction_type === "adjust") return amount;
+  return -amount;
 }
 
 export function calculateDepositSummary(
@@ -72,8 +79,8 @@ export function calculateDepositSummary(
     (acc, transaction) => {
       const amount = absoluteMoney(transaction.amount);
 
-      if (transaction.transaction_type === "create") acc.totalDeposited += amount;
-      if (transaction.transaction_type === "refund") acc.totalRefunded += amount;
+      if (transaction.transaction_type === "create" || transaction.transaction_type === "adjust") acc.totalDeposited += amount;
+      if (transaction.transaction_type === "refund" || transaction.transaction_type === "partial_refund") acc.totalRefunded += amount;
       if (transaction.transaction_type === "offset") acc.totalOffset += amount;
       if (transaction.transaction_type === "forfeit") acc.totalForfeit += amount;
 
@@ -117,6 +124,8 @@ export const depositTransactionService = {
       .from("rental_deposit_transactions")
       .insert({
         deposit_id: input.depositId,
+        room_id: input.roomId,
+        tenant_id: input.tenantId,
         transaction_type: input.transactionType,
         amount: input.amount,
         note: input.note ?? null,
