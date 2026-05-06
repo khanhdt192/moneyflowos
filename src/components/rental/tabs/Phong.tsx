@@ -278,9 +278,12 @@ function RoomModal({
   useEffect(() => {
     const loadDeposits = async () => {
       try {
-        const deposits = await depositService.listRoomWorkflowDepositsByRoomIds(state.rental.rooms.map((r) => r.id));
+        const rooms = state.rental.rooms;
+        const tenantIdByRoomId = new Map(rooms.map((r) => [r.id, r.tenant_id || r.tenantInfo?.id || null]));
+        const deposits = await depositService.listCurrentActiveDepositsByRoomIds(rooms.map((r) => r.id));
         const byRoom = deposits.reduce<Record<string, RentalDeposit>>((acc, item) => {
-          if (!acc[item.room_id]) acc[item.room_id] = item;
+          const currentTenantId = tenantIdByRoomId.get(item.room_id);
+          if (currentTenantId && item.tenant_id === currentTenantId && !acc[item.room_id]) acc[item.room_id] = item;
           return acc;
         }, {});
         setDepositsByRoomId(byRoom);

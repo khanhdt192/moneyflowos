@@ -85,13 +85,13 @@ export const depositService = {
     return (data as RentalDeposit | null) ?? null;
   },
 
-  async listRoomWorkflowDepositsByRoomIds(roomIds: string[]): Promise<RentalDeposit[]> {
+  async listCurrentActiveDepositsByRoomIds(roomIds: string[]): Promise<RentalDeposit[]> {
     if (!roomIds.length) return [];
     const { data, error } = await (supabase as any)
       .from("rental_deposits")
       .select("*")
       .in("room_id", roomIds)
-      .in("status", ["active", "pending_settlement", "settled"])
+      .eq("status", "active")
       .order("collected_at", { ascending: false });
 
     if (error) throw error;
