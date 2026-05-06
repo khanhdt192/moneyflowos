@@ -13,10 +13,12 @@ export type RentalDeposit = {
   tenant_id: string;
   room_id: string;
   amount: number;
-  status: "active" | "settled";
+  status: "active" | "pending_settlement" | "settled";
   note: string | null;
   collected_at: string;
   settled_at: string | null;
+  vacated_at: string | null;
+  settlement_note: string | null;
   created_at: string;
 };
 
@@ -83,16 +85,42 @@ export const depositService = {
     return (data as RentalDeposit | null) ?? null;
   },
 
-  async listActiveDepositsByRoomIds(roomIds: string[]): Promise<RentalDeposit[]> {
+  async listRoomWorkflowDepositsByRoomIds(roomIds: string[]): Promise<RentalDeposit[]> {
     if (!roomIds.length) return [];
     const { data, error } = await (supabase as any)
       .from("rental_deposits")
       .select("*")
       .in("room_id", roomIds)
-      .eq("status", "active")
+      .in("status", ["active", "pending_settlement", "settled"])
       .order("collected_at", { ascending: false });
 
     if (error) throw error;
     return (data ?? []) as RentalDeposit[];
+  },
+
+  async moveActiveRoomDepositToPendingSettlement(
+    roomId: string,
+    vacatedAt = new Date().toISOString(),
+  ): Promise<RentalDeposit | null> {
+    const { data, error } = await (supabase as any)
+      .from("rental_deposits")
+      .update({ status: "pending_settlement", vacated_at: vacatedAt })
+      .eq("room_id", roomId)
+      .eq("status", "active")
+      .select("*");
+
+    if (error) throw error;
+
+    const deposits = (data ?? []) as RentalDeposit[];
+    return deposits[0] ?? null;
+  },
+
+  async restoreDepositToActive(depositId: string): Promise<void> {
+    const { error } = await (supabase as any)
+      .from("rental_deposits")
+      .update({ status: "active", vacated_at: null })
+      .eq("id", depositId);
+
+    if (error) throw error;
   },
 };

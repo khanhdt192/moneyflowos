@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X, Check, Trash2, ChevronRight, Home } from "lucide-react";
+import { Plus, X, Check, ChevronRight, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { useTenant } from "@/hooks/useTenant";
 import { roomService } from "@/services/room.service";
 import { depositService, type RentalDeposit } from "@/services/deposit.service";
-import { useDepositSummary } from "@/components/rental/hooks/useDepositSummary";
-import { useDepositTimeline } from "@/components/rental/hooks/useDepositTimeline";
-import {
-  getDepositTransactionLabel,
-  getDepositTransactionSignedAmount,
-  type RentalDepositTransaction,
-} from "@/services/rental/deposit.service";
 import type { Tenant } from "@/services/tenant.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
 import { formatMoneyInput, parseMoneyInput, sanitizeDigitsInput } from "@/utils/number-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Status = "occupied" | "empty" | "debt";
 
@@ -37,22 +40,6 @@ const STATUS_CONFIG: Record<Status, { label: string; className: string }> = {
 };
 
 
-function formatCompactVNDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-
-  return date.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  });
-}
-
-function formatSignedMoney(value: number): string {
-  const prefix = value >= 0 ? "+" : "-";
-  return `${prefix}${formatMoney(Math.abs(value))}`;
-}
-
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
 }
@@ -63,6 +50,12 @@ function parseNonNegativeNumber(value: string): number | null {
   const parsed = Number.parseFloat(value);
   if (Number.isNaN(parsed) || parsed < 0) return null;
   return parsed;
+}
+
+function getDepositStatusLabel(status: RentalDeposit["status"]): string {
+  if (status === "active") return "Đang giữ";
+  if (status === "pending_settlement") return "Chờ quyết toán";
+  return "Đã quyết toán";
 }
 
 function detectFloorFromRoomName(name: string): number | null {
@@ -277,19 +270,20 @@ function RoomModal({
   const [blockedTenantIds, setBlockedTenantIds] = useState<Set<string>>(new Set());
   const [blockedTenantReason, setBlockedTenantReason] = useState<Record<string, string>>({});
   const [selectedTenantId, setSelectedTenantId] = useState("");
-  const [activeDepositsByRoomId, setActiveDepositsByRoomId] = useState<Record<string, RentalDeposit>>({});
+  const [depositsByRoomId, setDepositsByRoomId] = useState<Record<string, RentalDeposit>>({});
   const [tenantDepositAmount, setTenantDepositAmount] = useState("");
   const [tenantDepositNote, setTenantDepositNote] = useState("");
+  const [checkoutConfirmOpen, setCheckoutConfirmOpen] = useState(false);
 
   useEffect(() => {
     const loadDeposits = async () => {
       try {
-        const deposits = await depositService.listActiveDepositsByRoomIds(state.rental.rooms.map((r) => r.id));
+        const deposits = await depositService.listRoomWorkflowDepositsByRoomIds(state.rental.rooms.map((r) => r.id));
         const byRoom = deposits.reduce<Record<string, RentalDeposit>>((acc, item) => {
           if (!acc[item.room_id]) acc[item.room_id] = item;
           return acc;
         }, {});
-        setActiveDepositsByRoomId(byRoom);
+        setDepositsByRoomId(byRoom);
       } catch (error) {
         console.error("[room-modal] load deposit failed", error);
       }
@@ -301,11 +295,9 @@ function RoomModal({
   const debt = room ? (debtMap[room.id] ?? 0) : 0;
   const bill = room ? state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId) : null;
   const canChangeTenant = !bill || bill.paidAmount >= bill.totalAmount;
-  const activeDeposit = room ? activeDepositsByRoomId[room.id] : undefined;
-  const depositTimeline = useDepositTimeline(activeDeposit?.id);
-  const depositSummary = useDepositSummary(depositTimeline.transactions, activeDeposit?.amount);
-  const blockedByDeposit = Boolean(activeDeposit && room?.tenantInfo);
-  const canMutateTenant = canChangeTenant && !blockedByDeposit;
+  const roomDeposit = room ? depositsByRoomId[room.id] : undefined;
+  const hasActiveDeposit = roomDeposit?.status === "active";
+  const canMutateTenant = canChangeTenant;
 
   const handleOpen = (r: RentalRoom | null) => {
     if (r) {
@@ -317,6 +309,24 @@ function RoomModal({
       setTenantPhone(r.tenantInfo?.phone || "");
       setTenantAddress(r.tenantInfo?.address || "");
       setSelectedTenantId("");
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!room) return;
+    if (!canMutateTenant) {
+      toast.error("Chỉ trả phòng khi hóa đơn tháng này đã thanh toán đủ");
+      return;
+    }
+    try {
+      await removeFromRoom(room.id);
+      setTenantName("");
+      setTenantPhone("");
+      setTenantAddress("");
+      setCheckoutConfirmOpen(false);
+      toast.success(hasActiveDeposit ? "Đã trả phòng, tiền cọc chuyển sang chờ quyết toán" : "Đã trả phòng");
+    } catch {
+      toast.error("Không thể trả phòng");
     }
   };
 
@@ -565,23 +575,10 @@ function RoomModal({
                 <div>
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tiền cọc</h4>
                   <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1.5">
-                    <Row label="Đã cọc" value={activeDeposit ? formatMoney(depositSummary.totalDeposited) : "—"} />
-                    <Row label="Đã hoàn" value={activeDeposit ? formatMoney(depositSummary.totalRefunded) : "—"} />
-                    <Row label="Đã trừ" value={activeDeposit ? formatMoney(depositSummary.totalOffset) : "—"} />
-                    <Row label="Đã giữ lại" value={activeDeposit ? formatMoney(depositSummary.totalForfeit) : "—"} />
-                    <div className="border-t border-border pt-2 font-semibold text-emerald-700">
-                      <Row label="Còn giữ" value={activeDeposit ? formatMoney(depositSummary.remainingHeld) : "—"} />
-                    </div>
-                    <Row label="Trạng thái" value={activeDeposit ? "Đang giữ" : "—"} />
+                    <Row label="Đã cọc" value={roomDeposit ? formatMoney(roomDeposit.amount) : "—"} />
+                    <Row label="Trạng thái" value={roomDeposit ? getDepositStatusLabel(roomDeposit.status) : "—"} />
                   </div>
                 </div>
-
-                <DepositTimelineSection
-                  error={depositTimeline.error}
-                  loading={depositTimeline.loading}
-                  transactions={depositTimeline.transactions}
-                  visible={Boolean(activeDeposit)}
-                />
 
                 <div>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -634,31 +631,22 @@ function RoomModal({
                       <button type="button" onClick={() => setTenantMode("edit")} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Sửa người thuê</button>
                       <button
                         type="button"
-                        onClick={async () => {
-                          if (!confirm("Xóa người thuê khỏi phòng này?")) return;
-                          if (!canMutateTenant) {
-                            if (blockedByDeposit) toast.error("Cần xử lý tiền cọc trước khi đổi hoặc xóa người thuê.");
-                            toast.error("Chỉ xóa người thuê khi hóa đơn tháng này đã thanh toán đủ");
+                        onClick={() => {
+                          if (hasActiveDeposit) {
+                            setCheckoutConfirmOpen(true);
                             return;
                           }
-                          try {
-                            await removeFromRoom(room.id);
-                            setTenantName("");
-                            setTenantPhone("");
-                            setTenantAddress("");
-                            toast.success("Đã xóa người thuê khỏi phòng");
-                          } catch {
-                            toast.error("Không thể xóa người thuê khỏi phòng");
-                          }
+                          if (!confirm("Trả phòng cho người thuê này?")) return;
+                          void handleCheckout();
                         }}
                         disabled={!canMutateTenant}
                         className="w-full rounded-lg border border-destructive/40 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
-                      >Xóa người thuê khỏi phòng</button>
+                      >Trả phòng</button>
                       <button
                         type="button"
                         onClick={async () => {
                           if (!canMutateTenant) {
-                            if (blockedByDeposit) toast.error("Cần xử lý tiền cọc trước khi đổi hoặc xóa người thuê.");
+                            toast.error("Chỉ đổi người thuê khi hóa đơn tháng này đã thanh toán đủ");
                             return;
                           }
                           try {
@@ -672,7 +660,7 @@ function RoomModal({
                       className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30 disabled:opacity-50"
                       >Đổi người thuê</button>
                       {!canMutateTenant && (
-                        <p className="text-xs text-muted-foreground">{blockedByDeposit ? "Cần xử lý tiền cọc trước khi đổi hoặc xóa người thuê." : "Chỉ thao tác người thuê khi hóa đơn tháng này đã thanh toán đủ"}</p>
+                        <p className="text-xs text-muted-foreground">Chỉ thao tác người thuê khi hóa đơn tháng này đã thanh toán đủ</p>
                       )}
                     </>
                   ) : (
@@ -691,62 +679,29 @@ function RoomModal({
                   )}
                 </div>
               </div>
+
+              <AlertDialog open={checkoutConfirmOpen} onOpenChange={setCheckoutConfirmOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Trả phòng và giữ cọc chờ quyết toán?</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2 text-sm text-muted-foreground">
+                        <p>Người thuê này còn tiền cọc chưa quyết toán.</p>
+                        <p>Bạn vẫn có thể trả phòng để giải phóng phòng.</p>
+                        <p>Khoản cọc sẽ được chuyển sang danh sách chờ quyết toán và xử lý sau.</p>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Huỷ</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => void handleCheckout()}>Trả phòng, giữ cọc chờ quyết toán</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
           </>
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-
-function DepositTimelineSection({
-  error,
-  loading,
-  transactions,
-  visible,
-}: {
-  error: unknown;
-  loading: boolean;
-  transactions: RentalDepositTransaction[];
-  visible: boolean;
-}) {
-  if (!visible) return null;
-
-  return (
-    <div>
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lịch sử cọc</h4>
-      <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
-        {loading ? (
-          <p className="text-xs text-muted-foreground">Đang tải lịch sử cọc...</p>
-        ) : error ? (
-          <p className="text-xs text-rose-600">Không tải được lịch sử cọc.</p>
-        ) : transactions.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Chưa có giao dịch cọc.</p>
-        ) : (
-          <div className="space-y-3">
-            {transactions.map((transaction) => {
-              const signedAmount = getDepositTransactionSignedAmount(transaction);
-              const isPositive = signedAmount >= 0;
-
-              return (
-                <div key={transaction.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-border/70 pb-3 last:border-0 last:pb-0">
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="font-medium text-foreground">{getDepositTransactionLabel(transaction.transaction_type)}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{formatCompactVNDate(transaction.created_at)}</span>
-                    </div>
-                    {transaction.note && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{transaction.note}</p>}
-                  </div>
-                  <span className={`text-right tabular-nums font-semibold ${isPositive ? "text-emerald-600" : "text-rose-600"}`}>
-                    {formatSignedMoney(signedAmount)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
