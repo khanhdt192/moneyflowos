@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { useFinance, useFinanceActions } from "@/lib/finance-store";
+import { useFinance } from "@/lib/finance-store";
+import { rentalSettingsService } from "@/services/rental/rental-settings.service";
 
 export function useRentalSettingsForm() {
   const state = useFinance();
-  const actions = useFinanceActions();
   const settings = state.rental.settings;
 
   const [elecRate, setElecRate] = useState(String(settings.defaultElectricityRate));
@@ -37,27 +37,27 @@ export function useRentalSettingsForm() {
   };
 
   const saveShared = () => {
-    actions.updateRentalSettings({
-      defaultElectricityRate: Number(elecRate) || 0,
-      waterRatePerM3: Number(waterRate) || 0,
-      wifiPerRoom: Number(wifi) || 0,
-      cleaningPerRoom: Number(cleaning) || 0,
-      otherPerRoom: Number(other) || 0,
-      otherName: otherName.trim() || "Phụ phí",
+    const result = rentalSettingsService.saveSharedRoomSettings({
+      elecRate,
+      waterRate,
+      wifi,
+      cleaning,
+      other,
+      otherName,
     });
-    toast.success("Đã lưu cấu hình phòng 201 – 305");
+    toast.success(result.successMessage);
   };
 
   const saveT1 = () => {
-    actions.updateRentalSettings({
-      t1ElectricityBill: Number(t1Elec) || 0,
+    const result = rentalSettingsService.saveFirstFloorSettings({
+      t1Elec,
       t1HasWifi,
-      t1WifiPerRoom: Number(t1Wifi) || 0,
-      t1Cleaning: Number(t1Cleaning) || 0,
-      t1OtherName: t1OtherName.trim() || "Phụ phí",
-      t1OtherPerRoom: Number(t1Other) || 0,
+      t1Wifi,
+      t1Cleaning,
+      t1OtherName,
+      t1Other,
     });
-    toast.success("Đã lưu cấu hình Tầng 1");
+    toast.success(result.successMessage);
   };
 
   const sharedFixedTotal = (Number(wifi) || 0) + (Number(cleaning) || 0) + (Number(other) || 0);
