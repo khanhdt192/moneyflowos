@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { depositTransactionService } from "@/services/rental/deposit.service";
 
 export type CreateDepositInput = {
   tenantId: string;
@@ -34,7 +35,22 @@ export const depositService = {
       .single();
 
     if (error) throw error;
-    return data as RentalDeposit;
+
+    const deposit = data as RentalDeposit;
+
+    try {
+      await depositTransactionService.createDepositTransaction({
+        depositId: deposit.id,
+        transactionType: "create",
+        amount: deposit.amount,
+        note: deposit.note ?? undefined,
+      });
+    } catch (transactionError) {
+      await (supabase as any).from("rental_deposits").delete().eq("id", deposit.id);
+      throw transactionError;
+    }
+
+    return deposit;
   },
 
   async getActiveDepositByTenant(tenantId: string): Promise<RentalDeposit | null> {
