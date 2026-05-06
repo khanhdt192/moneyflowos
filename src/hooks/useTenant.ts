@@ -1,7 +1,12 @@
 import { useCallback, useState } from "react";
 import { roomService } from "@/services/room.service";
 import { depositService } from "@/services/deposit.service";
-import { tenantService, type CreateTenantInput, type Tenant, type UpdateTenantInput } from "@/services/tenant.service";
+import {
+  tenantService,
+  type CreateTenantInput,
+  type Tenant,
+  type UpdateTenantInput,
+} from "@/services/tenant.service";
 
 type RefetchRooms = () => Promise<unknown>;
 
@@ -90,10 +95,30 @@ export function useTenant(refetchRooms: RefetchRooms) {
     async (roomId: string) => {
       setIsLoading(true);
       setError(null);
+
+      let pendingDepositId: string | null = null;
+
       try {
+        const pendingDeposit =
+          await depositService.moveActiveRoomDepositToPendingSettlement(roomId);
+        pendingDepositId = pendingDeposit?.id ?? null;
+
         await roomService.removeTenant(roomId);
         await refetchRooms();
       } catch (err) {
+        console.error("[useTenant.removeFromRoom] failed", err);
+
+        if (pendingDepositId) {
+          try {
+            await depositService.restoreDepositToActive(pendingDepositId);
+          } catch (rollbackErr) {
+            console.error(
+              "[useTenant.removeFromRoom] rollback restoreDepositToActive failed",
+              rollbackErr,
+            );
+          }
+        }
+
         setError(err);
         throw err;
       } finally {
@@ -110,9 +135,14 @@ export function useTenant(refetchRooms: RefetchRooms) {
 
       let previous: { tenantId: string | null } | null = null;
       let assigned = false;
+      let pendingDepositId: string | null = null;
 
       try {
         previous = await roomService.getTenantAssignment(roomId);
+
+        const pendingDeposit =
+          await depositService.moveActiveRoomDepositToPendingSettlement(roomId);
+        pendingDepositId = pendingDeposit?.id ?? null;
 
         await roomService.assignTenant(roomId, tenantId);
         assigned = true;
@@ -134,7 +164,21 @@ export function useTenant(refetchRooms: RefetchRooms) {
           try {
             await roomService.restoreTenantAssignment(roomId, previous.tenantId);
           } catch (rollbackErr) {
-            console.error("[useTenant.assignExisting] rollback restoreTenantAssignment failed", rollbackErr);
+            console.error(
+              "[useTenant.assignExisting] rollback restoreTenantAssignment failed",
+              rollbackErr,
+            );
+          }
+        }
+
+        if (pendingDepositId) {
+          try {
+            await depositService.restoreDepositToActive(pendingDepositId);
+          } catch (rollbackErr) {
+            console.error(
+              "[useTenant.assignExisting] rollback restoreDepositToActive failed",
+              rollbackErr,
+            );
           }
         }
 
