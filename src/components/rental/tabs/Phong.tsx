@@ -5,6 +5,13 @@ import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { useTenant } from "@/hooks/useTenant";
 import { roomService } from "@/services/room.service";
 import { depositService, type RentalDeposit } from "@/services/deposit.service";
+import { useDepositSummary } from "@/components/rental/hooks/useDepositSummary";
+import { useDepositTimeline } from "@/components/rental/hooks/useDepositTimeline";
+import {
+  getDepositTransactionLabel,
+  getDepositTransactionSignedAmount,
+  type RentalDepositTransaction,
+} from "@/services/rental/deposit.service";
 import type { Tenant } from "@/services/tenant.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
@@ -30,6 +37,21 @@ const STATUS_CONFIG: Record<Status, { label: string; className: string }> = {
 };
 
 
+function formatCompactVNDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
+
+function formatSignedMoney(value: number): string {
+  const prefix = value >= 0 ? "+" : "-";
+  return `${prefix}${formatMoney(Math.abs(value))}`;
+}
 
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
@@ -280,6 +302,8 @@ function RoomModal({
   const bill = room ? state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId) : null;
   const canChangeTenant = !bill || bill.paidAmount >= bill.totalAmount;
   const activeDeposit = room ? activeDepositsByRoomId[room.id] : undefined;
+  const depositTimeline = useDepositTimeline(activeDeposit?.id);
+  const depositSummary = useDepositSummary(depositTimeline.transactions, activeDeposit?.amount);
   const blockedByDeposit = Boolean(activeDeposit && room?.tenantInfo);
   const canMutateTenant = canChangeTenant && !blockedByDeposit;
 
@@ -540,11 +564,24 @@ function RoomModal({
                 </div>
                 <div>
                   <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tiền cọc</h4>
-                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1">
-                    <Row label="Tiền cọc" value={activeDeposit ? formatMoney(activeDeposit.amount) : "—"} />
+                  <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-1.5">
+                    <Row label="Đã cọc" value={activeDeposit ? formatMoney(depositSummary.totalDeposited) : "—"} />
+                    <Row label="Đã hoàn" value={activeDeposit ? formatMoney(depositSummary.totalRefunded) : "—"} />
+                    <Row label="Đã trừ" value={activeDeposit ? formatMoney(depositSummary.totalOffset) : "—"} />
+                    <Row label="Đã giữ lại" value={activeDeposit ? formatMoney(depositSummary.totalForfeit) : "—"} />
+                    <div className="border-t border-border pt-2 font-semibold text-emerald-700">
+                      <Row label="Còn giữ" value={activeDeposit ? formatMoney(depositSummary.remainingHeld) : "—"} />
+                    </div>
                     <Row label="Trạng thái" value={activeDeposit ? "Đang giữ" : "—"} />
                   </div>
                 </div>
+
+                <DepositTimelineSection
+                  error={depositTimeline.error}
+                  loading={depositTimeline.loading}
+                  transactions={depositTimeline.transactions}
+                  visible={Boolean(activeDeposit)}
+                />
 
                 <div>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -658,6 +695,58 @@ function RoomModal({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+function DepositTimelineSection({
+  error,
+  loading,
+  transactions,
+  visible,
+}: {
+  error: unknown;
+  loading: boolean;
+  transactions: RentalDepositTransaction[];
+  visible: boolean;
+}) {
+  if (!visible) return null;
+
+  return (
+    <div>
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lịch sử cọc</h4>
+      <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm">
+        {loading ? (
+          <p className="text-xs text-muted-foreground">Đang tải lịch sử cọc...</p>
+        ) : error ? (
+          <p className="text-xs text-rose-600">Không tải được lịch sử cọc.</p>
+        ) : transactions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Chưa có giao dịch cọc.</p>
+        ) : (
+          <div className="space-y-3">
+            {transactions.map((transaction) => {
+              const signedAmount = getDepositTransactionSignedAmount(transaction);
+              const isPositive = signedAmount >= 0;
+
+              return (
+                <div key={transaction.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-border/70 pb-3 last:border-0 last:pb-0">
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="font-medium text-foreground">{getDepositTransactionLabel(transaction.transaction_type)}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{formatCompactVNDate(transaction.created_at)}</span>
+                    </div>
+                    {transaction.note && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{transaction.note}</p>}
+                  </div>
+                  <span className={`text-right tabular-nums font-semibold ${isPositive ? "text-emerald-600" : "text-rose-600"}`}>
+                    {formatSignedMoney(signedAmount)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
