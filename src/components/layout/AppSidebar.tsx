@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard,
-  ArrowLeftRight,
-  Target,
   Home,
-  FileBarChart,
   Settings,
   Moon,
   Sun,
@@ -16,11 +12,7 @@ import { useFinance } from "@/lib/finance-store";
 import { useShell } from "./shell-context";
 
 const items = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Giao dịch", url: "/cash-flow", icon: ArrowLeftRight },
-  { title: "Mục tiêu", url: "/goals", icon: Target },
   { title: "Cho thuê", url: "/rental", icon: Home },
-  { title: "Báo cáo", url: "/reports", icon: FileBarChart },
   { title: "Cài đặt", url: "/settings", icon: Settings },
 ];
 
@@ -120,14 +112,19 @@ export function AppSidebar() {
           </span>
         </button>
 
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-background/50 p-2.5">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/50 p-2.5">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-income to-savings text-sm font-bold text-primary-foreground">
             {initials}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate text-sm font-semibold text-foreground">{state.settings.name}</div>
-            <div className="truncate text-[11px] text-muted-foreground">Premium · $29/mo</div>
           </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </>
