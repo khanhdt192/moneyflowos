@@ -5,13 +5,15 @@ import { ChotThang } from "./tabs/ChotThang";
 import { BaoCao } from "./tabs/BaoCao";
 import { ChiPhiKhac } from "./tabs/ChiPhiKhac";
 import { MauHoaDon } from "./tabs/MauHoaDon";
+import { TienCoc } from "./tabs/TienCoc";
 
-type Tab = "tongquan" | "phong" | "chotthang" | "chiphikhac" | "mauhoadon" | "baocao";
+type Tab = "tongquan" | "phong" | "chotthang" | "tiencoc" | "chiphikhac" | "mauhoadon" | "baocao";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "tongquan",  label: "Tổng quan" },
   { id: "phong",     label: "Phòng" },
   { id: "chotthang", label: "Chốt tháng" },
+  { id: "tiencoc", label: "Tiền cọc" },
   { id: "chiphikhac", label: "Chi phí khác" },
   { id: "mauhoadon",  label: "Mẫu hóa đơn" },
   { id: "baocao",    label: "Báo cáo" },
@@ -63,6 +65,7 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
             onFocusRequestConsumed={() => setChotThangFocus(null)}
           />
         )}
+        {activeTab === "tiencoc" && <TienCoc />}
         {activeTab === "chiphikhac" && <ChiPhiKhac />}
         {activeTab === "mauhoadon" && <MauHoaDon />}
         {activeTab === "baocao"    && <BaoCao />}
