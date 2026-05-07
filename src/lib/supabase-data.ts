@@ -491,29 +491,76 @@ export const cloud = {
     },
     status: RentalBillStatus = "draft",
   ) {
+    const billStatus: TablesUpdate<"rental_room_bills">["status"] = status === "ready" ? "draft" : status;
+    const billPatch: TablesUpdate<"rental_room_bills"> = {
+      rent_amount: amounts.rentAmount,
+      electricity_amount: amounts.electricityAmount,
+      water_amount: amounts.waterAmount,
+      wifi_amount: amounts.wifiAmount,
+      cleaning_amount: amounts.cleaningAmount,
+      other_amount: amounts.otherAmount,
+      total_amount: amounts.totalAmount,
+      paid_amount: 0,
+      status: billStatus,
+    };
+
+    const { data: existing, error: existingError } = await supabase
+      .from("rental_room_bills")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
+    if (existingError) throw existingError;
+
+    if (existing) {
+      if (existing.status !== "draft") return existing;
+
+      const { data, error } = await supabase
+        .from("rental_room_bills")
+        .update(billPatch)
+        .eq("id", existing.id)
+        .eq("status", "draft")
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? existing;
+    }
+
     const { data, error } = await supabase
       .from("rental_room_bills")
-      .upsert(
-        {
-          user_id: userId,
-          room_id: roomId,
-          cycle_id: cycleId,
-          rent_amount: amounts.rentAmount,
-          electricity_amount: amounts.electricityAmount,
-          water_amount: amounts.waterAmount,
-          wifi_amount: amounts.wifiAmount,
-          cleaning_amount: amounts.cleaningAmount,
-          other_amount: amounts.otherAmount,
-          total_amount: amounts.totalAmount,
-          paid_amount: 0,
-          status,
-        },
-        { onConflict: "room_id,cycle_id", ignoreDuplicates: false },
-      )
+      .insert({
+        user_id: userId,
+        room_id: roomId,
+        cycle_id: cycleId,
+        ...billPatch,
+      } satisfies TablesInsert<"rental_room_bills">)
       .select()
       .single();
-    if (error) throw error;
-    return data;
+
+    if (!error) return data;
+
+    const { data: current, error: currentError } = await supabase
+      .from("rental_room_bills")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (current?.status === "draft") {
+      const { data: updated, error: updateError } = await supabase
+        .from("rental_room_bills")
+        .update(billPatch)
+        .eq("id", current.id)
+        .eq("status", "draft")
+        .select()
+        .single();
+      if (updateError) throw updateError;
+      return updated;
+    }
+    if (current) return current;
+    throw error;
   },
 
   async confirmBill(roomId: string, cycleId: string) {

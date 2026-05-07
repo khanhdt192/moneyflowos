@@ -95,6 +95,53 @@ function mapBillRowToState(b: any, cycleId: string): RentalRoomBill {
   };
 }
 
+
+export type RentalBillAmounts = {
+  rentAmount: number;
+  electricityAmount: number;
+  waterAmount: number;
+  wifiAmount: number;
+  cleaningAmount: number;
+  otherAmount: number;
+  totalAmount: number;
+};
+
+function isT1Room(room: RentalRoom): boolean {
+  return room.floor === 1 || /t[aâ]ng\s*1/i.test(room.name);
+}
+
+export function calculateRentalBillAmounts(
+  room: RentalRoom,
+  settings: RentalSettings,
+  reading: { startIndex: number; endIndex: number; waterM3: number },
+): RentalBillAmounts {
+  const groundFloor = isT1Room(room);
+  const consumptionKwh = Math.max(reading.endIndex - reading.startIndex, 0);
+  const waterM3 = Math.max(reading.waterM3, 0);
+
+  const rentAmount = room.rent;
+  const electricityAmount = groundFloor
+    ? settings.t1ElectricityBill
+    : consumptionKwh * settings.defaultElectricityRate;
+  const waterAmount = waterM3 * settings.waterRatePerM3;
+  const wifiAmount = groundFloor
+    ? settings.t1HasWifi ? settings.t1WifiPerRoom : 0
+    : settings.wifiPerRoom;
+  const cleaningAmount = groundFloor ? settings.t1Cleaning : settings.cleaningPerRoom;
+  const otherAmount = groundFloor ? settings.t1OtherPerRoom : settings.otherPerRoom;
+  const totalAmount = rentAmount + electricityAmount + waterAmount + wifiAmount + cleaningAmount + otherAmount;
+
+  return {
+    rentAmount,
+    electricityAmount,
+    waterAmount,
+    wifiAmount,
+    cleaningAmount,
+    otherAmount,
+    totalAmount,
+  };
+}
+
 /* ─── store ───────────────────────────────────────────────── */
 
 type Listener = () => void;
@@ -402,14 +449,29 @@ class FinanceStore {
       this.mutateRental({
         electricityReadings: this.state.rental.electricityReadings.map((r) => (r.id === nextReading.id ? final : r)),
       }, false);
-      const billRow = await cloud.getRoomBillByRoomAndCycle(this.userId, roomId, dbCycleId);
-      if (billRow) {
+      const room = this.state.rental.rooms.find((r) => r.id === roomId);
+      const existingBill = this.state.rental.roomBills.find((b) => b.roomId === roomId && b.cycleId === cycleId);
+      const occupied = !!(room?.tenantInfo?.id || room?.tenant_id || room?.occupied);
+
+      if (room && occupied && (!existingBill || existingBill.status === "draft")) {
+        const amounts = calculateRentalBillAmounts(room, this.state.rental.settings, final);
+        const billRow = await cloud.upsertBill(this.userId, roomId, dbCycleId, amounts, "draft");
         const nextBill = mapBillRowToState(billRow, cycleId);
         const existingIdx = this.state.rental.roomBills.findIndex((b) => b.id === nextBill.id || (b.roomId === roomId && b.cycleId === cycleId));
         const updatedBills = [...this.state.rental.roomBills];
         if (existingIdx >= 0) updatedBills[existingIdx] = nextBill;
         else updatedBills.push(nextBill);
         this.mutateRental({ roomBills: updatedBills }, false);
+      } else if (existingBill && existingBill.status !== "draft") {
+        const billRow = await cloud.getRoomBillByRoomAndCycle(this.userId, roomId, dbCycleId);
+        if (billRow) {
+          const nextBill = mapBillRowToState(billRow, cycleId);
+          this.mutateRental({
+            roomBills: this.state.rental.roomBills.map((b) =>
+              b.id === nextBill.id || (b.roomId === roomId && b.cycleId === cycleId) ? nextBill : b,
+            ),
+          }, false);
+        }
       }
       await this.refetch();
     } catch (err) {
