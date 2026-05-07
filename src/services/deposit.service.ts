@@ -22,6 +22,44 @@ export type RentalDeposit = {
   created_at: string;
 };
 
+export type RentalDepositForTab = RentalDeposit & {
+  tenant_full_name: string;
+  tenant_phone: string | null;
+  room_name: string;
+};
+
+type DepositJoinRow = RentalDeposit & {
+  rental_tenants?: { full_name?: string | null; phone?: string | null } | { full_name?: string | null; phone?: string | null }[] | null;
+  rental_rooms?: { name?: string | null } | { name?: string | null }[] | null;
+};
+
+function firstJoin<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+function mapDepositForTab(row: DepositJoinRow): RentalDepositForTab {
+  const tenant = firstJoin(row.rental_tenants);
+  const room = firstJoin(row.rental_rooms);
+
+  return {
+    id: row.id,
+    tenant_id: row.tenant_id,
+    room_id: row.room_id,
+    amount: Number(row.amount ?? 0),
+    status: row.status,
+    note: row.note ?? null,
+    collected_at: row.collected_at,
+    settled_at: row.settled_at ?? null,
+    vacated_at: row.vacated_at ?? null,
+    settlement_note: row.settlement_note ?? null,
+    created_at: row.created_at,
+    tenant_full_name: tenant?.full_name || "—",
+    tenant_phone: tenant?.phone ?? null,
+    room_name: room?.name || "—",
+  };
+}
+
 export const depositService = {
   async createDeposit(input: CreateDepositInput): Promise<RentalDeposit> {
     const { data, error } = await (supabase as any)
@@ -96,6 +134,31 @@ export const depositService = {
 
     if (error) throw error;
     return (data ?? []) as RentalDeposit[];
+  },
+
+  async listDepositsForTab(): Promise<RentalDepositForTab[]> {
+    const { data, error } = await (supabase as any)
+      .from("rental_deposits")
+      .select(`
+        id,
+        tenant_id,
+        room_id,
+        amount,
+        status,
+        note,
+        collected_at,
+        settled_at,
+        vacated_at,
+        settlement_note,
+        created_at,
+        rental_tenants:tenant_id(full_name, phone),
+        rental_rooms:room_id(name)
+      `)
+      .in("status", ["active", "pending_settlement", "settled"])
+      .order("collected_at", { ascending: false });
+
+    if (error) throw error;
+    return ((data ?? []) as DepositJoinRow[]).map(mapDepositForTab);
   },
 
   async moveActiveRoomDepositToPendingSettlement(
