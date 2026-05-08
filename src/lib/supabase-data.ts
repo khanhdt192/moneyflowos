@@ -204,6 +204,7 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     id: b.id,
     roomId: b.room_id,
     cycleId: cycleFormatMap[b.cycle_id] ?? b.cycle_id,
+    occupancyId: (b as any).occupancy_id ?? null,
     rentAmount: num(b.rent_amount),
     electricityAmount: num(b.electricity_amount),
     waterAmount: num(b.water_amount),
@@ -475,11 +476,34 @@ export const cloud = {
     return data;
   },
 
+  async getRoomBillByOccupancyAndCycle(userId: string, occupancyId: string, cycleId: string) {
+    const { data, error } = await (supabase as any)
+      .from("rental_room_bills")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("occupancy_id", occupancyId)
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async getRoomBillById(billId: string) {
+    const { data, error } = await supabase
+      .from("rental_room_bills")
+      .select("*")
+      .eq("id", billId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
   /* room bills */
   async upsertBill(
     userId: string,
     roomId: string,
     cycleId: string,
+    occupancyId: string,
     amounts: {
       rentAmount: number;
       electricityAmount: number;
@@ -504,11 +528,11 @@ export const cloud = {
       status: billStatus,
     };
 
-    const { data: existing, error: existingError } = await supabase
+    const { data: existing, error: existingError } = await (supabase as any)
       .from("rental_room_bills")
       .select("*")
       .eq("user_id", userId)
-      .eq("room_id", roomId)
+      .eq("occupancy_id", occupancyId)
       .eq("cycle_id", cycleId)
       .maybeSingle();
     if (existingError) throw existingError;
@@ -527,24 +551,25 @@ export const cloud = {
       return data ?? existing;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("rental_room_bills")
       .insert({
         user_id: userId,
         room_id: roomId,
         cycle_id: cycleId,
+        occupancy_id: occupancyId,
         ...billPatch,
-      } satisfies TablesInsert<"rental_room_bills">)
+      })
       .select()
       .single();
 
     if (!error) return data;
 
-    const { data: current, error: currentError } = await supabase
+    const { data: current, error: currentError } = await (supabase as any)
       .from("rental_room_bills")
       .select("*")
       .eq("user_id", userId)
-      .eq("room_id", roomId)
+      .eq("occupancy_id", occupancyId)
       .eq("cycle_id", cycleId)
       .maybeSingle();
     if (currentError) throw currentError;
@@ -560,6 +585,19 @@ export const cloud = {
       return updated;
     }
     if (current) return current;
+
+    // Legacy room+cycle constraints may still exist in some databases. Do not
+    // overwrite or return another occupancy's bill as the current bill.
+    const { data: legacyRoomCycleBill, error: legacyLookupError } = await (supabase as any)
+      .from("rental_room_bills")
+      .select("id, occupancy_id")
+      .eq("user_id", userId)
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
+    if (legacyLookupError) throw legacyLookupError;
+    if (legacyRoomCycleBill && (legacyRoomCycleBill as any).occupancy_id !== occupancyId) return null;
+
     throw error;
   },
 
@@ -575,7 +613,17 @@ export const cloud = {
       .update({ status: "confirmed", confirmed_at: now })
       .eq("room_id", roomId)
       .eq("cycle_id", resolvedCycleId)
-      .eq("status", "draft"); // only confirm drafts, safety guard
+      .eq("status", "draft"); // legacy compatibility only
+    if (error) throw error;
+  },
+
+  async confirmBillById(billId: string) {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("rental_room_bills")
+      .update({ status: "confirmed", confirmed_at: now })
+      .eq("id", billId)
+      .eq("status", "draft");
     if (error) throw error;
   },
 
@@ -652,6 +700,21 @@ export const cloud = {
     return status;
   },
 
+  async payBillById(billId: string, amount: number, method = "cash", note?: string) {
+    const { data: bill, error: billErr } = await supabase
+      .from("rental_room_bills")
+      .select("*")
+      .eq("id", billId)
+      .single();
+    if (billErr || !bill) throw new Error("Bill not found");
+    if (!["confirmed", "partial_paid"].includes(bill.status)) throw new Error("Bill is not payable");
+
+    const nextPaidAmount = Math.min(num(bill.paid_amount) + amount, num(bill.total_amount));
+    const status = await this.updateBillPayment(bill.id, nextPaidAmount, num(bill.total_amount));
+    const payment = await this.insertPayment(bill.user_id, bill.id, bill.room_id, amount, method, note);
+    return { status, payment };
+  },
+
   async payBill(roomId: string, cycleId: string, amount: number, method = "cash", note?: string) {
     const { data: auth } = await supabase.auth.getUser();
     const userId = auth.user?.id;
@@ -671,6 +734,15 @@ export const cloud = {
     const status = await this.updateBillPayment(bill.id, nextPaidAmount, num(bill.total_amount));
     const payment = await this.insertPayment(bill.user_id, bill.id, roomId, amount, method, note);
     return { status, payment };
+  },
+
+  async resetBillToDraftById(billId: string) {
+    const { error } = await supabase
+      .from("rental_room_bills")
+      .update({ status: "draft", paid_amount: 0, paid_at: null, confirmed_at: null })
+      .eq("id", billId)
+      .eq("status", "confirmed");
+    if (error) throw error;
   },
 
   async resetBillToDraft(roomId: string, cycleId: string) {

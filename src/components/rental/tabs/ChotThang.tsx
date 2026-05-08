@@ -14,7 +14,8 @@ import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-t
 import { formatMoney } from "@/utils/format";
 import { formatMoneyInput, parseMoneyInput, sanitizeDigitsInput } from "@/utils/number-input";
 import { exportSingleInvoice } from "@/lib/rental-pdf";
-import { useRentalRooms, type RentalRoomUiModel } from "@/hooks/use-rental-rooms";
+import { useRentalRooms } from "@/hooks/use-rental-rooms";
+import { occupancyService, type RentalOccupancy } from "@/services/occupancy.service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /* ─── types ───────────────────────────────────────────────── */
@@ -139,16 +140,24 @@ export function ChotThang({
   const cycleId  = `${year}-${String(month).padStart(2, "0")}`;
   const settings = state.rental.settings;
 
-  /* ── Supabase view: single source of truth for bill status ── */
+  /* ── Supabase view sync/loading for billing table ── */
   const {
-    rooms: apiRooms,
     loading: apiLoading,
     refetch: apiRefetch,
   } = useRentalRooms(cycleId);
+  const [activeOccupancyByRoomId, setActiveOccupancyByRoomId] = useState<Record<string, RentalOccupancy>>({});
 
-  const apiBillMap = Object.fromEntries(
-    apiRooms.map((r) => [r.room_id, r]),
-  ) as Record<string, RentalRoomUiModel>;
+  useEffect(() => {
+    const loadActiveOccupancies = async () => {
+      try {
+        setActiveOccupancyByRoomId(await occupancyService.getActiveOccupancyByRoomIds(state.rental.rooms.map((r) => r.id)));
+      } catch (error) {
+        console.error("[chot-thang] load active occupancies failed", error);
+        setActiveOccupancyByRoomId({});
+      }
+    };
+    void loadActiveOccupancies();
+  }, [state.rental.rooms]);
 
   /* local editing rows (controlled inputs) */
   const [rows, setRows]             = useState<Record<string, RowData>>({});
@@ -188,8 +197,14 @@ export function ChotThang({
   /* ─── local store maps ──────────────────────────────────── */
   const roomMap = Object.fromEntries(state.rental.rooms.map((r) => [r.id, r]));
 
-  const storeBillMap = Object.fromEntries(
-    state.rental.roomBills.filter((b) => b.cycleId === cycleId).map((b) => [b.roomId, b]),
+  const storeBillMap: Record<string, RentalRoomBill | undefined> = Object.fromEntries(
+    state.rental.rooms.map((room) => {
+      const activeOccupancy = activeOccupancyByRoomId[room.id];
+      const bill = activeOccupancy
+        ? state.rental.roomBills.find((b) => b.cycleId === cycleId && b.occupancyId === activeOccupancy.id)
+        : undefined;
+      return [room.id, bill];
+    }),
   );
 
   const readingMap = Object.fromEntries(
@@ -199,15 +214,13 @@ export function ChotThang({
   );
 
   const allRooms      = state.rental.rooms;
-  const occupiedRooms = allRooms.filter((r) => isRoomOccupied(r));
-
   /* KPI from API data */
-  const allApiBills    = Object.values(apiBillMap).filter((r) => r.bill_id);
-  const confirmedCount = allApiBills.filter((r) =>
-    r.bill_status && ["confirmed", "partial_paid", "paid"].includes(r.bill_status)).length;
-  const paidCount      = allApiBills.filter((r) => r.bill_status === "paid").length;
-  const totalBilled    = allApiBills.reduce((s, r) => s + (r.total_amount ?? 0), 0);
-  const totalPaid      = allApiBills.reduce((s, r) => s + (storeBillMap[r.room_id]?.paidAmount ?? 0), 0);
+  const currentOccupancyBills = Object.values(storeBillMap).filter((bill): bill is RentalRoomBill => !!bill);
+  const confirmedCount = currentOccupancyBills.filter((bill) =>
+    ["confirmed", "partial_paid", "paid"].includes(bill.status)).length;
+  const paidCount      = currentOccupancyBills.filter((bill) => bill.status === "paid").length;
+  const totalBilled    = currentOccupancyBills.reduce((s, bill) => s + bill.totalAmount, 0);
+  const totalPaid      = currentOccupancyBills.reduce((s, bill) => s + bill.paidAmount, 0);
 
   /* ─── row helpers ───────────────────────────────────────── */
 
@@ -232,8 +245,8 @@ export function ChotThang({
     }
 
     const room = roomMap[roomId];
-    const occupied = room ? isRoomOccupied(room) : false;
-    const apiBillStatus = apiBillMap[roomId]?.bill_status ?? storeBillMap[roomId]?.status ?? null;
+    const occupied = room ? isRoomOccupied(room) && !!activeOccupancyByRoomId[roomId] : false;
+    const apiBillStatus = storeBillMap[roomId]?.status ?? null;
     if (!canEditBillingInputs(occupied, apiBillStatus)) {
       toast.error("Hóa đơn đã chốt/đã thu, không thể chỉnh sửa");
       return;
@@ -262,7 +275,7 @@ export function ChotThang({
         setTimeout(() => setSaveState(roomId, "idle"), 2500);
         // store.refetch() already ran inside upsertElectricityReading.
         // Wait 200ms for the Supabase view (rental_room_overview) to propagate,
-        // then sync apiRooms so action buttons reflect the new bill.
+        // then keep the companion view request in sync.
         await new Promise<void>((r) => setTimeout(r, 200));
         await apiRefetch();
       } catch {
@@ -273,8 +286,8 @@ export function ChotThang({
 
   async function saveInlineReading(roomId: string, rowData: RowData) {
     const room = roomMap[roomId];
-    const occupied = room ? isRoomOccupied(room) : false;
-    const apiBillStatus = apiBillMap[roomId]?.bill_status ?? storeBillMap[roomId]?.status ?? null;
+    const occupied = room ? isRoomOccupied(room) && !!activeOccupancyByRoomId[roomId] : false;
+    const apiBillStatus = storeBillMap[roomId]?.status ?? null;
     if (!canEditBillingInputs(occupied, apiBillStatus)) {
       toast.error("Hóa đơn đã chốt/đã thu, không thể chỉnh sửa");
       return;
@@ -424,7 +437,7 @@ export function ChotThang({
           <SummaryCard label="Còn lại"          value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
           <SummaryCard label="Đã chốt / Đã thu" value={`${confirmedCount} / ${paidCount} phòng`} />
         </div>
-        {allApiBills.length === 0 && (
+        {currentOccupancyBills.length === 0 && (
           <p className="mt-2 text-sm text-muted-foreground">Chưa có hóa đơn tháng này</p>
         )}
       </div>
@@ -453,30 +466,27 @@ export function ChotThang({
               </tr>
             )}
             {allRooms.map((room) => {
-              const occupied     = isRoomOccupied(room);
-              const apiRow       = apiBillMap[room.id];
+              const occupied     = isRoomOccupied(room) && !!activeOccupancyByRoomId[room.id];
               const reading      = readingMap[room.id];
               const row          = getRow(room.id);
               const ground       = isT1(room);
               const ss           = saveStates[room.id] ?? "idle";
               const hasLocalEdit = !!rows[room.id];
 
-              // storeBill is always up-to-date: store.refetch() runs inside
-              // upsertElectricityReading, so it reflects DB state immediately.
-              // apiRow catches up 200ms later after apiRefetch().
+              // storeBill is resolved through the room's active occupancy for this cycle.
               const storeBill = storeBillMap[room.id];
 
-              /* Bill status: prefer API view; fall back to local store */
-              const apiBillStatus = apiRow?.bill_status ?? storeBill?.status ?? null;
+              /* Bill status: active occupancy bill only */
+              const apiBillStatus = storeBill?.status ?? null;
               const canEditBillInputs = canEditBillingInputs(occupied, apiBillStatus);
-              const displayStatus = getDisplayStatus(room, apiBillStatus, !!reading, cycleId);
+              const displayStatus = occupied ? getDisplayStatus(room, apiBillStatus, !!reading, cycleId) : "empty";
               const cfg           = STATUS_CFG[displayStatus];
 
-              /* Action availability: prefer API view flags; fall back to store */
-              const hasBill    = !!apiRow?.bill_id || !!storeBill;
+              /* Action availability: active occupancy bill only */
+              const hasBill    = !!storeBill;
               /* live total: DB value when available, else estimate */
-              const liveTotal = apiRow?.total_amount != null
-                ? apiRow.total_amount
+              const liveTotal = storeBill?.totalAmount != null
+                ? storeBill.totalAmount
                 : occupied && (reading || hasLocalEdit)
                   ? calcLiveTotal(room, settings, row)
                   : null;
@@ -644,10 +654,9 @@ export function ChotThang({
 
       {selectedRoomId && (() => {
         const room = roomMap[selectedRoomId];
-        const apiRow = apiBillMap[selectedRoomId];
         const storeBill = storeBillMap[selectedRoomId];
-        const occupied = room ? isRoomOccupied(room) : false;
-        const hasBill = !!apiRow?.bill_id || !!storeBill;
+        const occupied = room ? isRoomOccupied(room) && !!activeOccupancyByRoomId[selectedRoomId] : false;
+        const hasBill = !!storeBill;
         const canRenderDetailModal = !!room && occupied && hasBill;
         if (!canRenderDetailModal) return null;
         return (
@@ -655,11 +664,11 @@ export function ChotThang({
             <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden">
               {(() => {
                 const reading = getRow(selectedRoomId);
-              const effectiveBillStatus = apiRow?.bill_status ?? storeBill?.status ?? null;
+              const effectiveBillStatus = storeBill?.status ?? null;
               const canEditBillInputs = canEditBillingInputs(occupied, effectiveBillStatus);
-              const status = room ? getDisplayStatus(room, effectiveBillStatus, !!readingMap[selectedRoomId], cycleId) : "empty";
-              const canConfirm = apiRow?.ui?.can_confirm ?? (storeBill?.status === "draft");
-              const canPay = apiRow?.ui?.can_pay ?? (storeBill?.status === "confirmed" || storeBill?.status === "partial_paid");
+              const status = room && occupied ? getDisplayStatus(room, effectiveBillStatus, !!readingMap[selectedRoomId], cycleId) : "empty";
+              const canConfirm = storeBill?.status === "draft";
+              const canPay = storeBill?.status === "confirmed" || storeBill?.status === "partial_paid";
               const kwh = Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0);
               const remaining = storeBill ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount) : 0;
               return (
@@ -868,9 +877,9 @@ function WorkflowStep({ n, title, desc }: { n: number; title: string; desc: stri
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className={`flex items-center justify-between ${className}`}>
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium tabular-nums">{value}</span>
     </div>

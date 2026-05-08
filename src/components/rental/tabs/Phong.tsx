@@ -5,9 +5,9 @@ import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { useTenant } from "@/hooks/useTenant";
 import { roomService } from "@/services/room.service";
 import { depositService, type RentalDeposit } from "@/services/deposit.service";
-import { occupancyService } from "@/services/occupancy.service";
+import { occupancyService, type RentalOccupancy } from "@/services/occupancy.service";
 import type { Tenant } from "@/services/tenant.service";
-import type { RentalRoom } from "@/lib/finance-types";
+import type { RentalRoom, RentalRoomBill } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
 import { formatMoneyInput, parseMoneyInput, sanitizeDigitsInput } from "@/utils/number-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -82,14 +82,37 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
   const { createAndAssign } = useTenant(async () => {
     await actions.refetch();
   });
+  const [activeOccupancyByRoomId, setActiveOccupancyByRoomId] = useState<Record<string, RentalOccupancy>>({});
+
+  useEffect(() => {
+    const loadActiveOccupancies = async () => {
+      try {
+        setActiveOccupancyByRoomId(await occupancyService.getActiveOccupancyByRoomIds(state.rental.rooms.map((r) => r.id)));
+      } catch (error) {
+        console.error("[rooms] load active occupancies failed", error);
+        setActiveOccupancyByRoomId({});
+      }
+    };
+    void loadActiveOccupancies();
+  }, [state.rental.rooms]);
 
   const now = new Date();
   const cycleId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  const currentBillByRoomId: Record<string, RentalRoomBill | null> = Object.fromEntries(
+    state.rental.rooms.map((room) => {
+      const activeOccupancy = activeOccupancyByRoomId[room.id];
+      const bill = activeOccupancy
+        ? state.rental.roomBills.find((b) => b.cycleId === cycleId && b.occupancyId === activeOccupancy.id)
+        : undefined;
+      return [room.id, bill ?? null];
+    }),
+  );
+
   const debtMap = Object.fromEntries(
-    state.rental.roomBills
-      .filter((b) => b.cycleId === cycleId && b.paidAmount < b.totalAmount)
-      .map((b) => [b.roomId, b.totalAmount - b.paidAmount]),
+    Object.entries(currentBillByRoomId)
+      .filter(([, bill]) => bill && bill.paidAmount < bill.totalAmount)
+      .map(([roomId, bill]) => [roomId, bill!.totalAmount - bill!.paidAmount]),
   );
 
   return (
@@ -177,7 +200,7 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
               const debt = debtMap[room.id] ?? 0;
               const status = getRoomStatus(room, debt > 0);
               const cfg = STATUS_CONFIG[status];
-              const bill = state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId);
+              const bill = currentBillByRoomId[room.id];
               const occupied = isRoomOccupied(room);
               return (
                 <tr
@@ -235,6 +258,7 @@ export function Phong({ onOpenBillDetail }: { onOpenBillDetail?: (roomId: string
         cycleId={cycleId}
         onClose={() => setSelectedRoomId(null)}
         debtMap={debtMap}
+        activeOccupancyByRoomId={activeOccupancyByRoomId}
         onOpenBillDetail={onOpenBillDetail}
       />
     </div>
@@ -246,12 +270,14 @@ function RoomModal({
   cycleId,
   onClose,
   debtMap,
+  activeOccupancyByRoomId,
   onOpenBillDetail,
 }: {
   roomId: string | null;
   cycleId: string;
   onClose: () => void;
   debtMap: Record<string, number>;
+  activeOccupancyByRoomId: Record<string, RentalOccupancy>;
   onOpenBillDetail?: (roomId: string, cycleId: string) => void;
 }) {
   const state = useFinance();
@@ -305,7 +331,10 @@ function RoomModal({
 
   const room = roomId ? state.rental.rooms.find((r) => r.id === roomId) ?? null : null;
   const debt = room ? (debtMap[room.id] ?? 0) : 0;
-  const bill = room ? state.rental.roomBills.find((b) => b.roomId === room.id && b.cycleId === cycleId) : null;
+  const activeOccupancy = room ? activeOccupancyByRoomId[room.id] : undefined;
+  const bill = activeOccupancy
+    ? state.rental.roomBills.find((b) => b.occupancyId === activeOccupancy.id && b.cycleId === cycleId) ?? null
+    : null;
   const canChangeTenant = !bill || bill.paidAmount >= bill.totalAmount;
   const roomDeposit = room ? depositsByRoomId[room.id] : undefined;
   const hasActiveDeposit = roomDeposit?.status === "active";
@@ -347,18 +376,22 @@ function RoomModal({
     if (!userId) throw new Error("Không tìm thấy người dùng đăng nhập");
     const tenants = await listTenants(userId);
     setExistingTenants(tenants);
-    const tenantIdByRoomId = new Map(state.rental.rooms.map((r) => [r.id, r.tenant_id || r.tenantInfo?.id || null]));
+    const activeOccupancyById = new Map(Object.values(activeOccupancyByRoomId).map((occupancy) => [occupancy.id, occupancy]));
     const blocked = new Set<string>();
     const blockedReason: Record<string, string> = {};
     const roomNameByRoomId = new Map(state.rental.rooms.map((r) => [r.id, r.name]));
     state.rental.roomBills.forEach((b) => {
       if (b.status === "cancelled") return;
       if (b.paidAmount >= b.totalAmount) return;
-      const tenantId = tenantIdByRoomId.get(b.roomId);
-      if (tenantId) {
-        blocked.add(tenantId);
-        blockedReason[tenantId] = roomNameByRoomId.get(b.roomId) ? `Đang nợ bill phòng ${roomNameByRoomId.get(b.roomId)}` : "Đang nợ bill";
-      }
+      if (!b.occupancyId) return;
+
+      const activeOccupancy = activeOccupancyById.get(b.occupancyId);
+      if (!activeOccupancy) return;
+
+      blocked.add(activeOccupancy.tenant_id);
+      blockedReason[activeOccupancy.tenant_id] = roomNameByRoomId.get(activeOccupancy.room_id)
+        ? `Đang nợ bill phòng ${roomNameByRoomId.get(activeOccupancy.room_id)}`
+        : "Đang nợ bill";
     });
     setBlockedTenantIds(blocked);
     setBlockedTenantReason(blockedReason);
