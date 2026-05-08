@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { formatMoney } from "@/utils/format";
-import type { RentalDepositForTab } from "@/services/deposit.service";
+import { depositService, type RentalDepositForTab } from "@/services/deposit.service";
 import {
   depositTransactionService,
   type RentalDepositTransaction,
@@ -72,6 +73,33 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function SettlementSummaryRow({
+  label,
+  value,
+  emphasized = false,
+}: {
+  label: string;
+  value: number;
+  emphasized?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${
+        emphasized ? "bg-amber-50 text-amber-800" : "bg-muted/30"
+      }`}
+    >
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span
+        className={`text-sm font-semibold tabular-nums ${
+          emphasized ? "text-amber-800" : "text-foreground"
+        }`}
+      >
+        {formatMoney(value)}
+      </span>
+    </div>
+  );
+}
+
 function signedAmount(transaction: RentalDepositTransaction): string {
   const amount = depositTransactionService.getDepositTransactionSignedAmount(transaction);
   const sign = amount > 0 ? "+" : amount < 0 ? "−" : "";
@@ -85,27 +113,39 @@ function getLifecycleDescription(status: RentalDepositForTab["status"]): string 
 }
 
 export function TienCocDetailModal({
-  deposit,
+  deposit: initialDeposit,
   open,
   onOpenChange,
+  onDepositUpdated,
 }: {
   deposit: RentalDepositForTab | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDepositUpdated?: (deposit: RentalDepositForTab) => void;
 }) {
+  const [currentDeposit, setCurrentDeposit] = useState<RentalDepositForTab | null>(initialDeposit);
   const [transactions, setTransactions] = useState<RentalDepositTransaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [transactionError, setTransactionError] = useState<string | null>(null);
+  const [settlementNote, setSettlementNote] = useState("");
+  const [settling, setSettling] = useState(false);
+  const [settlementError, setSettlementError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !deposit?.id) {
+    setCurrentDeposit(initialDeposit);
+    setSettlementNote("");
+    setSettlementError(null);
+  }, [initialDeposit]);
+
+  useEffect(() => {
+    if (!open || !currentDeposit?.id) {
       setTransactions([]);
       setTransactionError(null);
       return;
     }
 
     let cancelled = false;
-    const depositId = deposit.id;
+    const depositId = currentDeposit.id;
 
     async function loadTransactions() {
       setLoadingTransactions(true);
@@ -127,9 +167,63 @@ export function TienCocDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [deposit?.id, open]);
+  }, [currentDeposit?.id, open]);
 
-  if (!deposit) return null;
+  if (!currentDeposit) return null;
+
+  const deposit = currentDeposit;
+  const summary = depositTransactionService.calculateDepositSummary(transactions, deposit.amount);
+  const canSettle =
+    deposit.status === "pending_settlement" &&
+    summary.remainingHeld > 0 &&
+    !loadingTransactions &&
+    !transactionError &&
+    !settling;
+
+  async function handleFullRefundSettlement() {
+    if (settling) return;
+
+    if (deposit.status !== "pending_settlement") {
+      setSettlementError("Chỉ quyết toán khoản cọc đang chờ quyết toán.");
+      return;
+    }
+
+    if (summary.remainingHeld <= 0) {
+      setSettlementError("Khoản cọc không còn số tiền đang giữ để hoàn.");
+      return;
+    }
+
+    setSettling(true);
+    setSettlementError(null);
+
+    try {
+      const updatedDeposit = await depositService.settlePendingDepositFullRefund(
+        deposit.id,
+        settlementNote,
+      );
+      setCurrentDeposit(updatedDeposit);
+      onDepositUpdated?.(updatedDeposit);
+
+      try {
+        const refreshedTransactions = await depositTransactionService.getDepositTransactions(
+          deposit.id,
+        );
+        setTransactions(refreshedTransactions);
+      } catch (refreshError) {
+        console.error("[deposit-detail] transaction refresh failed", refreshError);
+        setTransactionError("Đã quyết toán cọc nhưng chưa tải lại được lịch sử giao dịch.");
+      }
+
+      toast.success("Đã hoàn toàn bộ tiền cọc và quyết toán.");
+    } catch (err) {
+      console.error("[deposit-detail] settlement failed", err);
+      const message = err instanceof Error ? err.message : "Không thể quyết toán tiền cọc.";
+      setSettlementError(message);
+      toast.error(message);
+    } finally {
+      setSettling(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -262,14 +356,83 @@ export function TienCocDetailModal({
 
           <div className="space-y-5 lg:sticky lg:top-14 lg:self-start">
             <SectionCard title="Tác vụ tiền cọc">
-              <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
-                <p className="text-sm font-medium text-foreground">
-                  Khu vực tác vụ đang được chuẩn bị.
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Các thao tác tiền cọc và luồng quyết toán sẽ được bổ sung ở giai đoạn tiếp theo.
-                </p>
-              </div>
+              {deposit.status === "pending_settlement" ? (
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">Quyết toán cọc</h4>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Luồng này chỉ hoàn toàn bộ số tiền còn giữ và đánh dấu cọc đã quyết toán.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <SettlementSummaryRow label="Cọc ban đầu" value={summary.totalDeposited} />
+                    <SettlementSummaryRow label="Đã hoàn" value={summary.totalRefunded} />
+                    <SettlementSummaryRow label="Đã trừ công nợ" value={summary.totalOffset} />
+                    <SettlementSummaryRow label="Đã giữ lại" value={summary.totalForfeit} />
+                    <SettlementSummaryRow label="Còn giữ" value={summary.remainingHeld} emphasized />
+                  </div>
+
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Ghi chú quyết toán
+                    </span>
+                    <textarea
+                      value={settlementNote}
+                      onChange={(event) => setSettlementNote(event.target.value)}
+                      disabled={settling}
+                      rows={4}
+                      placeholder="Nhập ghi chú hoàn cọc (nếu có)"
+                      className="min-h-24 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+
+                  {settlementError && (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                      {settlementError}
+                    </div>
+                  )}
+
+                  {summary.remainingHeld <= 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                      Không còn số tiền đang giữ để hoàn, nên chưa thể thực hiện tác vụ này.
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => void handleFullRefundSettlement()}
+                    disabled={!canSettle}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {settling && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {settling ? "Đang quyết toán..." : "Hoàn toàn bộ & quyết toán"}
+                  </button>
+                </div>
+              ) : deposit.status === "active" ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+                  <p className="text-sm font-medium text-foreground">Cọc vẫn đang hoạt động.</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Chỉ có thể quyết toán sau khi trả phòng và khoản cọc chuyển sang trạng thái chờ quyết toán.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border bg-muted/20 px-4 py-4">
+                  <p className="text-sm font-medium text-foreground">Cọc đã quyết toán.</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-muted-foreground">Ngày quyết toán</span>
+                      <span className="font-medium text-foreground">{formatDate(deposit.settled_at)}</span>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Ghi chú quyết toán</div>
+                      <p className="mt-1 whitespace-pre-wrap font-medium text-foreground">
+                        {deposit.settlement_note?.trim() || "—"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </SectionCard>
           </div>
         </div>

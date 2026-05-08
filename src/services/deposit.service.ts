@@ -185,6 +185,33 @@ export const depositService = {
     );
   },
 
+  async getDepositForTabById(depositId: string): Promise<RentalDepositForTab | null> {
+    const { data, error } = await (supabase as any)
+      .from("rental_deposits")
+      .select(`
+        id,
+        tenant_id,
+        room_id,
+        amount,
+        occupancy_id,
+        status,
+        note,
+        collected_at,
+        settled_at,
+        vacated_at,
+        settlement_note,
+        created_at,
+        rental_tenants:tenant_id(full_name, phone),
+        rental_rooms:room_id(name),
+        rental_occupancies:occupancy_id(started_at, ended_at)
+      `)
+      .eq("id", depositId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data ? mapDepositForTab(data as DepositJoinRow) : null;
+  },
+
   async listDepositsForTab(): Promise<RentalDepositForTab[]> {
     const { data, error } = await (supabase as any)
       .from("rental_deposits")
@@ -210,6 +237,74 @@ export const depositService = {
 
     if (error) throw error;
     return ((data ?? []) as DepositJoinRow[]).map(mapDepositForTab);
+  },
+
+  async settlePendingDepositFullRefund(
+    depositId: string,
+    settlementNote?: string,
+  ): Promise<RentalDepositForTab> {
+    const deposit = await depositService.getDepositForTabById(depositId);
+
+    if (!deposit) {
+      throw new Error("Không tìm thấy khoản cọc.");
+    }
+
+    if (deposit.status !== "pending_settlement") {
+      throw new Error("Chỉ quyết toán khoản cọc đang chờ quyết toán.");
+    }
+
+    const transactions = await depositTransactionService.getDepositTransactions(deposit.id);
+    const summary = depositTransactionService.calculateDepositSummary(transactions, deposit.amount);
+
+    if (summary.remainingHeld <= 0) {
+      throw new Error("Khoản cọc không còn số tiền đang giữ để hoàn.");
+    }
+
+    await depositTransactionService.createDepositTransaction({
+      depositId: deposit.id,
+      roomId: deposit.room_id,
+      tenantId: deposit.tenant_id,
+      occupancyId: deposit.occupancy_id,
+      transactionType: "refund",
+      amount: summary.remainingHeld,
+      note: settlementNote?.trim() || undefined,
+    });
+
+    const settledAt = new Date().toISOString();
+    const { data, error } = await (supabase as any)
+      .from("rental_deposits")
+      .update({
+        status: "settled",
+        settled_at: settledAt,
+        settlement_note: settlementNote?.trim() || null,
+      })
+      .eq("id", deposit.id)
+      .eq("status", "pending_settlement")
+      .select(`
+        id,
+        tenant_id,
+        room_id,
+        amount,
+        occupancy_id,
+        status,
+        note,
+        collected_at,
+        settled_at,
+        vacated_at,
+        settlement_note,
+        created_at,
+        rental_tenants:tenant_id(full_name, phone),
+        rental_rooms:room_id(name),
+        rental_occupancies:occupancy_id(started_at, ended_at)
+      `)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      throw new Error("Không thể cập nhật trạng thái quyết toán cọc.");
+    }
+
+    return mapDepositForTab(data as DepositJoinRow);
   },
 
   async moveActiveOccupancyDepositToPendingSettlement(

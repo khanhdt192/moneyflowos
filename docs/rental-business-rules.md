@@ -329,6 +329,19 @@ Tab Tiền cọc phải tiếp tục nhìn thấy khoản cọc ngay cả khi:
 - occupancy đã ended
 - phòng đã được gán cho người thuê khác
 
+### 4.6.1 Quyết toán cọc giai đoạn 2A
+
+Luồng quyết toán hiện tại chỉ hỗ trợ thủ công hoàn toàn bộ số tiền còn giữ cho khoản cọc có status `pending_settlement`.
+
+Quy tắc:
+- chỉ tab **Tiền cọc** thực hiện luồng này
+- không quyết toán cọc `active`
+- không hoàn một phần
+- không trừ cọc vào bill
+- không tự động net với công nợ phòng
+- không giữ lại/forfeit trong giai đoạn này
+- khi xác nhận, hệ thống tạo một transaction `refund` bằng đúng `remainingHeld`, sau đó cập nhật deposit thành `settled`, set `settled_at` và lưu `settlement_note`
+
 ---
 
 ## 4.7 Rule của Chốt tháng
@@ -439,8 +452,8 @@ Current rule:
 
 Các nghiệp vụ sau **chưa phải source of truth hiện tại**:
 
-- settlement workflow đầy đủ
-- deposit refund/settlement UX hoàn chỉnh
+- settlement workflow đầy đủ ngoài luồng hoàn toàn bộ thủ công cho `pending_settlement`
+- partial refund / offset / forfeit UX hoàn chỉnh
 - tự động trừ bill vào cọc
 - giữ lại cọc theo hư hỏng
 - partial settlement phức tạp

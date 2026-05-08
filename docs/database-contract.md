@@ -259,6 +259,7 @@ Columns:
 Important notes:
 - Deposit is a separate domain from `rental_room_bills`.
 - Deposit must NOT be netted into monthly bill totals or payment flows.
+- Phase 2A settlement is a manual full-refund flow for deposits already in `pending_settlement`: create one `refund` transaction for the remaining held amount, then set `status = settled`, `settled_at`, and `settlement_note`.
 - Current active deposit lookup for room workflow should resolve through the room's active occupancy.
 - `room_id` remains for compatibility and reporting, but current ownership direction is occupancy-aware.
 
