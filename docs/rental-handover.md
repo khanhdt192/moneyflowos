@@ -53,6 +53,7 @@ Current statuses:
 Current ownership:
 - deposit belongs to occupancy
 - room modal should only show active occupancy deposit
+- deposit detail modal belongs to tab `Tiền cọc`
 
 ### Bill
 Current ownership:
@@ -109,6 +110,14 @@ DB/data cleanup direction:
 - moved away from legacy `(room_id, cycle_id)` assumption for current bill ownership
 - legacy data may still need audit / cleanup / backfill depending on environment
 - regression checklist is now documented in `docs/rental-regression-checklist.md`
+
+### O4 / Deposit detail modal polish
+UI polish completed for deposit detail modal:
+- deposit detail modal now follows the shared rental modal language more closely
+- sticky header + explicit close button
+- desktop 2-column layout
+- clearer separation between read-only summary / transaction history and lifecycle / notes / utility
+- business logic remains unchanged
 
 ==================================================
 IMPORTANT BUSINESS RULES
@@ -187,15 +196,17 @@ Layout direction already established for detail modals:
 
 Current known UI direction:
 - Room detail modal should feel consistent with Bill detail modal
-- Deposit detail modal should be aligned to the same modal language
+- Deposit detail modal now uses the same modal language direction
 - avoid ad-hoc layout differences across detail modals in the rental module
 
+Current visual reference:
+- deposit detail modal is now a valid reference for spacing, hierarchy, and section grouping
+- Room/Bill detail modals should be polished toward the same standard
+
 Current next UI/UX priority:
-- review and improve **tab chi tiết cọc / deposit detail UI**
-- make it visually closer to:
-  - chi tiết phòng
-  - chi tiết bill
-- improve consistency, spacing, hierarchy, and action grouping
+- review and improve **Room detail modal** and **Bill detail modal**
+- align both modals with the newer deposit detail modal standard
+- improve consistency of spacing, border/shadow rhythm, hierarchy, and action grouping across all rental detail modals
 
 ==================================================
 VALIDATION RULE
@@ -250,8 +261,8 @@ Current focus after occupancy migration:
 - continue O3 regression testing when needed
 - use `docs/rental-regression-checklist.md` for post-PR validation
 - optionally audit / clean legacy data in older environments
-- move back to **Tiền cọc** feature work
-- improve **deposit detail modal UI/UX** so it matches the visual quality and structure of Room/Bill detail modals
+- continue polishing the shared rental modal system
+- improve **Room detail modal** and **Bill detail modal** so they match the newer deposit detail modal standard
 
 ==================================================
 IMPORTANT MIGRATION NOTE
@@ -277,9 +288,10 @@ NEXT RECOMMENDED TASK
 ==================================================
 
 Recommended next task:
-- improve `Tiền cọc` detail UI/UX
-- align deposit detail modal with Room/Bill detail modal language
-- keep business logic stable while polishing the user-facing modal structure
+- polish `Phòng` detail modal UI/UX
+- polish `Chốt tháng` / bill detail modal UI/UX
+- align Room/Bill detail modals with the newer deposit detail modal language
+- keep business logic stable while improving the shared modal system
 
 ==================================================
 HANDOVER
@@ -296,6 +308,8 @@ Current architecture direction is occupancy-aware and the core flow has been tes
 7. save readings again
 
 This flow is now passing in the current environment.
+
+Deposit detail modal polish has also been merged, so the current UI consistency task is no longer `Tiền cọc` first.
 
 When touching:
 - billing
