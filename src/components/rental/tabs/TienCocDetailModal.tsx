@@ -73,33 +73,6 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function SettlementSummaryRow({
-  label,
-  value,
-  emphasized = false,
-}: {
-  label: string;
-  value: number;
-  emphasized?: boolean;
-}) {
-  return (
-    <div
-      className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${
-        emphasized ? "bg-amber-50 text-amber-800" : "bg-muted/30"
-      }`}
-    >
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span
-        className={`text-sm font-semibold tabular-nums ${
-          emphasized ? "text-amber-800" : "text-foreground"
-        }`}
-      >
-        {formatMoney(value)}
-      </span>
-    </div>
-  );
-}
-
 function signedAmount(transaction: RentalDepositTransaction): string {
   const amount = depositTransactionService.getDepositTransactionSignedAmount(transaction);
   const sign = amount > 0 ? "+" : amount < 0 ? "−" : "";
@@ -268,6 +241,20 @@ export function TienCocDetailModal({
                 <InfoRow label="Đã cọc">
                   <span className="tabular-nums">{formatMoney(deposit.amount)}</span>
                 </InfoRow>
+                <InfoRow label="Đã hoàn">
+                  <span className="tabular-nums">{formatMoney(summary.totalRefunded)}</span>
+                </InfoRow>
+                <InfoRow label="Đã trừ công nợ">
+                  <span className="tabular-nums">{formatMoney(summary.totalOffset)}</span>
+                </InfoRow>
+                <InfoRow label="Đã giữ lại">
+                  <span className="tabular-nums">{formatMoney(summary.totalForfeit)}</span>
+                </InfoRow>
+                <InfoRow label="Còn giữ">
+                  <span className="font-semibold tabular-nums text-amber-700">
+                    {formatMoney(summary.remainingHeld)}
+                  </span>
+                </InfoRow>
                 <InfoRow label="Trạng thái">
                   <div className="space-y-1">
                     <StatusBadge status={deposit.status} />
@@ -358,21 +345,6 @@ export function TienCocDetailModal({
             <SectionCard title="Tác vụ tiền cọc">
               {deposit.status === "pending_settlement" ? (
                 <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground">Quyết toán cọc</h4>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Luồng này chỉ hoàn toàn bộ số tiền còn giữ và đánh dấu cọc đã quyết toán.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <SettlementSummaryRow label="Cọc ban đầu" value={summary.totalDeposited} />
-                    <SettlementSummaryRow label="Đã hoàn" value={summary.totalRefunded} />
-                    <SettlementSummaryRow label="Đã trừ công nợ" value={summary.totalOffset} />
-                    <SettlementSummaryRow label="Đã giữ lại" value={summary.totalForfeit} />
-                    <SettlementSummaryRow label="Còn giữ" value={summary.remainingHeld} emphasized />
-                  </div>
-
                   <label className="block space-y-1.5">
                     <span className="text-xs font-medium text-muted-foreground">
                       Ghi chú quyết toán
@@ -417,20 +389,11 @@ export function TienCocDetailModal({
                   </p>
                 </div>
               ) : (
-                <div className="rounded-lg border border-border bg-muted/20 px-4 py-4">
+                <div className="rounded-lg border border-border bg-muted/20 px-4 py-6 text-center">
                   <p className="text-sm font-medium text-foreground">Cọc đã quyết toán.</p>
-                  <div className="mt-3 space-y-2 text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="text-muted-foreground">Ngày quyết toán</span>
-                      <span className="font-medium text-foreground">{formatDate(deposit.settled_at)}</span>
-                    </div>
-                    <div>
-                      <div className="text-muted-foreground">Ghi chú quyết toán</div>
-                      <p className="mt-1 whitespace-pre-wrap font-medium text-foreground">
-                        {deposit.settlement_note?.trim() || "—"}
-                      </p>
-                    </div>
-                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Khoản cọc này đã xử lý xong, không còn tác vụ quyết toán tiếp theo.
+                  </p>
                 </div>
               )}
             </SectionCard>

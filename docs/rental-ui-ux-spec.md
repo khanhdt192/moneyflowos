@@ -227,9 +227,9 @@ LEFT:
 
 RIGHT:
 - action/workflow panel for deposit lifecycle tasks
-- for `pending_settlement`, show the basic full-refund settlement workflow with summary rows, settlement note input, and one primary action: `Hoàn toàn bộ & quyết toán`
+- for `pending_settlement`, show the basic full-refund settlement workflow with only settlement note input and one primary action: `Hoàn toàn bộ & quyết toán`
 - for `active`, show a read-only message that settlement becomes available after checkout
-- for `settled`, show a read-only settled state with settled date/note when available
+- for `settled`, show a narrow read-only action-state message only
 
 ### 6.3 Rules
 - deposit detail modal should follow the same shared modal system as Room/Bill
