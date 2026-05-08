@@ -34,6 +34,19 @@ export const occupancyService = {
     return (data as RentalOccupancy | null) ?? null;
   },
 
+  async listActiveOccupanciesByRoomIds(roomIds: string[]): Promise<RentalOccupancy[]> {
+    if (!roomIds.length) return [];
+
+    const { data, error } = await (supabase as any)
+      .from("rental_occupancies")
+      .select("*")
+      .in("room_id", roomIds)
+      .eq("status", "active");
+
+    if (error) throw error;
+    return (data ?? []) as RentalOccupancy[];
+  },
+
   async createOccupancy(input: CreateOccupancyInput): Promise<RentalOccupancy> {
     const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(input.roomId);
     if (activeOccupancy) {

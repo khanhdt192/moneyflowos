@@ -5,6 +5,7 @@ import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import { useTenant } from "@/hooks/useTenant";
 import { roomService } from "@/services/room.service";
 import { depositService, type RentalDeposit } from "@/services/deposit.service";
+import { occupancyService } from "@/services/occupancy.service";
 import type { Tenant } from "@/services/tenant.service";
 import type { RentalRoom } from "@/lib/finance-types";
 import { formatMoney } from "@/utils/format";
@@ -279,11 +280,19 @@ function RoomModal({
     const loadDeposits = async () => {
       try {
         const rooms = state.rental.rooms;
-        const tenantIdByRoomId = new Map(rooms.map((r) => [r.id, r.tenant_id || r.tenantInfo?.id || null]));
-        const deposits = await depositService.listCurrentActiveDepositsByRoomIds(rooms.map((r) => r.id));
+        const activeOccupancies = await occupancyService.listActiveOccupanciesByRoomIds(rooms.map((r) => r.id));
+        const deposits = await depositService.listCurrentActiveDepositsByOccupancyIds(
+          activeOccupancies.map((occupancy) => occupancy.id),
+        );
+        const activeOccupancyById = new Map(activeOccupancies.map((occupancy) => [occupancy.id, occupancy]));
         const byRoom = deposits.reduce<Record<string, RentalDeposit>>((acc, item) => {
-          const currentTenantId = tenantIdByRoomId.get(item.room_id);
-          if (currentTenantId && item.tenant_id === currentTenantId && !acc[item.room_id]) acc[item.room_id] = item;
+          if (!item.occupancy_id) return acc;
+
+          const activeOccupancy = activeOccupancyById.get(item.occupancy_id);
+          if (activeOccupancy && !acc[activeOccupancy.room_id]) {
+            acc[activeOccupancy.room_id] = item;
+          }
+
           return acc;
         }, {});
         setDepositsByRoomId(byRoom);
