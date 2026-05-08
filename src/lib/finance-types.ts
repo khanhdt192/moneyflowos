@@ -112,6 +112,7 @@ export interface RentalRoomBill {
   id: string;
   roomId: string;
   cycleId: string;
+  occupancyId?: string | null;
   rentAmount: number;
   electricityAmount: number;
   waterAmount: number;

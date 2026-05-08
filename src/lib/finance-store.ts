@@ -18,6 +18,7 @@ import {
 } from "./finance-types";
 import { supabase } from "@/integrations/supabase/client";
 import { cloud, fetchAllForUser } from "./supabase-data";
+import { occupancyService } from "@/services/occupancy.service";
 
 const UNDO_LIMIT = 25;
 
@@ -80,6 +81,7 @@ function mapBillRowToState(b: any, cycleId: string): RentalRoomBill {
     id: b.id,
     roomId: b.room_id,
     cycleId,
+    occupancyId: b.occupancy_id ?? null,
     rentAmount: Number(b.rent_amount ?? 0),
     electricityAmount: Number(b.electricity_amount ?? 0),
     waterAmount: Number(b.water_amount ?? 0),
@@ -450,25 +452,30 @@ class FinanceStore {
         electricityReadings: this.state.rental.electricityReadings.map((r) => (r.id === nextReading.id ? final : r)),
       }, false);
       const room = this.state.rental.rooms.find((r) => r.id === roomId);
-      const existingBill = this.state.rental.roomBills.find((b) => b.roomId === roomId && b.cycleId === cycleId);
-      const occupied = !!(room?.tenantInfo?.id || room?.tenant_id || room?.occupied);
+      const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
+      const existingBill = activeOccupancy
+        ? this.state.rental.roomBills.find((b) => b.occupancyId === activeOccupancy.id && b.cycleId === cycleId)
+        : undefined;
+      const occupied = !!activeOccupancy && !!(room?.tenantInfo?.id || room?.tenant_id || room?.occupied);
 
-      if (room && occupied && (!existingBill || existingBill.status === "draft")) {
+      if (room && occupied && activeOccupancy && (!existingBill || existingBill.status === "draft")) {
         const amounts = calculateRentalBillAmounts(room, this.state.rental.settings, final);
-        const billRow = await cloud.upsertBill(this.userId, roomId, dbCycleId, amounts, "draft");
-        const nextBill = mapBillRowToState(billRow, cycleId);
-        const existingIdx = this.state.rental.roomBills.findIndex((b) => b.id === nextBill.id || (b.roomId === roomId && b.cycleId === cycleId));
-        const updatedBills = [...this.state.rental.roomBills];
-        if (existingIdx >= 0) updatedBills[existingIdx] = nextBill;
-        else updatedBills.push(nextBill);
-        this.mutateRental({ roomBills: updatedBills }, false);
+        const billRow = await cloud.upsertBill(this.userId, roomId, dbCycleId, activeOccupancy.id, amounts, "draft");
+        if (billRow) {
+          const nextBill = mapBillRowToState(billRow, cycleId);
+          const existingIdx = this.state.rental.roomBills.findIndex((b) => b.id === nextBill.id);
+          const updatedBills = [...this.state.rental.roomBills];
+          if (existingIdx >= 0) updatedBills[existingIdx] = nextBill;
+          else updatedBills.push(nextBill);
+          this.mutateRental({ roomBills: updatedBills }, false);
+        }
       } else if (existingBill && existingBill.status !== "draft") {
-        const billRow = await cloud.getRoomBillByRoomAndCycle(this.userId, roomId, dbCycleId);
+        const billRow = await cloud.getRoomBillById(existingBill.id);
         if (billRow) {
           const nextBill = mapBillRowToState(billRow, cycleId);
           this.mutateRental({
             roomBills: this.state.rental.roomBills.map((b) =>
-              b.id === nextBill.id || (b.roomId === roomId && b.cycleId === cycleId) ? nextBill : b,
+              b.id === nextBill.id ? nextBill : b,
             ),
           }, false);
         }
@@ -508,7 +515,7 @@ class FinanceStore {
     const doneBills = this.state.rental.roomBills.filter((b) => b.cycleId === cycleId && b.status !== "draft" && b.status !== "cancelled");
 
     for (const bill of draftBills) {
-      await cloud.confirmBill(bill.roomId, bill.cycleId);
+      await cloud.confirmBillById(bill.id);
     }
 
     if (draftBills.length > 0) await this.refetch();
@@ -531,7 +538,7 @@ class FinanceStore {
     });
 
     try {
-      await cloud.confirmBill(bill.roomId, bill.cycleId);
+      await cloud.confirmBillById(bill.id);
       await this.refetch();
     } catch {
       toast.error("Không chốt được hóa đơn");
@@ -567,7 +574,7 @@ class FinanceStore {
     });
 
     try {
-      await cloud.payBill(bill.roomId, bill.cycleId, amount, method, note);
+      await cloud.payBillById(bill.id, amount, method, note);
       await this.refetch();
     } catch (err) {
       console.error("[store] recordPayment failed", err);
@@ -585,7 +592,7 @@ class FinanceStore {
       payments: this.state.rental.payments.filter((p) => p.billId !== billId),
     });
     try {
-      await cloud.resetBillToDraft(bill.roomId, bill.cycleId);
+      await cloud.resetBillToDraftById(bill.id);
       await cloud.deletePaymentsByBill(billId);
       await this.refetch();
     } catch {

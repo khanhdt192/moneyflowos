@@ -47,6 +47,14 @@ export const occupancyService = {
     return (data ?? []) as RentalOccupancy[];
   },
 
+  async getActiveOccupancyByRoomIds(roomIds: string[]): Promise<Record<string, RentalOccupancy>> {
+    const occupancies = await occupancyService.listActiveOccupanciesByRoomIds(roomIds);
+    return occupancies.reduce<Record<string, RentalOccupancy>>((acc, occupancy) => {
+      acc[occupancy.room_id] = occupancy;
+      return acc;
+    }, {});
+  },
+
   async createOccupancy(input: CreateOccupancyInput): Promise<RentalOccupancy> {
     const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(input.roomId);
     if (activeOccupancy) {
