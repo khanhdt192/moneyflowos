@@ -223,6 +223,7 @@ export async function fetchAllForUser(userId: string): Promise<FinanceState> {
     id: r.id,
     roomId: r.room_id,
     cycleId: cycleFormatMap[r.cycle_id] ?? r.cycle_id,
+    occupancyId: (r as any).occupancy_id ?? null,
     startIndex: num(r.start_index),
     endIndex: num(r.end_index),
     consumptionKwh: num(r.consumption_kwh),
@@ -451,17 +452,74 @@ export const cloud = {
   },
 
   /* electricity readings */
-  async upsertReading(userId: string, roomId: string, cycleId: string, startIndex: number, endIndex: number, waterM3: number) {
-    const { data, error } = await supabase
+  async getReadingByOccupancyAndCycle(userId: string, occupancyId: string, cycleId: string) {
+    const { data, error } = await (supabase as any)
       .from("rental_electricity_readings")
-      .upsert(
-        { user_id: userId, room_id: roomId, cycle_id: cycleId, start_index: startIndex, end_index: endIndex, water_m3: waterM3 },
-        { onConflict: "room_id,cycle_id" },
-      )
-      .select()
-      .single();
+      .select("*")
+      .eq("user_id", userId)
+      .eq("occupancy_id", occupancyId)
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
     if (error) throw error;
     return data;
+  },
+
+  async upsertReading(userId: string, roomId: string, cycleId: string, occupancyId: string, startIndex: number, endIndex: number, waterM3: number) {
+    const readingPatch = { start_index: startIndex, end_index: endIndex, water_m3: waterM3 };
+    const existing = await this.getReadingByOccupancyAndCycle(userId, occupancyId, cycleId);
+
+    if (existing) {
+      const { data, error } = await (supabase as any)
+        .from("rental_electricity_readings")
+        .update(readingPatch)
+        .eq("id", existing.id)
+        .eq("occupancy_id", occupancyId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
+    const { data, error } = await (supabase as any)
+      .from("rental_electricity_readings")
+      .insert({
+        user_id: userId,
+        room_id: roomId,
+        cycle_id: cycleId,
+        occupancy_id: occupancyId,
+        ...readingPatch,
+      })
+      .select()
+      .single();
+
+    if (!error) return data;
+
+    const current = await this.getReadingByOccupancyAndCycle(userId, occupancyId, cycleId);
+    if (current) {
+      const { data: updated, error: updateError } = await (supabase as any)
+        .from("rental_electricity_readings")
+        .update(readingPatch)
+        .eq("id", current.id)
+        .eq("occupancy_id", occupancyId)
+        .select()
+        .single();
+      if (updateError) throw updateError;
+      return updated;
+    }
+
+    // Legacy room+cycle constraints may still exist in some databases. Never
+    // update a null/different occupancy row as the current active occupancy.
+    const { data: legacyRoomCycleReading, error: legacyLookupError } = await (supabase as any)
+      .from("rental_electricity_readings")
+      .select("id, occupancy_id")
+      .eq("user_id", userId)
+      .eq("room_id", roomId)
+      .eq("cycle_id", cycleId)
+      .maybeSingle();
+    if (legacyLookupError) throw legacyLookupError;
+    if (legacyRoomCycleReading && (legacyRoomCycleReading as any).occupancy_id !== occupancyId) return null;
+
+    throw error;
   },
 
   async getRoomBillByRoomAndCycle(userId: string, roomId: string, cycleId: string) {

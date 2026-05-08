@@ -131,6 +131,7 @@ export interface RentalElectricityReading {
   id: string;
   roomId: string;
   cycleId: string;
+  occupancyId?: string | null;
   startIndex: number;
   endIndex: number;
   consumptionKwh: number;

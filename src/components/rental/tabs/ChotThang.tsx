@@ -208,9 +208,13 @@ export function ChotThang({
   );
 
   const readingMap = Object.fromEntries(
-    state.rental.electricityReadings
-      .filter((r) => r.cycleId === cycleId)
-      .map((r) => [r.roomId, r]),
+    state.rental.rooms.map((room) => {
+      const activeOccupancy = activeOccupancyByRoomId[room.id];
+      const reading = activeOccupancy
+        ? state.rental.electricityReadings.find((r) => r.cycleId === cycleId && r.occupancyId === activeOccupancy.id)
+        : undefined;
+      return [room.id, reading];
+    }),
   );
 
   const allRooms      = state.rental.rooms;
