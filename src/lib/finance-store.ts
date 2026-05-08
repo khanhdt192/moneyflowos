@@ -432,33 +432,56 @@ class FinanceStore {
     const consumptionKwh = Math.max(endIndex - startIndex, 0);
     const prevReadings = this.state.rental.electricityReadings;
     const prevBills = this.state.rental.roomBills;
+    const room = this.state.rental.rooms.find((r) => r.id === roomId);
+    const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
+    const occupied = !!activeOccupancy && !!(room?.tenantInfo?.id || room?.tenant_id || room?.occupied);
 
-    // Optimistic update
-    const existing = this.state.rental.electricityReadings.find((r) => r.roomId === roomId && r.cycleId === cycleId);
-    const nextReading = { id: existing?.id ?? `${cycleId}:${roomId}`, roomId, cycleId, startIndex, endIndex, consumptionKwh, waterM3: waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0) };
+    if (!room || !occupied || !activeOccupancy) {
+      toast.error("Phòng chưa có lượt ở đang hoạt động");
+      throw new Error("Active occupancy is required to save readings");
+    }
+
+    // Optimistic update keyed by active occupancy + cycle. Do not reuse a
+    // legacy room+cycle row because it may belong to a previous occupancy.
+    const existing = this.state.rental.electricityReadings.find(
+      (r) => r.occupancyId === activeOccupancy.id && r.cycleId === cycleId,
+    );
+    const nextReading = {
+      id: existing?.id ?? `${cycleId}:${activeOccupancy.id}`,
+      roomId,
+      cycleId,
+      occupancyId: activeOccupancy.id,
+      startIndex,
+      endIndex,
+      consumptionKwh,
+      waterM3: waterM3 > 0 ? waterM3 : (existing?.waterM3 ?? 0),
+    };
     this.mutateRental({
       electricityReadings: existing
-        ? this.state.rental.electricityReadings.map((r) => (r.roomId === roomId && r.cycleId === cycleId ? nextReading : r))
+        ? this.state.rental.electricityReadings.map((r) => (r.id === existing.id ? nextReading : r))
         : [...this.state.rental.electricityReadings, nextReading],
     });
 
     try {
       // Ensure cycle exists
       const dbCycleId = await cloud.upsertCycle(this.userId, month, year);
-      const row = await cloud.upsertReading(this.userId, roomId, dbCycleId, startIndex, endIndex, waterM3);
+      const row = await cloud.upsertReading(this.userId, roomId, dbCycleId, activeOccupancy.id, startIndex, endIndex, waterM3);
+      if (!row) throw new Error("Reading belongs to another occupancy for this room and cycle");
       // Update the reading id from temp to real; keep cycleId as formatted "YYYY-MM" string (not the UUID)
-      const final = { ...nextReading, id: row.id, cycleId: cycleId, consumptionKwh: Math.max(row.end_index - row.start_index, 0), waterM3: row.water_m3 ?? 0 };
+      const final = {
+        ...nextReading,
+        id: row.id,
+        cycleId: cycleId,
+        occupancyId: row.occupancy_id ?? activeOccupancy.id,
+        consumptionKwh: Math.max(row.end_index - row.start_index, 0),
+        waterM3: row.water_m3 ?? 0,
+      };
       this.mutateRental({
         electricityReadings: this.state.rental.electricityReadings.map((r) => (r.id === nextReading.id ? final : r)),
       }, false);
-      const room = this.state.rental.rooms.find((r) => r.id === roomId);
-      const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
-      const existingBill = activeOccupancy
-        ? this.state.rental.roomBills.find((b) => b.occupancyId === activeOccupancy.id && b.cycleId === cycleId)
-        : undefined;
-      const occupied = !!activeOccupancy && !!(room?.tenantInfo?.id || room?.tenant_id || room?.occupied);
+      const existingBill = this.state.rental.roomBills.find((b) => b.occupancyId === activeOccupancy.id && b.cycleId === cycleId);
 
-      if (room && occupied && activeOccupancy && (!existingBill || existingBill.status === "draft")) {
+      if (!existingBill || existingBill.status === "draft") {
         const amounts = calculateRentalBillAmounts(room, this.state.rental.settings, final);
         const billRow = await cloud.upsertBill(this.userId, roomId, dbCycleId, activeOccupancy.id, amounts, "draft");
         if (billRow) {
@@ -469,7 +492,7 @@ class FinanceStore {
           else updatedBills.push(nextBill);
           this.mutateRental({ roomBills: updatedBills }, false);
         }
-      } else if (existingBill && existingBill.status !== "draft") {
+      } else {
         const billRow = await cloud.getRoomBillById(existingBill.id);
         if (billRow) {
           const nextBill = mapBillRowToState(billRow, cycleId);
