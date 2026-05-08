@@ -20,6 +20,9 @@ Deposit
 
 Bill
 → owned by occupancy + billing cycle
+
+Reading
+→ owned by occupancy + billing cycle for current workflow
 ```
 
 Current room workflow should resolve through:
@@ -56,6 +59,11 @@ Current ownership:
 - bill belongs to occupancy + billing cycle
 - current room workflow should resolve bill through active occupancy
 
+### Reading
+Current ownership:
+- reading belongs to occupancy + billing cycle for current workflow
+- Chốt tháng should hydrate only the active occupancy reading
+
 ==================================================
 CURRENT IMPLEMENTATION STATUS
 ==================================================
@@ -90,10 +98,17 @@ Billing occupancy-awareness:
 - Chốt tháng prefers active occupancy bill
 - current bill ownership no longer assumes only `room + cycle`
 
+### O2D / Reading fix
+Reading occupancy-awareness:
+- new readings linked to occupancy
+- Chốt tháng hydrates readings by active occupancy
+- old readings no longer leak into new tenant workflow in the same room + cycle
+
 ### O3
-DB constraint migration:
-- moving away from legacy `(room_id, cycle_id)` uniqueness
-- direction is occupancy-aware bill ownership
+DB/data cleanup direction:
+- moved away from legacy `(room_id, cycle_id)` assumption for current bill ownership
+- legacy data may still need audit / cleanup / backfill depending on environment
+- regression checklist is now documented in `docs/rental-regression-checklist.md`
 
 ==================================================
 IMPORTANT BUSINESS RULES
@@ -105,10 +120,15 @@ Room modal should only show:
 - current active occupancy deposit
 - current active occupancy bill
 
+Chốt tháng should only hydrate:
+- current active occupancy reading
+- current active occupancy bill
+
 Old occupancy data must not leak into:
 - current tenant
 - current room bill
 - current room deposit
+- current reading form
 
 ---
 
@@ -139,53 +159,43 @@ room + cycle
 
 for current room workflow.
 
+---
+
+## Reading
+
+Current reading ownership for current workflow:
+
+```text
+occupancy + cycle
+```
+
+not:
+
+```text
+room + cycle
+```
+
+for Chốt tháng hydration.
+
 ==================================================
 UI / UX DIRECTION
 ==================================================
 
-Layout:
-- LEFT = full read-only bill summary
-- RIGHT = workflow panel
+Layout direction already established for detail modals:
+- LEFT = read-only summary / information
+- RIGHT = workflow / actions
 
-LEFT SIDE:
-- Tiền thuê
-- Tiền điện
-- Tiền nước
-- Wifi
-- Vệ sinh
-- Phụ phí khác
-- Tổng
-- Đã thu
-- Còn thiếu
+Current known UI direction:
+- Room detail modal should feel consistent with Bill detail modal
+- Deposit detail modal should be aligned to the same modal language
+- avoid ad-hoc layout differences across detail modals in the rental module
 
-Rules:
-- read-only only
-- no inputs
-- no inline "Sửa"
-
---------------------------------------------------
-
-RIGHT SIDE = 3 sections
-
-1. Nhập điện nước
-- ONLY when bill = null / draft
-- hidden for confirmed / partial_paid / paid / cancelled
-- default read-only
-- click "Sửa" → editable
-
-2. Thu tiền
-- Đã thu
-- Còn thiếu
-- Số tiền thu
-- Phương thức
-- Ghi nhận
-
-3. Hành động khác
-- Đánh dấu đã thu đủ
-- Xuất PDF
-
-Panel rule:
-- left and right must have equal height
+Current next UI/UX priority:
+- review and improve **tab chi tiết cọc / deposit detail UI**
+- make it visually closer to:
+  - chi tiết phòng
+  - chi tiết bill
+- improve consistency, spacing, hierarchy, and action grouping
 
 ==================================================
 VALIDATION RULE
@@ -234,33 +244,63 @@ Supabase:
 CURRENT PRIORITIES
 ==================================================
 
+Occupancy migration core is now considered functionally complete for current workflow.
+
 Current focus after occupancy migration:
-- O3 regression testing
-- occupancy-aware billing verification
-- occupancy-aware deposit verification
-- cleanup remaining legacy room-centric assumptions
+- continue O3 regression testing when needed
+- use `docs/rental-regression-checklist.md` for post-PR validation
+- optionally audit / clean legacy data in older environments
+- move back to **Tiền cọc** feature work
+- improve **deposit detail modal UI/UX** so it matches the visual quality and structure of Room/Bill detail modals
 
 ==================================================
 IMPORTANT MIGRATION NOTE
 ==================================================
 
-Legacy rooms created before occupancy rollout may still contain:
-- `tenant_id`
-- `occupied = true`
+Legacy data created before occupancy rollout may still contain:
+- `tenant_id` / `occupied` without active occupancy rows
+- deposits with `occupancy_id = null`
+- bills with `occupancy_id = null`
+- readings with `occupancy_id = null`
+- deposit transactions with `occupancy_id = null`
 
-without active occupancy rows.
+Those datasets may require:
+- occupancy backfill
+- deposit backfill
+- bill/reading cleanup
+- transaction cleanup
 
-Those datasets require occupancy backfill before current occupancy-aware billing workflow works correctly.
+depending on the environment.
+
+==================================================
+NEXT RECOMMENDED TASK
+==================================================
+
+Recommended next task:
+- improve `Tiền cọc` detail UI/UX
+- align deposit detail modal with Room/Bill detail modal language
+- keep business logic stable while polishing the user-facing modal structure
 
 ==================================================
 HANDOVER
 ==================================================
 
-Current architecture direction is now occupancy-aware.
+Current architecture direction is occupancy-aware and the core flow has been tested through:
+
+1. add room + tenant + deposit
+2. save readings
+3. create bill
+4. mark paid
+5. checkout
+6. assign new tenant in same room + same cycle
+7. save readings again
+
+This flow is now passing in the current environment.
 
 When touching:
 - billing
 - deposits
+- readings
 - checkout
 - current room workflow
 
