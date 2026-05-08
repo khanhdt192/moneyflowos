@@ -116,7 +116,12 @@ UI polish completed for deposit detail modal:
 - deposit detail modal now follows the shared rental modal language more closely
 - sticky header + explicit close button
 - desktop 2-column layout
-- clearer separation between read-only summary / transaction history and lifecycle / notes / utility
+- left side now owns the full read-only snapshot:
+  - deposit summary
+  - status/date information
+  - notes
+  - transaction history
+- right side is now reserved as the future deposit action/workflow panel
 - business logic remains unchanged
 
 ==================================================
@@ -201,7 +206,10 @@ Current known UI direction:
 
 Current visual reference:
 - deposit detail modal is now a valid reference for spacing, hierarchy, and section grouping
-- Room/Bill detail modals should be polished toward the same standard
+- its current structure is:
+  - LEFT = full read-only snapshot + notes + history
+  - RIGHT = reserved action/workflow shell for the next deposit phase
+- Room/Bill detail modals should be polished toward the same visual standard
 
 Current next UI/UX priority:
 - review and improve **Room detail modal** and **Bill detail modal**
@@ -309,7 +317,7 @@ Current architecture direction is occupancy-aware and the core flow has been tes
 
 This flow is now passing in the current environment.
 
-Deposit detail modal polish has also been merged, so the current UI consistency task is no longer `Tiền cọc` first.
+Deposit detail modal polish and layout cleanup have been merged, so the current UI consistency task is no longer `Tiền cọc` first.
 
 When touching:
 - billing
