@@ -28,7 +28,7 @@ Phòng modal, Chốt tháng modal, and Tiền cọc detail modal must share:
 
 Layout rule:
 - LEFT = data (read-only summary / information)
-- RIGHT = workflow / actions / lifecycle / utility
+- RIGHT = workflow / actions
 
 Direction:
 - all rental detail modals should feel like one shared system
@@ -63,7 +63,7 @@ Rules:
 ### 3.4 Two-column direction
 Desktop:
 - LEFT = read-only summary / history
-- RIGHT = workflow / actions / lifecycle context
+- RIGHT = workflow / action area
 
 Mobile:
 - stack vertically
@@ -219,19 +219,22 @@ Rules:
 
 ### 6.2 Detail modal direction
 LEFT:
-- read-only deposit summary
+- full read-only deposit snapshot
+- deposit summary
+- status/date information
+- notes
 - transaction history
 
 RIGHT:
-- lifecycle state
-- notes
-- utility / secondary actions
+- reserved workflow/action panel for future deposit actions
+- settlement/refund workflow will belong here in future phases
 
 ### 6.3 Rules
 - deposit detail modal should follow the same shared modal system as Room/Bill
-- transaction history should be visually separated from lifecycle context
-- lifecycle/status context belongs on the right side
-- avoid mixing workflow actions into transaction history sections
+- avoid duplicating read-only information across both sides
+- all current read-only information belongs on the left side
+- the right side should be reserved for future deposit actions
+- do not fill the right side with redundant utility/read-only sections just to satisfy layout
 
 ---
 
@@ -252,6 +255,7 @@ Avoid:
 - unclear action hierarchy
 - multiple modal styles in same module
 - inconsistent border/shadow/card systems across rental modals
+- filling workflow panels with duplicated read-only information
 
 ---
 
