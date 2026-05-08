@@ -14,6 +14,9 @@ If code assumptions conflict with these rules, follow these rules.
 - Do not change schema unless explicitly requested.
 - Do not change business logic unless explicitly requested.
 - Keep changes minimal and scoped.
+- Project-specific docs/rules in this repo override generic coding guidelines.
+- Do not ask clarifying questions if the answer can be verified from repo docs or code.
+- If repo docs/code still do not confirm an assumption, say so clearly instead of guessing.
 
 ---
 
@@ -26,11 +29,48 @@ Before any rental task, always read:
 - `docs/rental-validation-rules.md`
 - `docs/rental-handover.md`
 
+If the task touches rental business ownership or workflow boundaries, also read:
+- `docs/rental-business-rules.md`
+
 ---
 
-## 3. Rental domain rules
+## 3. General coding behavior
 
-### 3.1 Tenant model
+### 3.1 Think before coding
+Before implementing:
+- state important assumptions explicitly
+- verify assumptions from repo docs/code first
+- if multiple interpretations exist, surface them instead of silently picking one
+- if a simpler approach exists, prefer it
+- if something is still unclear after verification, stop and say exactly what is unclear
+
+### 3.2 Simplicity first
+- write the minimum code that solves the requested problem
+- do not add extra features, abstractions, flexibility, or configurability that were not requested
+- do not add speculative error handling for scenarios that are not part of the task
+- if the solution feels overcomplicated, simplify it
+
+### 3.3 Surgical changes
+When editing existing code:
+- touch only what is needed for the requested task
+- do not refactor unrelated code
+- do not clean up adjacent code just because you noticed it
+- match the existing local style unless the task explicitly asks for a broader refactor
+- remove only the unused code/imports created by your own change
+- if you notice unrelated issues, mention them separately instead of changing them
+
+### 3.4 Goal-driven execution
+For non-trivial tasks:
+- translate the task into explicit success criteria
+- prefer verifiable checks already available in the repo
+- do not invent or add tests unless the task asks for tests or the repo already supports that pattern
+- use practical verification such as build/typecheck/manual flow expectations when appropriate
+
+---
+
+## 4. Rental domain rules
+
+### 4.1 Tenant model
 - `rental_rooms` does NOT store tenant name text.
 - Use `tenant_id`.
 - Tenant display name comes from `rental_tenants.full_name`.
@@ -39,7 +79,7 @@ Forbidden:
 - using `rental_rooms.tenant`
 - storing tenant name directly in `rental_rooms`
 
-### 3.2 Billing cycle model
+### 4.2 Billing cycle model
 - Billing uses UUID `cycle_id`.
 - UI may show month/year, but backend logic must resolve to `rental_billing_cycles.id`.
 
@@ -47,23 +87,23 @@ Forbidden:
 - using `YYYY-MM` as the final DB key
 - bypassing `rental_billing_cycles`
 
-### 3.3 Occupancy
+### 4.3 Occupancy
 - Canonical occupancy = tenant assigned.
 - Prefer `tenant_id` over raw `occupied` if they conflict.
 - Service layer must keep `occupied` synchronized.
 
-### 3.4 Tenant mobility guards
+### 4.4 Tenant mobility guards
 - Do NOT allow changing/removing tenant when the current room has an unpaid bill.
 - Do NOT allow assigning a tenant who has unpaid bills elsewhere.
 - Active deposit also blocks tenant change/remove in tab `Phòng`.
 
-### 3.5 Deposit domain
+### 4.5 Deposit domain
 - Deposit belongs to `public.rental_deposits`.
 - Deposit is separate from monthly bills and payments.
 - Do NOT net deposit into bill totals.
 - Enforce one active deposit per room.
 
-### 3.6 Chốt tháng edit lock
+### 4.6 Chốt tháng edit lock
 Billing inputs are editable only when:
 - room is occupied
 - effective bill status is `null` or `draft`
@@ -76,15 +116,15 @@ Billing inputs must be locked when status is:
 
 ---
 
-## 4. Validation rules AI must respect
+## 5. Validation rules AI must respect
 
-### 4.1 Digits-only fields
+### 5.1 Digits-only fields
 Apply digits-only input rules to:
 - điện
 - nước
 - SĐT
 
-### 4.2 Money fields
+### 5.2 Money fields
 Apply money-input formatting rules to:
 - giá thuê
 - tiền cọc
@@ -93,7 +133,7 @@ Apply money-input formatting rules to:
 Use shared helpers from the codebase when available.
 Do not re-implement duplicate local helper logic without a reason.
 
-### 4.3 Save-level guards
+### 5.3 Save-level guards
 Do not rely only on input type.
 Keep save-level validation for:
 - no negative values
@@ -104,7 +144,7 @@ Keep save-level validation for:
 
 ---
 
-## 5. Query and view rules
+## 6. Query and view rules
 
 - Verify exact columns before using any table or view.
 - Never filter by a column that the view does not expose.
@@ -113,7 +153,7 @@ Keep save-level validation for:
 
 ---
 
-## 6. Mutation rules
+## 7. Mutation rules
 
 After any successful mutation:
 - refetch data
@@ -127,7 +167,7 @@ Forbidden:
 
 ---
 
-## 7. Supabase schema change rules
+## 8. Supabase schema change rules
 
 When adding or changing Supabase tables, AI must treat these as separate required steps:
 1. schema / columns / constraints / indexes
@@ -154,7 +194,7 @@ OR
 
 ---
 
-## 8. Prompt rules for Codex
+## 9. Prompt rules for Codex
 
 Every Codex prompt must:
 1. start with the required file-reading block
@@ -176,7 +216,7 @@ Be explicit.
 
 ---
 
-## 9. DOC IMPACT CHECK
+## 10. DOC IMPACT CHECK
 
 After each task, evaluate whether these docs need updates:
 - `docs/database-contract.md`
@@ -190,7 +230,7 @@ If update is needed, update the docs explicitly.
 
 ---
 
-## 10. When uncertain
+## 11. When uncertain
 
 Say one of these clearly:
 - `I cannot verify this`
