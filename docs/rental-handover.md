@@ -2,19 +2,152 @@
 
 Project: MoneyFlowOS (rental module)
 
-Current focus:
-- Chốt tháng modal UI/UX refactor
-- numeric input system (IME-safe + money formatting)
+==================================================
+CURRENT ARCHITECTURE DIRECTION
+==================================================
+
+Canonical domain ownership direction:
+
+```text
+Room
+→ physical room / current room state
+
+Occupancy
+→ one tenant stay in one room during a period
+
+Deposit
+→ owned by occupancy
+
+Bill
+→ owned by occupancy + billing cycle
+```
+
+Current room workflow should resolve through:
+- active occupancy
+- not broad room-only assumptions
+
+---
+
+## Current practical meaning
+
+### Room
+Represents:
+- current room state
+- current assigned tenant
+- room master data
+
+`rental_rooms.tenant_id` and `occupied` still exist for backward UI compatibility.
+
+### Occupancy
+Represents:
+- one tenant staying in one room during a specific period
+
+Current statuses:
+- `active`
+- `ended`
+
+### Deposit
+Current ownership:
+- deposit belongs to occupancy
+- room modal should only show active occupancy deposit
+
+### Bill
+Current ownership:
+- bill belongs to occupancy + billing cycle
+- current room workflow should resolve bill through active occupancy
 
 ==================================================
-UI/UX DIRECTION
+CURRENT IMPLEMENTATION STATUS
+==================================================
+
+Completed:
+
+### O1
+DB foundation:
+- `rental_occupancies`
+- `occupancy_id` added to:
+  - deposits
+  - bills
+  - deposit transactions
+  - readings
+
+### O2A
+Occupancy app-layer lifecycle:
+- create occupancy on assign tenant
+- end occupancy on checkout
+- deposit linked to occupancy
+
+### O2B
+Deposit occupancy-awareness:
+- current room deposit lookup uses active occupancy
+- checkout moves current occupancy deposit to `pending_settlement`
+- old deposits no longer leak into current room workflow
+
+### O2C
+Billing occupancy-awareness:
+- new bills linked to occupancy
+- room modal bill lookup uses active occupancy
+- Chốt tháng prefers active occupancy bill
+- current bill ownership no longer assumes only `room + cycle`
+
+### O3
+DB constraint migration:
+- moving away from legacy `(room_id, cycle_id)` uniqueness
+- direction is occupancy-aware bill ownership
+
+==================================================
+IMPORTANT BUSINESS RULES
+==================================================
+
+## Current room workflow
+
+Room modal should only show:
+- current active occupancy deposit
+- current active occupancy bill
+
+Old occupancy data must not leak into:
+- current tenant
+- current room bill
+- current room deposit
+
+---
+
+## Checkout
+
+Checkout flow must:
+1. move deposit to `pending_settlement`
+2. end occupancy
+3. clear room tenant
+
+Deposit settlement is handled later in tab `Tiền cọc`.
+
+---
+
+## Billing
+
+Current billing ownership:
+
+```text
+occupancy + cycle
+```
+
+not:
+
+```text
+room + cycle
+```
+
+for current room workflow.
+
+==================================================
+UI / UX DIRECTION
 ==================================================
 
 Layout:
 - LEFT = full read-only bill summary
 - RIGHT = workflow panel
 
-LEFT SIDE (must always contain):
+LEFT SIDE:
 - Tiền thuê
 - Tiền điện
 - Tiền nước
@@ -80,11 +213,14 @@ ChatGPT:
 - design logic
 - write Codex prompts
 - review PRs
+- review DB migrations
+- keep docs synchronized with architecture direction
 
 User:
 - run Codex
 - run SQL
 - verify UI
+- verify business workflow
 
 Codex:
 - implement exactly per prompt
@@ -92,26 +228,44 @@ Codex:
 
 Supabase:
 - only modified via explicit SQL
+- new tables require explicit RLS review/policies
 
 ==================================================
-PROMPT RULE
+CURRENT PRIORITIES
 ==================================================
 
-Every prompt must:
-- be explicit
-- define scope
-- define what NOT to change
+Current focus after occupancy migration:
+- O3 regression testing
+- occupancy-aware billing verification
+- occupancy-aware deposit verification
+- cleanup remaining legacy room-centric assumptions
 
 ==================================================
-CURRENT STATE
+IMPORTANT MIGRATION NOTE
 ==================================================
 
-- PR45 rejected (bad UX)
-- PR46 merged (numeric + money input fixed)
-- next step: refine Chốt tháng right panel UI
+Legacy rooms created before occupancy rollout may still contain:
+- `tenant_id`
+- `occupied = true`
+
+without active occupancy rows.
+
+Those datasets require occupancy backfill before current occupancy-aware billing workflow works correctly.
 
 ==================================================
 HANDOVER
 ==================================================
 
-Confirm you understand this context before continuing.
+Current architecture direction is now occupancy-aware.
+
+When touching:
+- billing
+- deposits
+- checkout
+- current room workflow
+
+prefer:
+- active occupancy ownership
+
+over:
+- broad room-based assumptions.
