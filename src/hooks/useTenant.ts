@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { roomService } from "@/services/room.service";
 import { depositService } from "@/services/deposit.service";
+import { occupancyService, type RentalOccupancy } from "@/services/occupancy.service";
 import {
   tenantService,
   type CreateTenantInput,
@@ -26,6 +27,8 @@ export function useTenant(refetchRooms: RefetchRooms) {
 
       let createdTenantId: string | null = null;
       let assigned = false;
+      let createdOccupancyId: string | null = null;
+      let createdDepositId: string | null = null;
 
       try {
         const tenant = await tenantService.createTenant(payload);
@@ -34,19 +37,44 @@ export function useTenant(refetchRooms: RefetchRooms) {
         await roomService.assignTenant(roomId, tenant.id);
         assigned = true;
 
+        const occupancy = await occupancyService.createOccupancy({
+          userId: payload.userId,
+          roomId,
+          tenantId: tenant.id,
+        });
+        createdOccupancyId = occupancy.id;
+
         if (deposit && deposit.amount >= 0) {
-          await depositService.createDeposit({
+          const createdDeposit = await depositService.createDeposit({
             tenantId: tenant.id,
             roomId,
+            occupancyId: occupancy.id,
             amount: deposit.amount,
             note: deposit.note,
           });
+          createdDepositId = createdDeposit.id;
         }
 
         await refetchRooms();
         return tenant;
       } catch (err) {
         console.error("[useTenant.createAndAssign] failed", err);
+
+        if (createdDepositId) {
+          try {
+            await depositService.deleteDepositForRollback(createdDepositId);
+          } catch (rollbackErr) {
+            console.error("[useTenant.createAndAssign] rollback deleteDepositForRollback failed", rollbackErr);
+          }
+        }
+
+        if (createdOccupancyId) {
+          try {
+            await occupancyService.deleteOccupancy(createdOccupancyId);
+          } catch (rollbackErr) {
+            console.error("[useTenant.createAndAssign] rollback deleteOccupancy failed", rollbackErr);
+          }
+        }
 
         if (assigned) {
           try {
@@ -97,16 +125,34 @@ export function useTenant(refetchRooms: RefetchRooms) {
       setError(null);
 
       let pendingDepositId: string | null = null;
+      let endedOccupancyId: string | null = null;
 
       try {
         const pendingDeposit =
           await depositService.moveActiveRoomDepositToPendingSettlement(roomId);
         pendingDepositId = pendingDeposit?.id ?? null;
 
+        const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
+        if (activeOccupancy) {
+          const endedOccupancy = await occupancyService.endOccupancy(activeOccupancy.id);
+          endedOccupancyId = endedOccupancy.id;
+        }
+
         await roomService.removeTenant(roomId);
         await refetchRooms();
       } catch (err) {
         console.error("[useTenant.removeFromRoom] failed", err);
+
+        if (endedOccupancyId) {
+          try {
+            await occupancyService.restoreOccupancyToActive(endedOccupancyId);
+          } catch (rollbackErr) {
+            console.error(
+              "[useTenant.removeFromRoom] rollback restoreOccupancyToActive failed",
+              rollbackErr,
+            );
+          }
+        }
 
         if (pendingDepositId) {
           try {
@@ -133,12 +179,17 @@ export function useTenant(refetchRooms: RefetchRooms) {
       setIsLoading(true);
       setError(null);
 
-      let previous: { tenantId: string | null } | null = null;
+      let previous: { tenantId: string | null; userId: string } | null = null;
       let assigned = false;
       let pendingDepositId: string | null = null;
+      let previousOccupancy: RentalOccupancy | null = null;
+      let endedPreviousOccupancyId: string | null = null;
+      let createdOccupancyId: string | null = null;
+      let createdDepositId: string | null = null;
 
       try {
         previous = await roomService.getTenantAssignment(roomId);
+        previousOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
 
         const pendingDeposit =
           await depositService.moveActiveRoomDepositToPendingSettlement(roomId);
@@ -147,18 +198,59 @@ export function useTenant(refetchRooms: RefetchRooms) {
         await roomService.assignTenant(roomId, tenantId);
         assigned = true;
 
+        if (previousOccupancy) {
+          const endedOccupancy = await occupancyService.endOccupancy(previousOccupancy.id);
+          endedPreviousOccupancyId = endedOccupancy.id;
+        }
+
+        const occupancy = await occupancyService.createOccupancy({
+          userId: previous.userId,
+          roomId,
+          tenantId,
+        });
+        createdOccupancyId = occupancy.id;
+
         if (deposit && deposit.amount >= 0) {
-          await depositService.createDeposit({
+          const createdDeposit = await depositService.createDeposit({
             tenantId,
             roomId,
+            occupancyId: occupancy.id,
             amount: deposit.amount,
             note: deposit.note,
           });
+          createdDepositId = createdDeposit.id;
         }
 
         await refetchRooms();
       } catch (err) {
         console.error("[useTenant.assignExisting] failed", err);
+
+        if (createdDepositId) {
+          try {
+            await depositService.deleteDepositForRollback(createdDepositId);
+          } catch (rollbackErr) {
+            console.error("[useTenant.assignExisting] rollback deleteDepositForRollback failed", rollbackErr);
+          }
+        }
+
+        if (createdOccupancyId) {
+          try {
+            await occupancyService.deleteOccupancy(createdOccupancyId);
+          } catch (rollbackErr) {
+            console.error("[useTenant.assignExisting] rollback deleteOccupancy failed", rollbackErr);
+          }
+        }
+
+        if (endedPreviousOccupancyId) {
+          try {
+            await occupancyService.restoreOccupancyToActive(endedPreviousOccupancyId);
+          } catch (rollbackErr) {
+            console.error(
+              "[useTenant.assignExisting] rollback restoreOccupancyToActive failed",
+              rollbackErr,
+            );
+          }
+        }
 
         if (assigned && previous) {
           try {

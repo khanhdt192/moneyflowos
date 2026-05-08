@@ -7,6 +7,7 @@ export type RentalDepositTransaction = {
   deposit_id: string;
   room_id: string;
   tenant_id: string;
+  occupancy_id: string | null;
   transaction_type: DepositTransactionType;
   amount: number;
   note: string | null;
@@ -17,6 +18,7 @@ export type CreateDepositTransactionInput = {
   depositId: string;
   roomId: string;
   tenantId: string;
+  occupancyId: string;
   transactionType: DepositTransactionType;
   amount: number;
   note?: string;
@@ -126,6 +128,7 @@ export const depositTransactionService = {
         deposit_id: input.depositId,
         room_id: input.roomId,
         tenant_id: input.tenantId,
+        occupancy_id: input.occupancyId,
         transaction_type: input.transactionType,
         amount: input.amount,
         note: input.note ?? null,

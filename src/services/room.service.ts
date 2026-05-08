@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type RoomTenantAssignment = {
   tenantId: string | null;
   occupied: boolean;
+  userId: string;
 };
 
 export const roomService = {
@@ -18,7 +19,7 @@ export const roomService = {
   async getTenantAssignment(roomId: string): Promise<RoomTenantAssignment> {
     const { data, error } = await (supabase as any)
       .from("rental_rooms")
-      .select("tenant_id, occupied")
+      .select("tenant_id, occupied, user_id")
       .eq("id", roomId)
       .single();
 
@@ -27,6 +28,7 @@ export const roomService = {
     return {
       tenantId: (data?.tenant_id as string | null) ?? null,
       occupied: Boolean(data?.occupied),
+      userId: data?.user_id as string,
     };
   },
 

@@ -4,6 +4,7 @@ import { depositTransactionService } from "@/services/rental/deposit.service";
 export type CreateDepositInput = {
   tenantId: string;
   roomId: string;
+  occupancyId: string;
   amount: number;
   note?: string;
 };
@@ -12,6 +13,7 @@ export type RentalDeposit = {
   id: string;
   tenant_id: string;
   room_id: string;
+  occupancy_id: string | null;
   amount: number;
   status: "active" | "pending_settlement" | "settled";
   note: string | null;
@@ -46,6 +48,7 @@ function mapDepositForTab(row: DepositJoinRow): RentalDepositForTab {
     id: row.id,
     tenant_id: row.tenant_id,
     room_id: row.room_id,
+    occupancy_id: row.occupancy_id ?? null,
     amount: Number(row.amount ?? 0),
     status: row.status,
     note: row.note ?? null,
@@ -67,6 +70,7 @@ export const depositService = {
       .insert({
         tenant_id: input.tenantId,
         room_id: input.roomId,
+        occupancy_id: input.occupancyId,
         amount: input.amount,
         note: input.note ?? null,
         status: "active",
@@ -83,6 +87,7 @@ export const depositService = {
         depositId: deposit.id,
         roomId: deposit.room_id,
         tenantId: deposit.tenant_id,
+        occupancyId: input.occupancyId,
         transactionType: "create",
         amount: deposit.amount,
         note: deposit.note ?? undefined,
@@ -93,6 +98,22 @@ export const depositService = {
     }
 
     return deposit;
+  },
+
+  async deleteDepositForRollback(depositId: string): Promise<void> {
+    const { error: transactionError } = await (supabase as any)
+      .from("rental_deposit_transactions")
+      .delete()
+      .eq("deposit_id", depositId);
+
+    if (transactionError) throw transactionError;
+
+    const { error } = await (supabase as any)
+      .from("rental_deposits")
+      .delete()
+      .eq("id", depositId);
+
+    if (error) throw error;
   },
 
   async getActiveDepositByTenant(tenantId: string): Promise<RentalDeposit | null> {
@@ -144,6 +165,7 @@ export const depositService = {
         tenant_id,
         room_id,
         amount,
+        occupancy_id,
         status,
         note,
         collected_at,
