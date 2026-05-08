@@ -72,15 +72,6 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function DateBlock({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-foreground">{formatDate(value)}</div>
-    </div>
-  );
-}
-
 function signedAmount(transaction: RentalDepositTransaction): string {
   const amount = depositTransactionService.getDepositTransactionSignedAmount(transaction);
   const sign = amount > 0 ? "+" : amount < 0 ? "−" : "";
@@ -184,11 +175,35 @@ export function TienCocDetailModal({
                   <span className="tabular-nums">{formatMoney(deposit.amount)}</span>
                 </InfoRow>
                 <InfoRow label="Trạng thái">
-                  <StatusBadge status={deposit.status} />
+                  <div className="space-y-1">
+                    <StatusBadge status={deposit.status} />
+                    <div className="text-xs font-normal text-muted-foreground">
+                      {getLifecycleDescription(deposit.status)}
+                    </div>
+                  </div>
                 </InfoRow>
                 <InfoRow label="Ngày thu">{formatDate(deposit.collected_at)}</InfoRow>
                 <InfoRow label="Ngày trả phòng">{formatDate(deposit.vacated_at)}</InfoRow>
                 <InfoRow label="Ngày quyết toán">{formatDate(deposit.settled_at)}</InfoRow>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="Ghi chú">
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground">Ghi chú cọc</div>
+                  <p className="mt-1 whitespace-pre-wrap text-foreground">
+                    {deposit.note?.trim() || "—"}
+                  </p>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Ghi chú quyết toán
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-foreground">
+                    {deposit.settlement_note?.trim() || "—"}
+                  </p>
+                </div>
               </div>
             </SectionCard>
 
@@ -246,52 +261,15 @@ export function TienCocDetailModal({
           </div>
 
           <div className="space-y-5 lg:sticky lg:top-14 lg:self-start">
-            <SectionCard title="Trạng thái & vòng đời">
-              <div className="space-y-3">
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">Trạng thái</span>
-                    <StatusBadge status={deposit.status} />
-                  </div>
-                  <p className="mt-2 text-sm text-foreground">
-                    {getLifecycleDescription(deposit.status)}
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  <DateBlock label="Ngày thu" value={deposit.collected_at} />
-                  <DateBlock label="Ngày trả phòng" value={deposit.vacated_at} />
-                  <DateBlock label="Ngày quyết toán" value={deposit.settled_at} />
-                </div>
+            <SectionCard title="Tác vụ tiền cọc">
+              <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  Khu vực tác vụ đang được chuẩn bị.
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Các thao tác tiền cọc và luồng quyết toán sẽ được bổ sung ở giai đoạn tiếp theo.
+                </p>
               </div>
-            </SectionCard>
-
-            <SectionCard title="Ghi chú">
-              <div className="space-y-3 text-sm">
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground">Ghi chú cọc</div>
-                  <p className="mt-1 whitespace-pre-wrap text-foreground">
-                    {deposit.note?.trim() || "—"}
-                  </p>
-                </div>
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground">
-                    Ghi chú quyết toán
-                  </div>
-                  <p className="mt-1 whitespace-pre-wrap text-foreground">
-                    {deposit.settlement_note?.trim() || "—"}
-                  </p>
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Tiện ích">
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="w-full rounded-lg border border-border bg-background py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/40"
-              >
-                Đóng
-              </button>
             </SectionCard>
           </div>
         </div>
