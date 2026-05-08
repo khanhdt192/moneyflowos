@@ -11,32 +11,73 @@ The rental module must behave as ONE consistent system.
 Key rule:
 - Phòng = management
 - Chốt tháng = billing & payment
+- Tiền cọc = deposit lifecycle / settlement tracking
 
 ---
 
 ## 2. Shared modal system
 
-Phòng modal and Chốt tháng modal must share:
+Phòng modal, Chốt tháng modal, and Tiền cọc detail modal must share:
 - same modal shell
 - sticky header
-- one close button
+- one explicit close button
 - same spacing and card system
+- same section heading style
+- same border / shadow rhythm
 - 2-column layout on desktop
 
 Layout rule:
-- LEFT = data (read-only summary)
-- RIGHT = workflow / actions
+- LEFT = data (read-only summary / information)
+- RIGHT = workflow / actions / lifecycle / utility
+
+Direction:
+- all rental detail modals should feel like one shared system
+- avoid ad-hoc layout differences across domains
 
 ---
 
-## 3. Tab Phòng
+## 3. Shared modal visual rules
 
-### 3.1 Purpose
+### 3.1 Header
+Rules:
+- sticky header
+- compact density
+- one clear title line
+- status badge aligned in header area
+- one explicit close button
+
+### 3.2 Section cards
+Rules:
+- use consistent rounded corners
+- use consistent border treatment
+- use light shadow rhythm consistently
+- consistent internal padding
+- consistent spacing between sections
+
+### 3.3 Section headings
+Rules:
+- compact uppercase labels allowed
+- muted foreground hierarchy
+- consistent spacing above and below headings
+
+### 3.4 Two-column direction
+Desktop:
+- LEFT = read-only summary / history
+- RIGHT = workflow / actions / lifecycle context
+
+Mobile:
+- stack vertically
+
+---
+
+## 4. Tab Phòng
+
+### 4.1 Purpose
 - room management
 - tenant management
 - deposit management
 
-### 3.2 Billing rule
+### 4.2 Billing rule
 Phòng is VIEW ONLY for billing.
 
 Forbidden:
@@ -46,21 +87,36 @@ Forbidden:
 Use navigation:
 - "Thông tin hoá đơn" → open Chốt tháng
 
-### 3.3 Tenant rules
+### 4.3 Tenant rules
 - cannot change/remove tenant if:
   - room has unpaid bill
   - OR active deposit exists
 
-### 3.4 Deposit (Phase 1)
+### 4.4 Deposit (Phase 1)
 - show deposit in room modal
 - deposit is read-only after creation
 - no refund / settlement UI
 
+### 4.5 Room modal direction
+LEFT:
+- room summary
+- tenant summary
+- bill/deposit references
+
+RIGHT:
+- workflow actions
+- checkout flow
+- utility actions
+
+Rules:
+- keep workflow/actions separated from read-only summary
+- avoid mixing editable controls into summary sections
+
 ---
 
-## 4. Tab Chốt tháng (FINAL DIRECTION)
+## 5. Tab Chốt tháng (FINAL DIRECTION)
 
-### 4.1 Header
+### 5.1 Header
 Format:
 - Phòng 201 • Tên người thuê • Hóa đơn tháng MM/YYYY • [Status]
 
@@ -71,7 +127,7 @@ Rules:
 
 ---
 
-### 4.2 Two-column layout
+### 5.2 Two-column layout
 
 LEFT:
 - full read-only summary
@@ -83,7 +139,7 @@ Both sides must have equal visual height.
 
 ---
 
-### 4.3 LEFT – Tổng hợp hóa đơn
+### 5.3 LEFT – Tổng hợp hóa đơn
 
 Must always include:
 - Tiền thuê
@@ -105,7 +161,7 @@ Rules:
 
 ---
 
-### 4.4 RIGHT – Workflow panel
+### 5.4 RIGHT – Workflow panel
 
 3 sections only:
 
@@ -154,7 +210,32 @@ Rules:
 
 ---
 
-## 5. Button hierarchy
+## 6. Tab Tiền cọc
+
+### 6.1 Purpose
+- deposit lifecycle tracking
+- settlement visibility
+- deposit transaction history
+
+### 6.2 Detail modal direction
+LEFT:
+- read-only deposit summary
+- transaction history
+
+RIGHT:
+- lifecycle state
+- notes
+- utility / secondary actions
+
+### 6.3 Rules
+- deposit detail modal should follow the same shared modal system as Room/Bill
+- transaction history should be visually separated from lifecycle context
+- lifecycle/status context belongs on the right side
+- avoid mixing workflow actions into transaction history sections
+
+---
+
+## 7. Button hierarchy
 
 - Primary = main action (Chốt / Ghi nhận)
 - Secondary = normal actions
@@ -162,7 +243,7 @@ Rules:
 
 ---
 
-## 6. Anti-patterns
+## 8. Anti-patterns
 
 Avoid:
 - mixing input into summary
@@ -170,10 +251,12 @@ Avoid:
 - duplicate information across left/right
 - unclear action hierarchy
 - multiple modal styles in same module
+- inconsistent border/shadow/card systems across rental modals
 
 ---
 
-## 7. Summary
+## 9. Summary
 
 Phòng = quản lý
 Chốt tháng = thanh toán
+Tiền cọc = vòng đời tiền cọc
