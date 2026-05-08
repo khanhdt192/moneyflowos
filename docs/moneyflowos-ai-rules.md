@@ -127,7 +127,34 @@ Forbidden:
 
 ---
 
-## 7. Prompt rules for Codex
+## 7. Supabase schema change rules
+
+When adding or changing Supabase tables, AI must treat these as separate required steps:
+1. schema / columns / constraints / indexes
+2. foreign keys
+3. RLS policies
+4. app-layer usage validation
+
+Required rule:
+- creating a new table is NOT complete until RLS policies are reviewed and added explicitly
+
+For every new table used by the frontend or client-side Supabase calls, AI must check:
+- whether RLS is enabled
+- whether SELECT policy exists
+- whether INSERT policy exists
+- whether UPDATE policy exists
+- whether DELETE policy exists when needed
+
+Do NOT assume a new table is usable just because SQL table creation succeeded.
+
+When proposing DB SQL for a new table, AI should either:
+- include RLS policy SQL in the same DB task
+OR
+- explicitly state that RLS policy creation is a required follow-up before app code can use the table
+
+---
+
+## 8. Prompt rules for Codex
 
 Every Codex prompt must:
 1. start with the required file-reading block
@@ -149,7 +176,7 @@ Be explicit.
 
 ---
 
-## 8. DOC IMPACT CHECK
+## 9. DOC IMPACT CHECK
 
 After each task, evaluate whether these docs need updates:
 - `docs/database-contract.md`
@@ -163,7 +190,7 @@ If update is needed, update the docs explicitly.
 
 ---
 
-## 9. When uncertain
+## 10. When uncertain
 
 Say one of these clearly:
 - `I cannot verify this`
