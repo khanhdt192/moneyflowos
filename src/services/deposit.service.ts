@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { occupancyService } from "@/services/occupancy.service";
 import { depositTransactionService } from "@/services/rental/deposit.service";
 
 export type CreateDepositInput = {
@@ -28,11 +29,14 @@ export type RentalDepositForTab = RentalDeposit & {
   tenant_full_name: string;
   tenant_phone: string | null;
   room_name: string;
+  occupancy_started_at: string | null;
+  occupancy_ended_at: string | null;
 };
 
 type DepositJoinRow = RentalDeposit & {
   rental_tenants?: { full_name?: string | null; phone?: string | null } | { full_name?: string | null; phone?: string | null }[] | null;
   rental_rooms?: { name?: string | null } | { name?: string | null }[] | null;
+  rental_occupancies?: { started_at?: string | null; ended_at?: string | null } | { started_at?: string | null; ended_at?: string | null }[] | null;
 };
 
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
@@ -43,6 +47,7 @@ function firstJoin<T>(value: T | T[] | null | undefined): T | null {
 function mapDepositForTab(row: DepositJoinRow): RentalDepositForTab {
   const tenant = firstJoin(row.rental_tenants);
   const room = firstJoin(row.rental_rooms);
+  const occupancy = firstJoin(row.rental_occupancies);
 
   return {
     id: row.id,
@@ -60,6 +65,8 @@ function mapDepositForTab(row: DepositJoinRow): RentalDepositForTab {
     tenant_full_name: tenant?.full_name || "—",
     tenant_phone: tenant?.phone ?? null,
     room_name: room?.name || "—",
+    occupancy_started_at: occupancy?.started_at ?? null,
+    occupancy_ended_at: occupancy?.ended_at ?? null,
   };
 }
 
@@ -130,11 +137,11 @@ export const depositService = {
     return (data as RentalDeposit | null) ?? null;
   },
 
-  async getActiveDepositByRoom(roomId: string): Promise<RentalDeposit | null> {
+  async getActiveDepositByOccupancy(occupancyId: string): Promise<RentalDeposit | null> {
     const { data, error } = await (supabase as any)
       .from("rental_deposits")
       .select("*")
-      .eq("room_id", roomId)
+      .eq("occupancy_id", occupancyId)
       .eq("status", "active")
       .order("collected_at", { ascending: false })
       .limit(1)
@@ -144,17 +151,38 @@ export const depositService = {
     return (data as RentalDeposit | null) ?? null;
   },
 
-  async listCurrentActiveDepositsByRoomIds(roomIds: string[]): Promise<RentalDeposit[]> {
-    if (!roomIds.length) return [];
+  async listCurrentActiveDepositsByOccupancyIds(occupancyIds: string[]): Promise<RentalDeposit[]> {
+    if (!occupancyIds.length) return [];
+
     const { data, error } = await (supabase as any)
       .from("rental_deposits")
       .select("*")
-      .in("room_id", roomIds)
+      .in("occupancy_id", occupancyIds)
       .eq("status", "active")
       .order("collected_at", { ascending: false });
 
     if (error) throw error;
     return (data ?? []) as RentalDeposit[];
+  },
+
+  async getCurrentRoomDepositByActiveOccupancy(roomId: string): Promise<RentalDeposit | null> {
+    const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
+    if (!activeOccupancy) return null;
+
+    return depositService.getActiveDepositByOccupancy(activeOccupancy.id);
+  },
+
+  async getActiveDepositByRoom(roomId: string): Promise<RentalDeposit | null> {
+    return depositService.getCurrentRoomDepositByActiveOccupancy(roomId);
+  },
+
+  async listCurrentActiveDepositsByRoomIds(roomIds: string[]): Promise<RentalDeposit[]> {
+    if (!roomIds.length) return [];
+
+    const activeOccupancies = await occupancyService.listActiveOccupanciesByRoomIds(roomIds);
+    return depositService.listCurrentActiveDepositsByOccupancyIds(
+      activeOccupancies.map((occupancy) => occupancy.id),
+    );
   },
 
   async listDepositsForTab(): Promise<RentalDepositForTab[]> {
@@ -174,7 +202,8 @@ export const depositService = {
         settlement_note,
         created_at,
         rental_tenants:tenant_id(full_name, phone),
-        rental_rooms:room_id(name)
+        rental_rooms:room_id(name),
+        rental_occupancies:occupancy_id(started_at, ended_at)
       `)
       .in("status", ["active", "pending_settlement", "settled"])
       .order("collected_at", { ascending: false });
@@ -183,21 +212,30 @@ export const depositService = {
     return ((data ?? []) as DepositJoinRow[]).map(mapDepositForTab);
   },
 
-  async moveActiveRoomDepositToPendingSettlement(
-    roomId: string,
+  async moveActiveOccupancyDepositToPendingSettlement(
+    occupancyId: string,
     vacatedAt = new Date().toISOString(),
   ): Promise<RentalDeposit | null> {
     const { data, error } = await (supabase as any)
       .from("rental_deposits")
       .update({ status: "pending_settlement", vacated_at: vacatedAt })
-      .eq("room_id", roomId)
+      .eq("occupancy_id", occupancyId)
       .eq("status", "active")
-      .select("*");
+      .select("*")
+      .maybeSingle();
 
     if (error) throw error;
+    return (data as RentalDeposit | null) ?? null;
+  },
 
-    const deposits = (data ?? []) as RentalDeposit[];
-    return deposits[0] ?? null;
+  async moveActiveRoomDepositToPendingSettlement(
+    roomId: string,
+    vacatedAt = new Date().toISOString(),
+  ): Promise<RentalDeposit | null> {
+    const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
+    if (!activeOccupancy) return null;
+
+    return depositService.moveActiveOccupancyDepositToPendingSettlement(activeOccupancy.id, vacatedAt);
   },
 
   async restoreDepositToActive(depositId: string): Promise<void> {

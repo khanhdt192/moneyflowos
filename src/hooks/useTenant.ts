@@ -128,13 +128,17 @@ export function useTenant(refetchRooms: RefetchRooms) {
       let endedOccupancyId: string | null = null;
 
       try {
-        const pendingDeposit =
-          await depositService.moveActiveRoomDepositToPendingSettlement(roomId);
-        pendingDepositId = pendingDeposit?.id ?? null;
-
         const activeOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
         if (activeOccupancy) {
-          const endedOccupancy = await occupancyService.endOccupancy(activeOccupancy.id);
+          const vacatedAt = new Date().toISOString();
+          const pendingDeposit =
+            await depositService.moveActiveOccupancyDepositToPendingSettlement(
+              activeOccupancy.id,
+              vacatedAt,
+            );
+          pendingDepositId = pendingDeposit?.id ?? null;
+
+          const endedOccupancy = await occupancyService.endOccupancy(activeOccupancy.id, vacatedAt);
           endedOccupancyId = endedOccupancy.id;
         }
 
@@ -183,6 +187,7 @@ export function useTenant(refetchRooms: RefetchRooms) {
       let assigned = false;
       let pendingDepositId: string | null = null;
       let previousOccupancy: RentalOccupancy | null = null;
+      let previousVacatedAt: string | null = null;
       let endedPreviousOccupancyId: string | null = null;
       let createdOccupancyId: string | null = null;
       let createdDepositId: string | null = null;
@@ -191,15 +196,24 @@ export function useTenant(refetchRooms: RefetchRooms) {
         previous = await roomService.getTenantAssignment(roomId);
         previousOccupancy = await occupancyService.getActiveOccupancyByRoom(roomId);
 
-        const pendingDeposit =
-          await depositService.moveActiveRoomDepositToPendingSettlement(roomId);
-        pendingDepositId = pendingDeposit?.id ?? null;
+        if (previousOccupancy) {
+          previousVacatedAt = new Date().toISOString();
+          const pendingDeposit =
+            await depositService.moveActiveOccupancyDepositToPendingSettlement(
+              previousOccupancy.id,
+              previousVacatedAt,
+            );
+          pendingDepositId = pendingDeposit?.id ?? null;
+        }
 
         await roomService.assignTenant(roomId, tenantId);
         assigned = true;
 
         if (previousOccupancy) {
-          const endedOccupancy = await occupancyService.endOccupancy(previousOccupancy.id);
+          const endedOccupancy = await occupancyService.endOccupancy(
+            previousOccupancy.id,
+            previousVacatedAt ?? undefined,
+          );
           endedPreviousOccupancyId = endedOccupancy.id;
         }
 
