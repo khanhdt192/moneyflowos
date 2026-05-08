@@ -1,13 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Home,
-  Loader2,
-  Check,
-  X,
-  RefreshCw,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, Loader2, Check, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
 import type { RentalRoom, RentalRoomBill, RentalSettings } from "@/lib/finance-types";
@@ -34,15 +26,15 @@ type BillStatus =
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 const STATUS_CFG: Record<BillStatus, { label: string; cls: string }> = {
-  empty:        { label: "Trống",        cls: "bg-slate-100 text-slate-500 border-slate-200" },
-  no_reading:   { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  has_reading:  { label: "Đã nhập số",   cls: "bg-sky-50 text-sky-700 border-sky-200" },
-  draft:        { label: "Nháp",         cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  confirmed:    { label: "Đã chốt",      cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  empty: { label: "Trống", cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  no_reading: { label: "Chưa nhập số", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  has_reading: { label: "Đã nhập số", cls: "bg-sky-50 text-sky-700 border-sky-200" },
+  draft: { label: "Nháp", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  confirmed: { label: "Đã chốt", cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   partial_paid: { label: "Thu một phần", cls: "bg-violet-50 text-violet-700 border-violet-200" },
-  paid:         { label: "Đã thu",       cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  overdue:      { label: "Quá hạn",      cls: "bg-rose-50 text-rose-700 border-rose-200" },
-  cancelled:    { label: "Đã huỷ",       cls: "bg-slate-100 text-slate-400 border-slate-200" },
+  paid: { label: "Đã thu", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  overdue: { label: "Quá hạn", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  cancelled: { label: "Đã huỷ", cls: "bg-slate-100 text-slate-400 border-slate-200" },
 };
 
 function isT1(room: RentalRoom) {
@@ -81,8 +73,6 @@ function getDisplayStatus(
   return "draft";
 }
 
-
-
 function isDigitsOnly(value: string): boolean {
   return /^\d*$/.test(value);
 }
@@ -110,7 +100,6 @@ function preventInvalidNumberPaste(event: React.ClipboardEvent<HTMLInputElement>
   }
 }
 
-
 function calcLiveTotal(room: RentalRoom, settings: RentalSettings, row: RowData): number {
   const ground = isT1(room);
   const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
@@ -132,25 +121,26 @@ export function ChotThang({
   focusRequest?: { roomId: string; cycleId: string; nonce: number } | null;
   onFocusRequestConsumed?: () => void;
 }) {
-  const state   = useFinance();
+  const state = useFinance();
   const actions = useFinanceActions();
-  const now     = new Date();
+  const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear]   = useState(now.getFullYear());
-  const cycleId  = `${year}-${String(month).padStart(2, "0")}`;
+  const [year, setYear] = useState(now.getFullYear());
+  const cycleId = `${year}-${String(month).padStart(2, "0")}`;
   const settings = state.rental.settings;
 
   /* ── Supabase view sync/loading for billing table ── */
-  const {
-    loading: apiLoading,
-    refetch: apiRefetch,
-  } = useRentalRooms(cycleId);
-  const [activeOccupancyByRoomId, setActiveOccupancyByRoomId] = useState<Record<string, RentalOccupancy>>({});
+  const { loading: apiLoading, refetch: apiRefetch } = useRentalRooms(cycleId);
+  const [activeOccupancyByRoomId, setActiveOccupancyByRoomId] = useState<
+    Record<string, RentalOccupancy>
+  >({});
 
   useEffect(() => {
     const loadActiveOccupancies = async () => {
       try {
-        setActiveOccupancyByRoomId(await occupancyService.getActiveOccupancyByRoomIds(state.rental.rooms.map((r) => r.id)));
+        setActiveOccupancyByRoomId(
+          await occupancyService.getActiveOccupancyByRoomIds(state.rental.rooms.map((r) => r.id)),
+        );
       } catch (error) {
         console.error("[chot-thang] load active occupancies failed", error);
         setActiveOccupancyByRoomId({});
@@ -160,15 +150,15 @@ export function ChotThang({
   }, [state.rental.rooms]);
 
   /* local editing rows (controlled inputs) */
-  const [rows, setRows]             = useState<Record<string, RowData>>({});
+  const [rows, setRows] = useState<Record<string, RowData>>({});
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
-  const debounceTimers              = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [highlightedRoomId, setHighlightedRoomId] = useState<string | null>(null);
 
   /* payment form — single shared state; cleared when a new row expands */
-  const [payInput, setPayInput]   = useState("");
+  const [payInput, setPayInput] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [meterEditingRoomId, setMeterEditingRoomId] = useState<string | null>(null);
 
@@ -201,7 +191,9 @@ export function ChotThang({
     state.rental.rooms.map((room) => {
       const activeOccupancy = activeOccupancyByRoomId[room.id];
       const bill = activeOccupancy
-        ? state.rental.roomBills.find((b) => b.cycleId === cycleId && b.occupancyId === activeOccupancy.id)
+        ? state.rental.roomBills.find(
+            (b) => b.cycleId === cycleId && b.occupancyId === activeOccupancy.id,
+          )
         : undefined;
       return [room.id, bill];
     }),
@@ -211,20 +203,25 @@ export function ChotThang({
     state.rental.rooms.map((room) => {
       const activeOccupancy = activeOccupancyByRoomId[room.id];
       const reading = activeOccupancy
-        ? state.rental.electricityReadings.find((r) => r.cycleId === cycleId && r.occupancyId === activeOccupancy.id)
+        ? state.rental.electricityReadings.find(
+            (r) => r.cycleId === cycleId && r.occupancyId === activeOccupancy.id,
+          )
         : undefined;
       return [room.id, reading];
     }),
   );
 
-  const allRooms      = state.rental.rooms;
+  const allRooms = state.rental.rooms;
   /* KPI from API data */
-  const currentOccupancyBills = Object.values(storeBillMap).filter((bill): bill is RentalRoomBill => !!bill);
+  const currentOccupancyBills = Object.values(storeBillMap).filter(
+    (bill): bill is RentalRoomBill => !!bill,
+  );
   const confirmedCount = currentOccupancyBills.filter((bill) =>
-    ["confirmed", "partial_paid", "paid"].includes(bill.status)).length;
-  const paidCount      = currentOccupancyBills.filter((bill) => bill.status === "paid").length;
-  const totalBilled    = currentOccupancyBills.reduce((s, bill) => s + bill.totalAmount, 0);
-  const totalPaid      = currentOccupancyBills.reduce((s, bill) => s + bill.paidAmount, 0);
+    ["confirmed", "partial_paid", "paid"].includes(bill.status),
+  ).length;
+  const paidCount = currentOccupancyBills.filter((bill) => bill.status === "paid").length;
+  const totalBilled = currentOccupancyBills.reduce((s, bill) => s + bill.totalAmount, 0);
+  const totalPaid = currentOccupancyBills.reduce((s, bill) => s + bill.paidAmount, 0);
 
   /* ─── row helpers ───────────────────────────────────────── */
 
@@ -233,8 +230,8 @@ export function ChotThang({
     const r = readingMap[roomId];
     return {
       start: r?.startIndex != null ? String(r.startIndex) : "",
-      end:   r?.endIndex   != null ? String(r.endIndex)   : "",
-      water: r?.waterM3    != null ? String(r.waterM3)    : "",
+      end: r?.endIndex != null ? String(r.endIndex) : "",
+      water: r?.waterM3 != null ? String(r.waterM3) : "",
     };
   }
 
@@ -262,7 +259,7 @@ export function ChotThang({
     clearTimeout(debounceTimers.current[roomId]);
     debounceTimers.current[roomId] = setTimeout(async () => {
       const start = parseNonNegativeInteger(newRow.start);
-      const end   = parseNonNegativeInteger(newRow.end);
+      const end = parseNonNegativeInteger(newRow.end);
       const water = parseNonNegativeInteger(newRow.water);
       if (start == null || end == null || water == null) {
         toast.error("Chỉ được nhập số hợp lệ");
@@ -297,13 +294,17 @@ export function ChotThang({
       return;
     }
 
-    if (!isDigitsOnly(rowData.start) || !isDigitsOnly(rowData.end) || !isDigitsOnly(rowData.water)) {
+    if (
+      !isDigitsOnly(rowData.start) ||
+      !isDigitsOnly(rowData.end) ||
+      !isDigitsOnly(rowData.water)
+    ) {
       toast.error("Chỉ được nhập số hợp lệ");
       return;
     }
 
     const start = parseNonNegativeInteger(rowData.start);
-    const end   = parseNonNegativeInteger(rowData.end);
+    const end = parseNonNegativeInteger(rowData.end);
     const water = parseNonNegativeInteger(rowData.water);
     if (start == null || end == null || water == null) {
       toast.error("Không được nhập số âm");
@@ -346,8 +347,14 @@ export function ChotThang({
     const bill = storeBillMap[roomId];
     if (!bill) return;
     const amount = parseMoneyInput(payInput);
-    if (amount == null) { toast.error("Chỉ được nhập số hợp lệ"); return; }
-    if (!amount || amount <= 0) { toast.error("Nhập số tiền hợp lệ"); return; }
+    if (amount == null) {
+      toast.error("Chỉ được nhập số hợp lệ");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      toast.error("Nhập số tiền hợp lệ");
+      return;
+    }
     const remaining = bill.totalAmount - bill.paidAmount;
     if (amount > remaining + 0.5) {
       toast.error(`Vượt quá số tiền cần thu (${formatMoney(remaining)})`);
@@ -385,23 +392,36 @@ export function ChotThang({
   function handleExportSingle(roomId: string) {
     const room = roomMap[roomId];
     const bill = storeBillMap[roomId];
-    if (!room || !bill) { toast.error("Chưa có hóa đơn cho phòng này"); return; }
-    exportSingleInvoice({ room, bill, month, year, settings, invoiceSettings: state.rental.invoiceSettings });
+    if (!room || !bill) {
+      toast.error("Chưa có hóa đơn cho phòng này");
+      return;
+    }
+    exportSingleInvoice({
+      room,
+      bill,
+      month,
+      year,
+      settings,
+      invoiceSettings: state.rental.invoiceSettings,
+    });
     toast.success(`Đang xuất hóa đơn ${room.name}…`);
   }
 
   /* ─── month nav ─────────────────────────────────────────── */
 
   function prevMonth() {
-    if (month === 1) { setMonth(12); setYear((y) => y - 1); }
-    else setMonth((m) => m - 1);
+    if (month === 1) {
+      setMonth(12);
+      setYear((y) => y - 1);
+    } else setMonth((m) => m - 1);
   }
   function nextMonth() {
     const nm = month === 12 ? 1 : month + 1;
     const ny = month === 12 ? year + 1 : year;
     const cur = new Date();
     if (ny > cur.getFullYear() || (ny === cur.getFullYear() && nm > cur.getMonth() + 1)) return;
-    setMonth(nm); setYear(ny);
+    setMonth(nm);
+    setYear(ny);
   }
 
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
@@ -412,8 +432,11 @@ export function ChotThang({
     <div className="space-y-5">
       {/* ── Month navigator ── */}
       <div className="flex items-center gap-2">
-        <button type="button" onClick={prevMonth}
-          className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors">
+        <button
+          type="button"
+          onClick={prevMonth}
+          className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors"
+        >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span className="min-w-32 text-center text-base font-semibold">
@@ -424,21 +447,27 @@ export function ChotThang({
             </span>
           )}
         </span>
-        <button type="button" onClick={nextMonth} disabled={isCurrentMonth}
-          className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors disabled:opacity-40">
+        <button
+          type="button"
+          onClick={nextMonth}
+          disabled={isCurrentMonth}
+          className="rounded-lg border border-border p-1.5 hover:bg-muted/40 transition-colors disabled:opacity-40"
+        >
           <ChevronRight className="h-4 w-4" />
         </button>
-        {apiLoading && (
-          <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-        )}
+        {apiLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
       </div>
 
       {/* ── KPI summary ── */}
       <div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <SummaryCard label="Tổng hóa đơn"    value={formatMoney(totalBilled)} />
-          <SummaryCard label="Đã thu"           value={formatMoney(totalPaid)} accent="emerald" />
-          <SummaryCard label="Còn lại"          value={formatMoney(Math.max(0, totalBilled - totalPaid))} accent="rose" />
+          <SummaryCard label="Tổng hóa đơn" value={formatMoney(totalBilled)} />
+          <SummaryCard label="Đã thu" value={formatMoney(totalPaid)} accent="emerald" />
+          <SummaryCard
+            label="Còn lại"
+            value={formatMoney(Math.max(0, totalBilled - totalPaid))}
+            accent="rose"
+          />
           <SummaryCard label="Đã chốt / Đã thu" value={`${confirmedCount} / ${paidCount} phòng`} />
         </div>
         {currentOccupancyBills.length === 0 && (
@@ -451,14 +480,30 @@ export function ChotThang({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Phòng</th>
-              <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">Khách thuê</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Số đầu</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Số cuối</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nước (m³)</th>
-              <th className="px-4 py-3 text-right  text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tổng bill</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Trạng thái</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hóa đơn</th>
+              <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Phòng
+              </th>
+              <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Khách thuê
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Số đầu
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Số cuối
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Nước (m³)
+              </th>
+              <th className="px-4 py-3 text-right  text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Tổng bill
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Trạng thái
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Hóa đơn
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -470,11 +515,11 @@ export function ChotThang({
               </tr>
             )}
             {allRooms.map((room) => {
-              const occupied     = isRoomOccupied(room) && !!activeOccupancyByRoomId[room.id];
-              const reading      = readingMap[room.id];
-              const row          = getRow(room.id);
-              const ground       = isT1(room);
-              const ss           = saveStates[room.id] ?? "idle";
+              const occupied = isRoomOccupied(room) && !!activeOccupancyByRoomId[room.id];
+              const reading = readingMap[room.id];
+              const row = getRow(room.id);
+              const ground = isT1(room);
+              const ss = saveStates[room.id] ?? "idle";
               const hasLocalEdit = !!rows[room.id];
 
               // storeBill is resolved through the room's active occupancy for this cycle.
@@ -483,17 +528,20 @@ export function ChotThang({
               /* Bill status: active occupancy bill only */
               const apiBillStatus = storeBill?.status ?? null;
               const canEditBillInputs = canEditBillingInputs(occupied, apiBillStatus);
-              const displayStatus = occupied ? getDisplayStatus(room, apiBillStatus, !!reading, cycleId) : "empty";
-              const cfg           = STATUS_CFG[displayStatus];
+              const displayStatus = occupied
+                ? getDisplayStatus(room, apiBillStatus, !!reading, cycleId)
+                : "empty";
+              const cfg = STATUS_CFG[displayStatus];
 
               /* Action availability: active occupancy bill only */
-              const hasBill    = !!storeBill;
+              const hasBill = !!storeBill;
               /* live total: DB value when available, else estimate */
-              const liveTotal = storeBill?.totalAmount != null
-                ? storeBill.totalAmount
-                : occupied && (reading || hasLocalEdit)
-                  ? calcLiveTotal(room, settings, row)
-                  : null;
+              const liveTotal =
+                storeBill?.totalAmount != null
+                  ? storeBill.totalAmount
+                  : occupied && (reading || hasLocalEdit)
+                    ? calcLiveTotal(room, settings, row)
+                    : null;
 
               function openModal() {
                 if (!occupied || !hasBill) {
@@ -553,7 +601,9 @@ export function ChotThang({
                           value={row.start}
                           onKeyDown={preventInvalidNumberKeyDown}
                           onPaste={preventInvalidNumberPaste}
-                          onChange={(e) => onReadingChange(room.id, "start", sanitizeDigitsInput(e.target.value))}
+                          onChange={(e) =>
+                            onReadingChange(room.id, "start", sanitizeDigitsInput(e.target.value))
+                          }
                           disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
@@ -573,7 +623,9 @@ export function ChotThang({
                           value={row.end}
                           onKeyDown={preventInvalidNumberKeyDown}
                           onPaste={preventInvalidNumberPaste}
-                          onChange={(e) => onReadingChange(room.id, "end", sanitizeDigitsInput(e.target.value))}
+                          onChange={(e) =>
+                            onReadingChange(room.id, "end", sanitizeDigitsInput(e.target.value))
+                          }
                           disabled={!canEditBillInputs}
                           className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                           placeholder="0"
@@ -590,7 +642,9 @@ export function ChotThang({
                         value={row.water}
                         onKeyDown={preventInvalidNumberKeyDown}
                         onPaste={preventInvalidNumberPaste}
-                        onChange={(e) => onReadingChange(room.id, "water", sanitizeDigitsInput(e.target.value))}
+                        onChange={(e) =>
+                          onReadingChange(room.id, "water", sanitizeDigitsInput(e.target.value))
+                        }
                         disabled={!canEditBillInputs}
                         className="w-20 rounded border border-border bg-background px-2 py-1 text-center text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                         placeholder="0"
@@ -601,7 +655,9 @@ export function ChotThang({
                     <td className="px-4 py-3 text-right tabular-nums">
                       {liveTotal != null ? (
                         <div className="inline-flex flex-col items-end gap-0.5">
-                          <span className={`font-semibold ${!hasBill ? "text-muted-foreground" : ""}`}>
+                          <span
+                            className={`font-semibold ${!hasBill ? "text-muted-foreground" : ""}`}
+                          >
                             {formatMoney(liveTotal)}
                           </span>
                           {!hasBill && (
@@ -613,14 +669,20 @@ export function ChotThang({
                       )}
                       {ss !== "idle" && (
                         <div className="mt-0.5 flex items-center justify-end gap-0.5">
-                          {ss === "saving" && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-                          {ss === "saved"  && <Check className="h-3 w-3 text-emerald-500" />}
-                          {ss === "error"  && <X className="h-3 w-3 text-rose-500" />}
-                          <span className={`text-[10px] ${
-                            ss === "saved" ? "text-emerald-600" :
-                            ss === "error" ? "text-rose-600" :
-                            "text-muted-foreground"
-                          }`}>
+                          {ss === "saving" && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                          {ss === "saved" && <Check className="h-3 w-3 text-emerald-500" />}
+                          {ss === "error" && <X className="h-3 w-3 text-rose-500" />}
+                          <span
+                            className={`text-[10px] ${
+                              ss === "saved"
+                                ? "text-emerald-600"
+                                : ss === "error"
+                                  ? "text-rose-600"
+                                  : "text-muted-foreground"
+                            }`}
+                          >
                             {ss === "saving" ? "Đang lưu…" : ss === "saved" ? "Đã lưu" : "Lỗi lưu"}
                           </span>
                         </div>
@@ -629,7 +691,9 @@ export function ChotThang({
 
                     {/* Status badge */}
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}>
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.cls}`}
+                      >
                         {cfg.label}
                       </span>
                     </td>
@@ -648,7 +712,6 @@ export function ChotThang({
                       </div>
                     </td>
                   </tr>
-
                 </Fragment>
               );
             })}
@@ -656,131 +719,324 @@ export function ChotThang({
         </table>
       </div>
 
-      {selectedRoomId && (() => {
-        const room = roomMap[selectedRoomId];
-        const storeBill = storeBillMap[selectedRoomId];
-        const occupied = room ? isRoomOccupied(room) && !!activeOccupancyByRoomId[selectedRoomId] : false;
-        const hasBill = !!storeBill;
-        const canRenderDetailModal = !!room && occupied && hasBill;
-        if (!canRenderDetailModal) return null;
-        return (
-          <Dialog open onOpenChange={(open) => !open && setSelectedRoomId(null)}>
-            <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden">
-              {(() => {
-                const reading = getRow(selectedRoomId);
-              const effectiveBillStatus = storeBill?.status ?? null;
-              const canEditBillInputs = canEditBillingInputs(occupied, effectiveBillStatus);
-              const status = room && occupied ? getDisplayStatus(room, effectiveBillStatus, !!readingMap[selectedRoomId], cycleId) : "empty";
-              const canConfirm = storeBill?.status === "draft";
-              const canPay = storeBill?.status === "confirmed" || storeBill?.status === "partial_paid";
-              const kwh = Math.max((parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0), 0);
-              const remaining = storeBill ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount) : 0;
-              return (
-                <div className="space-y-4">
-                  <DialogHeader className="-mx-6 -mt-6 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-1 backdrop-blur">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex items-center gap-2 text-sm">
-                        <DialogTitle className="shrink-0 text-base font-semibold text-foreground">{room.name}</DialogTitle>
-                        <span className="shrink-0 text-muted-foreground">•</span>
-                        <span className="truncate text-muted-foreground">{room.tenant || "Trống"}</span>
-                        <span className="shrink-0 text-muted-foreground">•</span>
-                        <span className="truncate text-muted-foreground">Hóa đơn tháng {String(month).padStart(2, "0")}/{year}</span>
-                        <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}>{STATUS_CFG[status].label}</span>
-                      </div>
-                      <button type="button" onClick={() => { setMeterEditingRoomId(null); setSelectedRoomId(null); }} className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </DialogHeader>
-                  <div className="grid items-stretch gap-5 pt-3 lg:grid-cols-[1fr_320px]">
-                    <div className="h-full">
-                      {storeBill ? (
-                        <SectionCard title="Tổng hợp hóa đơn">
-                          <Row label="Tiền thuê" value={formatMoney(storeBill.rentAmount)} />
-                          <Row label="Tiền điện" value={formatMoney(storeBill.electricityAmount)} />
-                          <Row label="Tiền nước" value={formatMoney(storeBill.waterAmount)} />
-                          <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
-                          <Row label="Vệ sinh" value={formatMoney(storeBill.cleaningAmount)} />
-                          <Row label="Phụ phí khác" value={formatMoney(storeBill.otherAmount)} />
-                          <div className="border-t border-border pt-2">
-                            <Row label="Tổng" value={formatMoney(storeBill.totalAmount)} className="font-semibold" />
+      {selectedRoomId &&
+        (() => {
+          const room = roomMap[selectedRoomId];
+          const storeBill = storeBillMap[selectedRoomId];
+          const occupied = room
+            ? isRoomOccupied(room) && !!activeOccupancyByRoomId[selectedRoomId]
+            : false;
+          const hasBill = !!storeBill;
+          const canRenderDetailModal = !!room && occupied && hasBill;
+          if (!canRenderDetailModal) return null;
+          return (
+            <Dialog open onOpenChange={(open) => !open && setSelectedRoomId(null)}>
+              <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden">
+                {(() => {
+                  const reading = getRow(selectedRoomId);
+                  const effectiveBillStatus = storeBill?.status ?? null;
+                  const canEditBillInputs = canEditBillingInputs(occupied, effectiveBillStatus);
+                  const status =
+                    room && occupied
+                      ? getDisplayStatus(
+                          room,
+                          effectiveBillStatus,
+                          !!readingMap[selectedRoomId],
+                          cycleId,
+                        )
+                      : "empty";
+                  const canConfirm = storeBill?.status === "draft";
+                  const canPay =
+                    storeBill?.status === "confirmed" || storeBill?.status === "partial_paid";
+                  const kwh = Math.max(
+                    (parseFloat(reading.end) || 0) - (parseFloat(reading.start) || 0),
+                    0,
+                  );
+                  const remaining = storeBill
+                    ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount)
+                    : 0;
+                  return (
+                    <div>
+                      <DialogHeader className="-mx-6 -mt-6 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-2 backdrop-blur">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <DialogTitle className="min-w-0 truncate text-base font-semibold text-foreground">
+                                {room.name} • {room.tenant || "Trống"} • Hóa đơn tháng{" "}
+                                {String(month).padStart(2, "0")}/{year}
+                              </DialogTitle>
+                              <span
+                                className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_CFG[status].cls}`}
+                              >
+                                {STATUS_CFG[status].label}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Tổng hợp khoản thu và thao tác xử lý hóa đơn
+                            </p>
                           </div>
-                          <Row label="Đã thu" value={formatMoney(storeBill.paidAmount)} />
-                          <Row label="Còn thiếu" value={formatMoney(remaining)} className="font-semibold text-rose-600" />
-                        </SectionCard>
-                      ) : null}
-                    </div>
-                    <div className="h-full overflow-y-auto rounded-xl border border-border bg-card p-3">
-                      <div className="space-y-3">
-                        {storeBill && effectiveBillStatus === "draft" && (
-                          <SectionCard title="Nhập điện nước">
-                            {meterEditingRoomId !== room.id ? (
-                              <>
-                                <Row label="Số đầu" value={reading.start || "0"} />
-                                <Row label="Số cuối" value={reading.end || "0"} />
-                                <Row label="Tiêu thụ" value={String(kwh)} />
-                                <Row label="Số m3 nước" value={reading.water || "0"} />
-                                <div className="grid grid-cols-2 gap-2 pt-1">
-                                  <button type="button" onClick={() => { setRows((p) => ({ ...p, [room.id]: { ...reading } })); setMeterEditingRoomId(room.id); }} className="rounded-lg border border-border py-2 text-sm font-medium hover:bg-muted/30">Sửa</button>
-                                  {canConfirm ? <button type="button" onClick={() => handleConfirmSingle(room.id)} className="rounded-lg bg-foreground py-2 text-sm font-semibold text-background">Chốt hóa đơn</button> : null}
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                {!isT1(room) && (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <label className="space-y-1 text-xs text-muted-foreground">
-                                      <span>Số đầu</span>
-                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.start} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, start: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground" />
-                                    </label>
-                                    <label className="space-y-1 text-xs text-muted-foreground">
-                                      <span>Số cuối</span>
-                                      <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.end} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, end: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground" />
-                                    </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMeterEditingRoomId(null);
+                              setSelectedRoomId(null);
+                            }}
+                            aria-label="Đóng chi tiết hóa đơn"
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </DialogHeader>
+                      <div className="grid items-start gap-5 pt-3 lg:grid-cols-[1fr_320px]">
+                        <div className="space-y-5">
+                          {storeBill ? (
+                            <SectionCard title="Tổng hợp hóa đơn">
+                              <Row label="Tiền thuê" value={formatMoney(storeBill.rentAmount)} />
+                              <Row
+                                label="Tiền điện"
+                                value={formatMoney(storeBill.electricityAmount)}
+                              />
+                              <Row label="Tiền nước" value={formatMoney(storeBill.waterAmount)} />
+                              <Row label="Wifi" value={formatMoney(storeBill.wifiAmount)} />
+                              <Row label="Vệ sinh" value={formatMoney(storeBill.cleaningAmount)} />
+                              <Row
+                                label="Phụ phí khác"
+                                value={formatMoney(storeBill.otherAmount)}
+                              />
+                              <div className="border-t border-border pt-2">
+                                <Row
+                                  label="Tổng"
+                                  value={formatMoney(storeBill.totalAmount)}
+                                  className="font-semibold"
+                                />
+                              </div>
+                              <Row label="Đã thu" value={formatMoney(storeBill.paidAmount)} />
+                              <Row
+                                label="Còn thiếu"
+                                value={formatMoney(remaining)}
+                                className="font-semibold text-rose-600"
+                              />
+                            </SectionCard>
+                          ) : null}
+                        </div>
+                        <div className="space-y-5 lg:sticky lg:top-14 lg:self-start">
+                          {storeBill && effectiveBillStatus === "draft" && (
+                            <SectionCard title="Nhập điện nước">
+                              {meterEditingRoomId !== room.id ? (
+                                <>
+                                  <Row label="Số đầu" value={reading.start || "0"} />
+                                  <Row label="Số cuối" value={reading.end || "0"} />
+                                  <Row label="Tiêu thụ" value={String(kwh)} />
+                                  <Row label="Số m3 nước" value={reading.water || "0"} />
+                                  <div className="grid grid-cols-2 gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRows((p) => ({ ...p, [room.id]: { ...reading } }));
+                                        setMeterEditingRoomId(room.id);
+                                      }}
+                                      className="rounded-lg border border-border py-2 text-sm font-medium hover:bg-muted/30"
+                                    >
+                                      Sửa
+                                    </button>
+                                    {canConfirm ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleConfirmSingle(room.id)}
+                                        className="rounded-lg bg-foreground py-2 text-sm font-semibold text-background"
+                                      >
+                                        Chốt hóa đơn
+                                      </button>
+                                    ) : null}
                                   </div>
+                                </>
+                              ) : (
+                                <>
+                                  {!isT1(room) && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <label className="space-y-1 text-xs text-muted-foreground">
+                                        <span>Số đầu</span>
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          pattern="[0-9]*"
+                                          value={reading.start}
+                                          onKeyDown={preventInvalidNumberKeyDown}
+                                          onPaste={preventInvalidNumberPaste}
+                                          onChange={(e) =>
+                                            setRows((p) => ({
+                                              ...p,
+                                              [room.id]: {
+                                                ...reading,
+                                                start: sanitizeDigitsInput(e.target.value),
+                                              },
+                                            }))
+                                          }
+                                          className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                        />
+                                      </label>
+                                      <label className="space-y-1 text-xs text-muted-foreground">
+                                        <span>Số cuối</span>
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          pattern="[0-9]*"
+                                          value={reading.end}
+                                          onKeyDown={preventInvalidNumberKeyDown}
+                                          onPaste={preventInvalidNumberPaste}
+                                          onChange={(e) =>
+                                            setRows((p) => ({
+                                              ...p,
+                                              [room.id]: {
+                                                ...reading,
+                                                end: sanitizeDigitsInput(e.target.value),
+                                              },
+                                            }))
+                                          }
+                                          className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                        />
+                                      </label>
+                                    </div>
+                                  )}
+                                  <label className="space-y-1 text-xs text-muted-foreground">
+                                    <span>Số m3 nước</span>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      value={reading.water}
+                                      onKeyDown={preventInvalidNumberKeyDown}
+                                      onPaste={preventInvalidNumberPaste}
+                                      onChange={(e) =>
+                                        setRows((p) => ({
+                                          ...p,
+                                          [room.id]: {
+                                            ...reading,
+                                            water: sanitizeDigitsInput(e.target.value),
+                                          },
+                                        }))
+                                      }
+                                      className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
+                                    />
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        await saveInlineReading(room.id, reading);
+                                        setMeterEditingRoomId(null);
+                                      }}
+                                      disabled={!canEditBillInputs}
+                                      className="rounded-lg bg-foreground py-2 text-sm font-semibold text-background disabled:opacity-40"
+                                    >
+                                      Lưu
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const origin = readingMap[room.id];
+                                        setRows((p) => ({
+                                          ...p,
+                                          [room.id]: {
+                                            start:
+                                              origin?.startIndex != null
+                                                ? String(origin.startIndex)
+                                                : "",
+                                            end:
+                                              origin?.endIndex != null
+                                                ? String(origin.endIndex)
+                                                : "",
+                                            water:
+                                              origin?.waterM3 != null ? String(origin.waterM3) : "",
+                                          },
+                                        }));
+                                        setMeterEditingRoomId(null);
+                                      }}
+                                      className="rounded-lg border border-border py-2 text-sm font-medium"
+                                    >
+                                      Huỷ
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </SectionCard>
+                          )}
+                          {storeBill &&
+                            canPay &&
+                            ["confirmed", "partial_paid"].includes(effectiveBillStatus ?? "") && (
+                              <PaymentSection
+                                bill={storeBill}
+                                payInput={payInput}
+                                setPayInput={setPayInput}
+                                payMethod={payMethod}
+                                setPayMethod={setPayMethod}
+                                onPay={() => handlePay(room.id)}
+                              />
+                            )}
+                          {storeBill &&
+                          canPay &&
+                          ["confirmed", "partial_paid"].includes(effectiveBillStatus ?? "") ? (
+                            <SectionCard title="Hành động khác">
+                              <button
+                                type="button"
+                                onClick={() => handlePayRemaining(room.id)}
+                                className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background"
+                              >
+                                Đánh dấu đã thu đủ
+                              </button>
+                              {storeBill &&
+                                ["confirmed", "partial_paid", "paid"].includes(
+                                  storeBill.status,
+                                ) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleExportSingle(room.id)}
+                                    className="mt-2 w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
+                                  >
+                                    Xuất PDF
+                                  </button>
                                 )}
-                                <label className="space-y-1 text-xs text-muted-foreground">
-                                  <span>Số m3 nước</span>
-                                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={reading.water} onKeyDown={preventInvalidNumberKeyDown} onPaste={preventInvalidNumberPaste} onChange={(e) => setRows((p) => ({ ...p, [room.id]: { ...reading, water: sanitizeDigitsInput(e.target.value) } }))} className="w-full rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground" />
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
-                                  <button type="button" onClick={async () => { await saveInlineReading(room.id, reading); setMeterEditingRoomId(null); }} disabled={!canEditBillInputs} className="rounded-lg bg-foreground py-2 text-sm font-semibold text-background disabled:opacity-40">Lưu</button>
-                                  <button type="button" onClick={() => { const origin = readingMap[room.id]; setRows((p) => ({ ...p, [room.id]: { start: origin?.startIndex != null ? String(origin.startIndex) : "", end: origin?.endIndex != null ? String(origin.endIndex) : "", water: origin?.waterM3 != null ? String(origin.waterM3) : "" } })); setMeterEditingRoomId(null); }} className="rounded-lg border border-border py-2 text-sm font-medium">Huỷ</button>
-                                </div>
-                              </>
-                            )}
-                          </SectionCard>
-                        )}
-                        {storeBill && canPay && ["confirmed", "partial_paid"].includes(effectiveBillStatus ?? "") && (
-                          <PaymentSection bill={storeBill} payInput={payInput} setPayInput={setPayInput} payMethod={payMethod} setPayMethod={setPayMethod} onPay={() => handlePay(room.id)} />
-                        )}
-                        {storeBill && canPay && ["confirmed", "partial_paid"].includes(effectiveBillStatus ?? "") ? (
-                          <SectionCard title="Hành động khác">
-                            <button type="button" onClick={() => handlePayRemaining(room.id)} className="w-full rounded-lg bg-foreground py-2.5 text-sm font-semibold text-background">Đánh dấu đã thu đủ</button>
-                            {storeBill && ["confirmed", "partial_paid", "paid"].includes(storeBill.status) && (
-                              <button type="button" onClick={() => handleExportSingle(room.id)} className="mt-2 w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
-                            )}
-                          </SectionCard>
-                        ) : null}
-                        {storeBill && storeBill.status === "paid" ? (
-                          <button type="button" onClick={() => handleExportSingle(room.id)} className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30">Xuất PDF</button>
-                        ) : null}
+                            </SectionCard>
+                          ) : null}
+                          {storeBill && storeBill.status === "paid" ? (
+                            <SectionCard title="Hành động khác">
+                              <button
+                                type="button"
+                                onClick={() => handleExportSingle(room.id)}
+                                className="w-full rounded-lg border border-border py-2.5 text-sm font-medium hover:bg-muted/30"
+                              >
+                                Xuất PDF
+                              </button>
+                            </SectionCard>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              );
-              })()}
-            </DialogContent>
-          </Dialog>
-        );
-      })()}
+                  );
+                })()}
+              </DialogContent>
+            </Dialog>
+          );
+        })()}
 
       {/* ── Workflow guide ── */}
       <div className="flex flex-wrap gap-3">
-        <WorkflowStep n={1} title="Nhập chỉ số" desc="Điền số đầu, số cuối và nước ngay trên bảng" />
-        <WorkflowStep n={2} title="Xem chi tiết hóa đơn" desc="Mở chi tiết để kiểm tra tiền thuê, điện, nước và phụ phí" />
-        <WorkflowStep n={3} title="Chốt bill và thu tiền" desc="Thực hiện xác nhận bill, ghi nhận thanh toán và xuất PDF trong màn chi tiết" />
+        <WorkflowStep
+          n={1}
+          title="Nhập chỉ số"
+          desc="Điền số đầu, số cuối và nước ngay trên bảng"
+        />
+        <WorkflowStep
+          n={2}
+          title="Xem chi tiết hóa đơn"
+          desc="Mở chi tiết để kiểm tra tiền thuê, điện, nước và phụ phí"
+        />
+        <WorkflowStep
+          n={3}
+          title="Chốt bill và thu tiền"
+          desc="Thực hiện xác nhận bill, ghi nhận thanh toán và xuất PDF trong màn chi tiết"
+        />
       </div>
     </div>
   );
@@ -788,11 +1044,23 @@ export function ChotThang({
 
 /* ─── sub-components ──────────────────────────────────────── */
 
-function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: "emerald" | "rose" }) {
+function SummaryCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: "emerald" | "rose";
+}) {
   const color =
-    accent === "emerald" ? "text-emerald-600" : accent === "rose" ? "text-rose-600" : "text-foreground";
+    accent === "emerald"
+      ? "text-emerald-600"
+      : accent === "rose"
+        ? "text-rose-600"
+        : "text-foreground";
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`mt-1 text-base font-semibold tabular-nums ${color}`}>{value}</p>
     </div>
@@ -801,33 +1069,46 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm space-y-3">
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h4>
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4 text-sm shadow-sm">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </h4>
       {children}
-    </div>
+    </section>
   );
 }
 
 function PaymentSection({
-  bill, payInput, setPayInput, payMethod, setPayMethod, onPay,
+  bill,
+  payInput,
+  setPayInput,
+  payMethod,
+  setPayMethod,
+  onPay,
 }: {
   bill: RentalRoomBill;
-  payInput: string;   setPayInput: (v: string) => void;
-  payMethod: string;  setPayMethod: (v: string) => void;
+  payInput: string;
+  setPayInput: (v: string) => void;
+  payMethod: string;
+  setPayMethod: (v: string) => void;
   onPay: () => void;
 }) {
   const remaining = Math.max(0, bill.totalAmount - bill.paidAmount);
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
-      <p className="text-sm font-semibold">Thu tiền một phần</p>
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Thu tiền
+      </h4>
 
       {/* Payment summary */}
-      <div className="flex items-center gap-6 text-sm">
-        <div>
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
           <span className="text-muted-foreground text-xs">Đã trả</span>
-          <p className="font-semibold text-emerald-600 tabular-nums">{formatMoney(bill.paidAmount)}</p>
+          <p className="font-semibold text-emerald-600 tabular-nums">
+            {formatMoney(bill.paidAmount)}
+          </p>
         </div>
-        <div>
+        <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
           <span className="text-muted-foreground text-xs">Còn thiếu</span>
           <p className="font-semibold text-rose-600 tabular-nums">{formatMoney(remaining)}</p>
         </div>
@@ -863,7 +1144,7 @@ function PaymentSection({
       >
         Ghi nhận
       </button>
-    </div>
+    </section>
   );
 }
 
@@ -881,11 +1162,21 @@ function WorkflowStep({ n, title, desc }: { n: number; title: string; desc: stri
   );
 }
 
-function Row({ label, value, className = "" }: { label: string; value: string; className?: string }) {
+function Row({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
   return (
-    <div className={`flex items-center justify-between ${className}`}>
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums">{value}</span>
+    <div
+      className={`flex items-start justify-between gap-4 border-b border-border/60 py-2 text-foreground last:border-0 ${className}`}
+    >
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-right font-medium tabular-nums">{value}</span>
     </div>
   );
 }
