@@ -244,12 +244,6 @@ export function TienCocDetailModal({
                 <InfoRow label="Đã hoàn">
                   <span className="tabular-nums">{formatMoney(summary.totalRefunded)}</span>
                 </InfoRow>
-                <InfoRow label="Đã trừ công nợ">
-                  <span className="tabular-nums">{formatMoney(summary.totalOffset)}</span>
-                </InfoRow>
-                <InfoRow label="Đã giữ lại">
-                  <span className="tabular-nums">{formatMoney(summary.totalForfeit)}</span>
-                </InfoRow>
                 <InfoRow label="Còn giữ">
                   <span className="font-semibold tabular-nums text-amber-700">
                     {formatMoney(summary.remainingHeld)}

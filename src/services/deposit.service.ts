@@ -260,7 +260,7 @@ export const depositService = {
       throw new Error("Khoản cọc không còn số tiền đang giữ để hoàn.");
     }
 
-    await depositTransactionService.createDepositTransaction({
+    const refundTransaction = await depositTransactionService.createDepositTransaction({
       depositId: deposit.id,
       roomId: deposit.room_id,
       tenantId: deposit.tenant_id,
@@ -269,6 +269,19 @@ export const depositService = {
       amount: summary.remainingHeld,
       note: settlementNote?.trim() || undefined,
     });
+
+    async function rollbackRefundTransaction(originalError: unknown): Promise<never> {
+      const { error: rollbackError } = await (supabase as any)
+        .from("rental_deposit_transactions")
+        .delete()
+        .eq("id", refundTransaction.id);
+
+      if (rollbackError) {
+        console.error("[deposit-settlement] refund transaction rollback failed", rollbackError);
+      }
+
+      throw originalError;
+    }
 
     const settledAt = new Date().toISOString();
     const { data, error } = await (supabase as any)
@@ -299,9 +312,12 @@ export const depositService = {
       `)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      await rollbackRefundTransaction(error);
+    }
+
     if (!data) {
-      throw new Error("Không thể cập nhật trạng thái quyết toán cọc.");
+      await rollbackRefundTransaction(new Error("Không thể cập nhật trạng thái quyết toán cọc."));
     }
 
     return mapDepositForTab(data as DepositJoinRow);
