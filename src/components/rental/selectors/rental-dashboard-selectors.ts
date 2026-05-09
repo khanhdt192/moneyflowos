@@ -1,4 +1,5 @@
 import type {
+  RentalBillingCycle,
   RentalElectricityReading,
   RentalRoom,
   RentalRoomBill,
@@ -26,6 +27,72 @@ export type RentalDashboardTrendPoint = {
   collected: number;
 };
 
+export type RentalDashboardCycleContext = {
+  /** UI-selected month in YYYY-MM format. */
+  uiMonthKey: string;
+  /** Billing-cycle database record resolved from the UI month, when it already exists locally. */
+  billingCycle?: RentalBillingCycle;
+  /**
+   * Compatibility lookup key for current frontend bill/reading arrays.
+   *
+   * The database identity is billingCycle.id, but the current rental frontend state still stores
+   * bill.cycleId and reading.cycleId as YYYY-MM strings. Keep that legacy lookup explicit so the
+   * dashboard does not conceptually treat the UI month key as a DB cycle UUID.
+   */
+  frontendCycleKey: string;
+};
+
+export type RentalDashboardSelectorInput = {
+  rooms: RentalRoom[];
+  roomBills: RentalRoomBill[];
+  electricityReadings: RentalElectricityReading[];
+  activeOccupancyByRoomId: ActiveOccupancyByRoomId;
+  uiMonthKey: string;
+  billingCycles: RentalBillingCycle[];
+  currentBillingCycle?: RentalBillingCycle;
+};
+
+export type RentalDashboardTrendInput = {
+  roomBills: RentalRoomBill[];
+  billingCycles: RentalBillingCycle[];
+  referenceDate: Date;
+};
+
+export function formatMonthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+export function resolveBillingCycleFromMonthKey(
+  billingCycles: RentalBillingCycle[],
+  uiMonthKey: string,
+): RentalBillingCycle | undefined {
+  const [yearText, monthText] = uiMonthKey.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month)) {
+    return undefined;
+  }
+
+  return billingCycles.find((cycle) => cycle.year === year && cycle.month === month);
+}
+
+export function createRentalDashboardCycleContext({
+  uiMonthKey,
+  billingCycles,
+  currentBillingCycle,
+}: {
+  uiMonthKey: string;
+  billingCycles: RentalBillingCycle[];
+  currentBillingCycle?: RentalBillingCycle;
+}): RentalDashboardCycleContext {
+  return {
+    uiMonthKey,
+    billingCycle: currentBillingCycle ?? resolveBillingCycleFromMonthKey(billingCycles, uiMonthKey),
+    frontendCycleKey: uiMonthKey,
+  };
+}
+
 export function selectActiveOccupiedRoomIds(
   rooms: RentalRoom[],
   activeOccupancyByRoomId: ActiveOccupancyByRoomId,
@@ -48,7 +115,7 @@ export function selectCurrentBillByRoomId(
   rooms: RentalRoom[],
   roomBills: RentalRoomBill[],
   activeOccupancyByRoomId: ActiveOccupancyByRoomId,
-  cycleId: string,
+  frontendCycleKey: string,
 ): Record<string, RentalRoomBill | undefined> {
   return Object.fromEntries(
     rooms.map((room) => {
@@ -56,7 +123,7 @@ export function selectCurrentBillByRoomId(
       const bill = activeOccupancy
         ? roomBills.find(
             (candidate) =>
-              candidate.occupancyId === activeOccupancy.id && candidate.cycleId === cycleId,
+              candidate.occupancyId === activeOccupancy.id && candidate.cycleId === frontendCycleKey,
           )
         : undefined;
 
@@ -69,7 +136,7 @@ export function selectCurrentReadingByRoomId(
   rooms: RentalRoom[],
   electricityReadings: RentalElectricityReading[],
   activeOccupancyByRoomId: ActiveOccupancyByRoomId,
-  cycleId: string,
+  frontendCycleKey: string,
 ): Record<string, RentalElectricityReading | undefined> {
   return Object.fromEntries(
     rooms.map((room) => {
@@ -77,7 +144,7 @@ export function selectCurrentReadingByRoomId(
       const reading = activeOccupancy
         ? electricityReadings.find(
             (candidate) =>
-              candidate.occupancyId === activeOccupancy.id && candidate.cycleId === cycleId,
+              candidate.occupancyId === activeOccupancy.id && candidate.cycleId === frontendCycleKey,
           )
         : undefined;
 
@@ -91,27 +158,28 @@ export function selectRentalDashboardSummary({
   roomBills,
   electricityReadings,
   activeOccupancyByRoomId,
-  cycleId,
-}: {
-  rooms: RentalRoom[];
-  roomBills: RentalRoomBill[];
-  electricityReadings: RentalElectricityReading[];
-  activeOccupancyByRoomId: ActiveOccupancyByRoomId;
-  cycleId: string;
-}): RentalDashboardSummary {
+  uiMonthKey,
+  billingCycles,
+  currentBillingCycle,
+}: RentalDashboardSelectorInput): RentalDashboardSummary {
+  const cycleContext = createRentalDashboardCycleContext({
+    uiMonthKey,
+    billingCycles,
+    currentBillingCycle,
+  });
   const occupiedRoomIds = selectActiveOccupiedRoomIds(rooms, activeOccupancyByRoomId);
   const emptyRoomIds = selectEmptyRoomIds(rooms, activeOccupancyByRoomId);
   const currentBillByRoomId = selectCurrentBillByRoomId(
     rooms,
     roomBills,
     activeOccupancyByRoomId,
-    cycleId,
+    cycleContext.frontendCycleKey,
   );
   const currentReadingByRoomId = selectCurrentReadingByRoomId(
     rooms,
     electricityReadings,
     activeOccupancyByRoomId,
-    cycleId,
+    cycleContext.frontendCycleKey,
   );
 
   const currentBills = occupiedRoomIds
@@ -138,16 +206,18 @@ export function selectRentalDashboardSummary({
   };
 }
 
-export function selectRentalDashboardTrend(
-  roomBills: RentalRoomBill[],
-  referenceDate: Date,
-): RentalDashboardTrendPoint[] {
+export function selectRentalDashboardTrend({
+  roomBills,
+  billingCycles,
+  referenceDate,
+}: RentalDashboardTrendInput): RentalDashboardTrendPoint[] {
   const months: RentalDashboardTrendPoint[] = [];
 
   for (let i = 5; i >= 0; i--) {
     const date = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
-    const cycleId = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    const bills = roomBills.filter((bill) => bill.cycleId === cycleId);
+    const uiMonthKey = formatMonthKey(date.getFullYear(), date.getMonth() + 1);
+    const cycleContext = createRentalDashboardCycleContext({ uiMonthKey, billingCycles });
+    const bills = roomBills.filter((bill) => bill.cycleId === cycleContext.frontendCycleKey);
     const revenue = bills.reduce((sum, bill) => sum + bill.totalAmount, 0);
     const collected = bills.reduce((sum, bill) => sum + bill.paidAmount, 0);
 

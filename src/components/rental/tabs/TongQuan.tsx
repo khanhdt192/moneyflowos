@@ -5,6 +5,8 @@ import { useFinance } from "@/lib/finance-store";
 import { formatCompact } from "@/lib/format";
 import { formatMoney } from "@/utils/format";
 import {
+  formatMonthKey,
+  resolveBillingCycleFromMonthKey,
   selectRentalDashboardSummary,
   selectRentalDashboardTrend,
 } from "@/components/rental/selectors/rental-dashboard-selectors";
@@ -14,10 +16,15 @@ type Tab = "tongquan" | "phong" | "chotthang" | "baocao" | "caidat";
 
 export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
   const state = useFinance();
-  const now = new Date();
-  const currentCycleId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const now = useMemo(() => new Date(), []);
+  const currentMonthKey = formatMonthKey(now.getFullYear(), now.getMonth() + 1);
 
   const rooms = state.rental.rooms;
+  const billingCycles = state.rental.billingCycles;
+  const currentBillingCycle = useMemo(
+    () => resolveBillingCycleFromMonthKey(billingCycles, currentMonthKey),
+    [billingCycles, currentMonthKey],
+  );
   const [activeOccupancyByRoomId, setActiveOccupancyByRoomId] = useState<
     Record<string, RentalOccupancy>
   >({});
@@ -44,14 +51,18 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
         roomBills: state.rental.roomBills,
         electricityReadings: state.rental.electricityReadings,
         activeOccupancyByRoomId,
-        cycleId: currentCycleId,
+        uiMonthKey: currentMonthKey,
+        billingCycles,
+        currentBillingCycle,
       }),
     [
       rooms,
       state.rental.roomBills,
       state.rental.electricityReadings,
       activeOccupancyByRoomId,
-      currentCycleId,
+      currentMonthKey,
+      billingCycles,
+      currentBillingCycle,
     ],
   );
 
@@ -69,8 +80,13 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
   const roomMap = Object.fromEntries(rooms.map((room) => [room.id, room]));
 
   const trendData = useMemo(
-    () => selectRentalDashboardTrend(state.rental.roomBills, now),
-    [state.rental.roomBills],
+    () =>
+      selectRentalDashboardTrend({
+        roomBills: state.rental.roomBills,
+        billingCycles,
+        referenceDate: now,
+      }),
+    [state.rental.roomBills, billingCycles, now],
   );
 
   return (
