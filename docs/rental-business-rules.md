@@ -96,6 +96,7 @@ Tab Tiền cọc **không** quản lý:
 - bill hàng tháng
 - chỉ số điện nước
 - trạng thái occupancy hiện tại của phòng
+- offset công nợ bill
 
 ---
 
@@ -238,9 +239,11 @@ Một khoản cọc mới:
 - có `amount`
 - có status ban đầu là `active`
 
-Deposit transaction history hiện tại theo hướng đơn giản chỉ cần support:
+Deposit transaction history hiện tại cần support tối thiểu:
 - `create`
 - `refund`
+- `partial_refund`
+- `forfeit`
 
 ---
 
@@ -331,16 +334,40 @@ Tab Tiền cọc phải tiếp tục nhìn thấy khoản cọc ngay cả khi:
 
 ### 4.6.1 Quyết toán cọc giai đoạn 2A
 
-Luồng quyết toán hiện tại chỉ hỗ trợ thủ công hoàn toàn bộ số tiền còn giữ cho khoản cọc có status `pending_settlement`.
+Luồng quyết toán hiện tại hỗ trợ thủ công hoàn toàn bộ số tiền còn giữ cho khoản cọc có status `pending_settlement`.
 
 Quy tắc:
 - chỉ tab **Tiền cọc** thực hiện luồng này
 - không quyết toán cọc `active`
-- không hoàn một phần
 - không trừ cọc vào bill
 - không tự động net với công nợ phòng
-- không giữ lại/forfeit trong giai đoạn này
 - khi xác nhận, hệ thống tạo một transaction `refund` bằng đúng `remainingHeld`, sau đó cập nhật deposit thành `settled`, set `settled_at` và lưu `settlement_note`
+
+### 4.6.2 Quyết toán cọc giai đoạn 2B
+
+Luồng tiếp theo hỗ trợ **hoàn một phần** cho khoản cọc có status `pending_settlement`.
+
+Quy tắc:
+- chỉ tab **Tiền cọc** thực hiện luồng này
+- không quyết toán cọc `active`
+- không offset bill
+- không tự động net với công nợ phòng
+- người dùng nhập `refundAmount`
+- hệ thống tính:
+  - `forfeitAmount = remainingHeld - refundAmount`
+- điều kiện hợp lệ:
+  - `refundAmount > 0`
+  - `refundAmount < remainingHeld`
+  - nếu `refundAmount = remainingHeld` thì phải dùng luồng Phase 2A
+- khi xác nhận, hệ thống tạo theo thứ tự:
+  - một transaction `partial_refund` = `refundAmount`
+  - một transaction `forfeit` = `forfeitAmount`
+- sau đó cập nhật deposit thành `settled`, set `settled_at` và lưu `settlement_note`
+
+Ý nghĩa nghiệp vụ:
+- phần hoàn lại cho khách được ghi nhận riêng
+- phần không hoàn được xem là khoản giữ lại cuối cùng của quyết toán
+- sau khi xử lý xong, deposit không còn ở trạng thái `pending_settlement`
 
 ---
 
@@ -420,9 +447,11 @@ Field quan trọng:
 
 `rental_deposit_transactions` là lịch sử giao dịch cọc.
 
-Hiện tại business flow đơn giản hóa về:
+Hiện tại business flow cần support:
 - `create`
 - `refund`
+- `partial_refund`
+- `forfeit`
 
 Transaction history là nền cho:
 - audit
@@ -452,11 +481,10 @@ Current rule:
 
 Các nghiệp vụ sau **chưa phải source of truth hiện tại**:
 
-- settlement workflow đầy đủ ngoài luồng hoàn toàn bộ thủ công cho `pending_settlement`
-- partial refund / offset / forfeit UX hoàn chỉnh
+- settlement workflow đầy đủ ngoài Phase 2A / 2B
+- offset bill từ tiền cọc
 - tự động trừ bill vào cọc
-- giữ lại cọc theo hư hỏng
-- partial settlement phức tạp
+- giữ lại cọc theo nhiều lý do chi tiết/phân loại
 - automation đa bước khi trả phòng
 - full historical data migration cho toàn bộ dữ liệu cũ trước occupancy rollout
 
@@ -471,6 +499,7 @@ Không làm các kiểu sau:
 - dùng tab Phòng để quản lý full deposit lifecycle
 - hiển thị cọc `pending_settlement` như cọc hiện tại của phòng
 - dùng tab Chốt tháng để quyết toán cọc
+- offset cọc vào bill trong phase hiện tại
 - xoá deposit khi người thuê trả phòng
 - đồng nhất room lifecycle với deposit lifecycle
 - coi UI state là source of truth của nghiệp vụ
