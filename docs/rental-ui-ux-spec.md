@@ -227,7 +227,9 @@ LEFT:
 
 RIGHT:
 - action/workflow panel for deposit lifecycle tasks
-- for `pending_settlement`, show the basic full-refund settlement workflow with only settlement note input and one primary action: `Hoàn toàn bộ & quyết toán`
+- for `pending_settlement`, show a compact settlement workflow selector for `Hoàn toàn bộ` and `Hoàn một phần`
+- full-refund mode keeps the existing settlement note input and primary action: `Hoàn toàn bộ & quyết toán`
+- partial-refund mode shows refund amount, settlement note, live refund/forfeit preview, and primary action: `Quyết toán một phần`
 - for `active`, show a read-only message that settlement becomes available after checkout
 - for `settled`, show a narrow read-only action-state message only
 
