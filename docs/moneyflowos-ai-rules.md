@@ -101,6 +101,7 @@ Forbidden:
 - Deposit belongs to `public.rental_deposits`.
 - Deposit is separate from monthly bills and payments.
 - Do NOT net deposit into bill totals.
+- Basic settlement currently belongs only to tab `Tiền cọc`: only `pending_settlement` deposits may be fully refunded and marked `settled`; do not settle `active` deposits or net deposits into bills.
 - Enforce one active deposit per room.
 
 ### 4.6 Chốt tháng edit lock

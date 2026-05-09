@@ -121,7 +121,7 @@ UI polish completed for deposit detail modal:
   - status/date information
   - notes
   - transaction history
-- right side is now reserved as the future deposit action/workflow panel
+- right side now contains the first deposit action/workflow panel: full refund settlement for `pending_settlement`; `active` and `settled` remain read-only states
 - business logic remains unchanged
 
 ==================================================
@@ -153,7 +153,7 @@ Checkout flow must:
 2. end occupancy
 3. clear room tenant
 
-Deposit settlement is handled later in tab `Tiền cọc`.
+Deposit settlement is handled in tab `Tiền cọc`. Current phase supports only manual full refund for deposits already in `pending_settlement`; it creates one `refund` transaction for the remaining held amount and then marks the deposit `settled` with `settled_at` and `settlement_note`.
 
 ---
 

@@ -226,14 +226,16 @@ LEFT:
 - transaction history
 
 RIGHT:
-- reserved workflow/action panel for future deposit actions
-- settlement/refund workflow will belong here in future phases
+- action/workflow panel for deposit lifecycle tasks
+- for `pending_settlement`, show the basic full-refund settlement workflow with only settlement note input and one primary action: `Hoàn toàn bộ & quyết toán`
+- for `active`, show a read-only message that settlement becomes available after checkout
+- for `settled`, show a narrow read-only action-state message only
 
 ### 6.3 Rules
 - deposit detail modal should follow the same shared modal system as Room/Bill
 - avoid duplicating read-only information across both sides
 - all current read-only information belongs on the left side
-- the right side should be reserved for future deposit actions
+- the right side should contain only the narrow workflow/action state for the current deposit status
 - do not fill the right side with redundant utility/read-only sections just to satisfy layout
 
 ---

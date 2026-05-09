@@ -120,6 +120,10 @@ export function TienCoc() {
         onOpenChange={(open) => {
           if (!open) setSelectedDeposit(null);
         }}
+        onDepositUpdated={(updatedDeposit) => {
+          setSelectedDeposit(updatedDeposit);
+          void refresh();
+        }}
       />
     </div>
   );

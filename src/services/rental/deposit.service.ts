@@ -18,7 +18,7 @@ export type CreateDepositTransactionInput = {
   depositId: string;
   roomId: string;
   tenantId: string;
-  occupancyId: string;
+  occupancyId: string | null;
   transactionType: DepositTransactionType;
   amount: number;
   note?: string;
