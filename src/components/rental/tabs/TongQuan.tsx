@@ -1,9 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Home, TrendingUp, CheckCircle2, AlertCircle, DoorOpen, Zap, FileText, ArrowRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useFinance } from "@/lib/finance-store";
-import { formatCompact } from "@/lib/format"
+import { formatCompact } from "@/lib/format";
 import { formatMoney } from "@/utils/format";
+import {
+  selectRentalDashboardSummary,
+  selectRentalDashboardTrend,
+} from "@/components/rental/selectors/rental-dashboard-selectors";
+import { occupancyService, type RentalOccupancy } from "@/services/occupancy.service";
 
 type Tab = "tongquan" | "phong" | "chotthang" | "baocao" | "caidat";
 
@@ -13,36 +18,60 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
   const currentCycleId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   const rooms = state.rental.rooms;
-  const occupied = rooms.filter((r) => r.occupied);
-  const empty = rooms.filter((r) => !r.occupied);
+  const [activeOccupancyByRoomId, setActiveOccupancyByRoomId] = useState<
+    Record<string, RentalOccupancy>
+  >({});
 
-  const currentBills = state.rental.roomBills.filter((b) => b.cycleId === currentCycleId);
-  const totalRevenue = currentBills.reduce((s, b) => s + b.totalAmount, 0);
-  const totalCollected = currentBills.reduce((s, b) => s + b.paidAmount, 0);
-  const totalDebt = Math.max(totalRevenue - totalCollected, 0);
+  useEffect(() => {
+    const loadActiveOccupancies = async () => {
+      try {
+        setActiveOccupancyByRoomId(
+          await occupancyService.getActiveOccupancyByRoomIds(rooms.map((room) => room.id)),
+        );
+      } catch (error) {
+        console.error("[tong-quan] load active occupancies failed", error);
+        setActiveOccupancyByRoomId({});
+      }
+    };
 
-  const roomsWithReadings = new Set(
-    state.rental.electricityReadings
-      .filter((r) => r.cycleId === currentCycleId)
-      .map((r) => r.roomId),
+    void loadActiveOccupancies();
+  }, [rooms]);
+
+  const dashboardSummary = useMemo(
+    () =>
+      selectRentalDashboardSummary({
+        rooms,
+        roomBills: state.rental.roomBills,
+        electricityReadings: state.rental.electricityReadings,
+        activeOccupancyByRoomId,
+        cycleId: currentCycleId,
+      }),
+    [
+      rooms,
+      state.rental.roomBills,
+      state.rental.electricityReadings,
+      activeOccupancyByRoomId,
+      currentCycleId,
+    ],
   );
-  const missingElectricity = occupied.filter((r) => !roomsWithReadings.has(r.id));
-  const unpaidBills = currentBills.filter((b) => b.paidAmount < b.totalAmount);
 
-  const roomMap = Object.fromEntries(rooms.map((r) => [r.id, r]));
+  const {
+    occupiedCount,
+    emptyCount,
+    currentBills,
+    totalRevenue,
+    totalCollected,
+    totalDebt,
+    unpaidBills,
+    missingReadings,
+  } = dashboardSummary;
 
-  const trendData = useMemo(() => {
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const bills = state.rental.roomBills.filter((b) => b.cycleId === key);
-      const revenue = bills.reduce((s, b) => s + b.totalAmount, 0);
-      const collected = bills.reduce((s, b) => s + b.paidAmount, 0);
-      months.push({ month: `T${d.getMonth() + 1}`, revenue, collected });
-    }
-    return months;
-  }, [state.rental.roomBills]);
+  const roomMap = Object.fromEntries(rooms.map((room) => [room.id, room]));
+
+  const trendData = useMemo(
+    () => selectRentalDashboardTrend(state.rental.roomBills, now),
+    [state.rental.roomBills],
+  );
 
   return (
     <div className="space-y-5">
@@ -50,8 +79,8 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
         <KpiCard
           icon={<Home className="h-4 w-4" />}
           label="Tỷ lệ lấp đầy"
-          value={`${occupied.length}/${rooms.length}`}
-          sub={`${rooms.length > 0 ? Math.round((occupied.length / rooms.length) * 100) : 0}% công suất`}
+          value={`${occupiedCount}/${rooms.length}`}
+          sub={`${rooms.length > 0 ? Math.round((occupiedCount / rooms.length) * 100) : 0}% công suất`}
           color="blue"
         />
         <KpiCard
@@ -78,7 +107,7 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
         <KpiCard
           icon={<DoorOpen className="h-4 w-4" />}
           label="Phòng trống"
-          value={String(empty.length)}
+          value={String(emptyCount)}
           sub="đang không có khách"
           color="slate"
         />
@@ -97,8 +126,8 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
           <ActionWidget
             icon={<Zap className="h-4 w-4 text-amber-500" />}
             title="Chưa nhập điện nước"
-            count={missingElectricity.length}
-            items={missingElectricity.map((r) => r.name)}
+            count={missingReadings.length}
+            items={missingReadings.map((room) => room.name)}
             emptyText="Tất cả phòng đã nhập số điện"
             colorScheme="amber"
           />
@@ -106,7 +135,7 @@ export function TongQuan({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
             icon={<FileText className="h-4 w-4 text-rose-500" />}
             title="Hóa đơn chưa thu"
             count={unpaidBills.length}
-            items={unpaidBills.map((b) => roomMap[b.roomId]?.name ?? b.roomId)}
+            items={unpaidBills.map((bill) => roomMap[bill.roomId]?.name ?? bill.roomId)}
             emptyText="Tất cả đã thu tiền rồi"
             colorScheme="rose"
           />
