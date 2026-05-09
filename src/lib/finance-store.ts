@@ -466,7 +466,6 @@ class FinanceStore {
       // Ensure cycle exists
       const dbCycleId = await cloud.upsertCycle(this.userId, month, year);
       const row = await cloud.upsertReading(this.userId, roomId, dbCycleId, activeOccupancy.id, startIndex, endIndex, waterM3);
-      if (!row) throw new Error("Reading belongs to another occupancy for this room and cycle");
       // Update the reading id from temp to real; keep cycleId as formatted "YYYY-MM" string (not the UUID)
       const final = {
         ...nextReading,

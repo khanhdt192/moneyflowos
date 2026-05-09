@@ -507,17 +507,6 @@ export const cloud = {
       return updated;
     }
 
-    // Legacy room+cycle constraints may still exist in some databases. Never
-    // update a null/different occupancy row as the current active occupancy.
-    const { data: legacyRoomCycleReading, error: legacyLookupError } = await (supabase as any)
-      .from("rental_electricity_readings")
-      .select("id, occupancy_id")
-      .eq("user_id", userId)
-      .eq("room_id", roomId)
-      .eq("cycle_id", cycleId)
-      .maybeSingle();
-    if (legacyLookupError) throw legacyLookupError;
-    if (legacyRoomCycleReading && (legacyRoomCycleReading as any).occupancy_id !== occupancyId) return null;
 
     throw error;
   },
