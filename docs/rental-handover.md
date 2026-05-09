@@ -153,7 +153,7 @@ Checkout flow must:
 2. end occupancy
 3. clear room tenant
 
-Deposit settlement is handled in tab `Tiền cọc`. Current phase supports only manual full refund for deposits already in `pending_settlement`; it creates one `refund` transaction for the remaining held amount and then marks the deposit `settled` with `settled_at` and `settlement_note`.
+Deposit settlement is handled in tab `Tiền cọc`. Current phase supports manual full refund for deposits already in `pending_settlement`; it creates one `refund` transaction for the remaining held amount and then marks the deposit `settled` with `settled_at` and `settlement_note`. It also supports partial refund settlement for deposits already in `pending_settlement`; it creates one `partial_refund` transaction for the refunded amount and one `forfeit` transaction for the remaining held amount, then marks the deposit `settled` with `settled_at` and `settlement_note`.
 
 ---
 

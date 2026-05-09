@@ -101,12 +101,16 @@ export function TienCocDetailModal({
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [transactionError, setTransactionError] = useState<string | null>(null);
   const [settlementNote, setSettlementNote] = useState("");
+  const [settlementMode, setSettlementMode] = useState<"full" | "partial">("full");
+  const [partialRefundAmount, setPartialRefundAmount] = useState("");
   const [settling, setSettling] = useState(false);
   const [settlementError, setSettlementError] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentDeposit(initialDeposit);
     setSettlementNote("");
+    setSettlementMode("full");
+    setPartialRefundAmount("");
     setSettlementError(null);
   }, [initialDeposit]);
 
@@ -146,12 +150,45 @@ export function TienCocDetailModal({
 
   const deposit = currentDeposit;
   const summary = depositTransactionService.calculateDepositSummary(transactions, deposit.amount);
+  const partialRefundValue = partialRefundAmount.trim() === "" ? NaN : Number(partialRefundAmount);
+  const partialForfeitAmount = Number.isFinite(partialRefundValue)
+    ? Math.max(summary.remainingHeld - partialRefundValue, 0)
+    : 0;
+  const partialRefundError = (() => {
+    if (settlementMode !== "partial" || partialRefundAmount.trim() === "") return null;
+    if (!Number.isFinite(partialRefundValue)) return "Số tiền hoàn khách không hợp lệ.";
+    if (partialRefundValue <= 0) return "Số tiền hoàn khách phải lớn hơn 0.";
+    if (partialRefundValue === summary.remainingHeld) {
+      return "Nếu hoàn toàn bộ số tiền đang giữ, hãy dùng luồng Hoàn toàn bộ.";
+    }
+    if (partialRefundValue > summary.remainingHeld) {
+      return "Số tiền hoàn khách không được lớn hơn số tiền đang giữ.";
+    }
+    return null;
+  })();
   const canSettle =
     deposit.status === "pending_settlement" &&
     summary.remainingHeld > 0 &&
     !loadingTransactions &&
     !transactionError &&
     !settling;
+  const canPartialSettle =
+    canSettle &&
+    settlementMode === "partial" &&
+    partialRefundAmount.trim() !== "" &&
+    !partialRefundError &&
+    partialRefundValue > 0 &&
+    partialRefundValue < summary.remainingHeld;
+
+  async function refreshDepositAndTransactions(depositId: string, fallbackDeposit: RentalDepositForTab) {
+    const freshDeposit = await depositService.getDepositForTabById(depositId);
+    const nextDeposit = freshDeposit ?? fallbackDeposit;
+    setCurrentDeposit(nextDeposit);
+    onDepositUpdated?.(nextDeposit);
+
+    const refreshedTransactions = await depositTransactionService.getDepositTransactions(depositId);
+    setTransactions(refreshedTransactions);
+  }
 
   async function handleFullRefundSettlement() {
     if (settling) return;
@@ -174,22 +211,63 @@ export function TienCocDetailModal({
         deposit.id,
         settlementNote,
       );
-      setCurrentDeposit(updatedDeposit);
-      onDepositUpdated?.(updatedDeposit);
-
-      try {
-        const refreshedTransactions = await depositTransactionService.getDepositTransactions(
-          deposit.id,
-        );
-        setTransactions(refreshedTransactions);
-      } catch (refreshError) {
-        console.error("[deposit-detail] transaction refresh failed", refreshError);
-        setTransactionError("Đã quyết toán cọc nhưng chưa tải lại được lịch sử giao dịch.");
-      }
+      await refreshDepositAndTransactions(deposit.id, updatedDeposit);
 
       toast.success("Đã hoàn toàn bộ tiền cọc và quyết toán.");
     } catch (err) {
       console.error("[deposit-detail] settlement failed", err);
+      const message = err instanceof Error ? err.message : "Không thể quyết toán tiền cọc.";
+      setSettlementError(message);
+      toast.error(message);
+    } finally {
+      setSettling(false);
+    }
+  }
+
+  async function handlePartialRefundSettlement() {
+    if (settling) return;
+
+    if (deposit.status !== "pending_settlement") {
+      setSettlementError("Chỉ quyết toán khoản cọc đang chờ quyết toán.");
+      return;
+    }
+
+    if (summary.remainingHeld <= 0) {
+      setSettlementError("Khoản cọc không còn số tiền đang giữ để quyết toán.");
+      return;
+    }
+
+    if (partialRefundError) {
+      setSettlementError(partialRefundError);
+      return;
+    }
+
+    if (!Number.isFinite(partialRefundValue) || partialRefundValue <= 0) {
+      setSettlementError("Số tiền hoàn khách phải lớn hơn 0.");
+      return;
+    }
+
+    if (partialRefundValue >= summary.remainingHeld) {
+      setSettlementError(
+        "Số tiền hoàn phải nhỏ hơn số tiền đang giữ. Nếu hoàn toàn bộ, hãy dùng luồng Hoàn toàn bộ.",
+      );
+      return;
+    }
+
+    setSettling(true);
+    setSettlementError(null);
+
+    try {
+      const updatedDeposit = await depositService.settlePendingDepositPartialRefund(
+        deposit.id,
+        partialRefundValue,
+        settlementNote,
+      );
+      await refreshDepositAndTransactions(deposit.id, updatedDeposit);
+
+      toast.success("Đã quyết toán cọc bằng hoàn một phần.");
+    } catch (err) {
+      console.error("[deposit-detail] partial settlement failed", err);
       const message = err instanceof Error ? err.message : "Không thể quyết toán tiền cọc.";
       setSettlementError(message);
       toast.error(message);
@@ -339,6 +417,59 @@ export function TienCocDetailModal({
             <SectionCard title="Tác vụ tiền cọc">
               {deposit.status === "pending_settlement" ? (
                 <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettlementMode("full");
+                        setSettlementError(null);
+                      }}
+                      disabled={settling}
+                      className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        settlementMode === "full"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Hoàn toàn bộ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettlementMode("partial");
+                        setSettlementError(null);
+                      }}
+                      disabled={settling}
+                      className={`rounded-md px-3 py-2 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        settlementMode === "partial"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Hoàn một phần
+                    </button>
+                  </div>
+
+                  {settlementMode === "partial" && (
+                    <label className="block space-y-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Số tiền hoàn khách
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={partialRefundAmount}
+                        onChange={(event) => {
+                          setPartialRefundAmount(event.target.value);
+                          setSettlementError(null);
+                        }}
+                        disabled={settling}
+                        placeholder="Nhập số tiền hoàn"
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      />
+                    </label>
+                  )}
+
                   <label className="block space-y-1.5">
                     <span className="text-xs font-medium text-muted-foreground">
                       Ghi chú quyết toán
@@ -347,11 +478,42 @@ export function TienCocDetailModal({
                       value={settlementNote}
                       onChange={(event) => setSettlementNote(event.target.value)}
                       disabled={settling}
-                      rows={4}
-                      placeholder="Nhập ghi chú hoàn cọc (nếu có)"
-                      className="min-h-24 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      rows={settlementMode === "partial" ? 3 : 4}
+                      placeholder={
+                        settlementMode === "partial"
+                          ? "Nhập ghi chú quyết toán (nếu có)"
+                          : "Nhập ghi chú hoàn cọc (nếu có)"
+                      }
+                      className="min-h-20 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
                     />
                   </label>
+
+                  {settlementMode === "partial" && (
+                    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-3 py-1">
+                        <span className="text-muted-foreground">Hoàn khách:</span>
+                        <span className="font-semibold tabular-nums text-foreground">
+                          {Number.isFinite(partialRefundValue) && partialRefundValue > 0
+                            ? formatMoney(partialRefundValue)
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 py-1">
+                        <span className="text-muted-foreground">Giữ lại:</span>
+                        <span className="font-semibold tabular-nums text-foreground">
+                          {Number.isFinite(partialRefundValue) && partialRefundValue > 0
+                            ? formatMoney(partialForfeitAmount)
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {partialRefundError && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                      {partialRefundError}
+                    </div>
+                  )}
 
                   {settlementError && (
                     <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
@@ -365,15 +527,27 @@ export function TienCocDetailModal({
                     </div>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => void handleFullRefundSettlement()}
-                    disabled={!canSettle}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {settling && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {settling ? "Đang quyết toán..." : "Hoàn toàn bộ & quyết toán"}
-                  </button>
+                  {settlementMode === "full" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleFullRefundSettlement()}
+                      disabled={!canSettle}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {settling && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {settling ? "Đang quyết toán..." : "Hoàn toàn bộ & quyết toán"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handlePartialRefundSettlement()}
+                      disabled={!canPartialSettle}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {settling && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {settling ? "Đang quyết toán..." : "Quyết toán một phần"}
+                    </button>
+                  )}
                 </div>
               ) : deposit.status === "active" ? (
                 <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-6 text-center">

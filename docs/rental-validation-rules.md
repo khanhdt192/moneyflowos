@@ -149,6 +149,7 @@ Phòng:
 - tenant name valid
 - phone digits-only
 - deposit valid
+- partial deposit settlement only accepts `pending_settlement` deposits with `refundAmount > 0` and `refundAmount < remainingHeld`; `refundAmount = remainingHeld` must use the full-refund flow
 
 Chốt tháng:
 - edit lock works
