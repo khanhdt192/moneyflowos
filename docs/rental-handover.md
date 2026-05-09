@@ -116,13 +116,28 @@ UI polish completed for deposit detail modal:
 - deposit detail modal now follows the shared rental modal language more closely
 - sticky header + explicit close button
 - desktop 2-column layout
-- left side now owns the full read-only snapshot:
+- left side owns the full read-only snapshot:
   - deposit summary
   - status/date information
   - notes
   - transaction history
-- right side now contains the first deposit action/workflow panel: full refund settlement for `pending_settlement`; `active` and `settled` remain read-only states
-- business logic remains unchanged
+- right side is the deposit action/workflow panel
+
+### O5 / Deposit settlement phase 2A
+Basic deposit settlement is complete:
+- full refund settlement for `pending_settlement`
+- create one `refund` transaction
+- update deposit to `settled`
+- save `settled_at` and `settlement_note`
+
+### O6 / Deposit settlement phase 2B
+Partial deposit settlement is complete:
+- partial refund settlement for `pending_settlement`
+- create one `partial_refund` transaction
+- create one `forfeit` transaction
+- update deposit to `settled`
+- save `settled_at` and `settlement_note`
+- no bill coupling / no offset flow
 
 ==================================================
 IMPORTANT BUSINESS RULES
@@ -153,7 +168,22 @@ Checkout flow must:
 2. end occupancy
 3. clear room tenant
 
-Deposit settlement is handled in tab `Tiền cọc`. Current phase supports manual full refund for deposits already in `pending_settlement`; it creates one `refund` transaction for the remaining held amount and then marks the deposit `settled` with `settled_at` and `settlement_note`. It also supports partial refund settlement for deposits already in `pending_settlement`; it creates one `partial_refund` transaction for the refunded amount and one `forfeit` transaction for the remaining held amount, then marks the deposit `settled` with `settled_at` and `settlement_note`.
+Deposit settlement is handled in tab `Tiền cọc`.
+
+Current supported deposit settlement flows:
+- Phase 2A:
+  - manual full refund for `pending_settlement`
+  - create one `refund` transaction for the remaining held amount
+  - then mark the deposit `settled` with `settled_at` and `settlement_note`
+- Phase 2B:
+  - manual partial refund for `pending_settlement`
+  - create one `partial_refund` transaction for the refunded amount
+  - create one `forfeit` transaction for the retained amount
+  - then mark the deposit `settled` with `settled_at` and `settlement_note`
+
+Explicitly not supported in the current phase:
+- offset bill from deposit
+- auto netting with room debt
 
 ---
 
@@ -208,7 +238,9 @@ Current visual reference:
 - deposit detail modal is now a valid reference for spacing, hierarchy, and section grouping
 - its current structure is:
   - LEFT = full read-only snapshot + notes + history
-  - RIGHT = reserved action/workflow shell for the next deposit phase
+  - RIGHT = deposit settlement action panel
+    - full refund mode
+    - partial refund mode
 - Room/Bill detail modals should be polished toward the same visual standard
 
 Current next UI/UX priority:
@@ -291,6 +323,14 @@ Those datasets may require:
 
 depending on the environment.
 
+Also note:
+- DB constraint / migration for `rental_deposit_transactions.transaction_type` must include:
+  - `create`
+  - `refund`
+  - `partial_refund`
+  - `forfeit`
+- app code + docs alone are not sufficient unless the DB constraint is migrated too
+
 ==================================================
 NEXT RECOMMENDED TASK
 ==================================================
@@ -312,12 +352,14 @@ Current architecture direction is occupancy-aware and the core flow has been tes
 3. create bill
 4. mark paid
 5. checkout
-6. assign new tenant in same room + same cycle
-7. save readings again
+6. settle deposit by full refund
+7. settle deposit by partial refund
+8. assign new tenant in same room + same cycle
+9. save readings again
 
 This flow is now passing in the current environment.
 
-Deposit detail modal polish and layout cleanup have been merged, so the current UI consistency task is no longer `Tiền cọc` first.
+Deposit settlement core is no longer the immediate next feature gap.
 
 When touching:
 - billing
