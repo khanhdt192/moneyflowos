@@ -55,7 +55,7 @@ function StatusBadge({ status }: { status: RentalDepositForTab["status"] }) {
 
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:rounded-xl">
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
       </h3>
@@ -66,9 +66,9 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-border/60 py-2 last:border-0">
+    <div className="flex items-start justify-between gap-4 border-b border-border/60 py-3 last:border-0 sm:py-2 max-sm:flex-col max-sm:gap-1">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="min-w-0 text-right text-sm font-medium text-foreground">{children}</div>
+      <div className="min-w-0 text-left text-sm font-medium text-foreground sm:text-right">{children}</div>
     </div>
   );
 }
@@ -278,18 +278,19 @@ export function TienCocDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden">
-        <DialogHeader className="-mx-6 -mt-6 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-2 backdrop-blur">
+      <DialogContent className="bottom-0 top-auto max-h-[92dvh] w-full max-w-none translate-y-0 overflow-y-auto rounded-t-3xl p-4 [&>button]:hidden sm:bottom-auto sm:top-[50%] sm:max-h-[90vh] sm:w-[95vw] sm:max-w-5xl sm:translate-y-[-50%] sm:rounded-xl sm:p-6">
+        <DialogHeader className="-mx-4 -mt-4 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 text-left backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 sm:py-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <DialogTitle className="min-w-0 truncate text-base font-semibold text-foreground">
-                  {deposit.room_name} • {deposit.tenant_full_name} • Tiền cọc
+                <DialogTitle className="min-w-0 text-base font-semibold text-foreground sm:truncate">
+                  <span className="sm:hidden">Tiền cọc · {deposit.tenant_full_name}</span>
+                  <span className="hidden sm:inline">{deposit.room_name} • {deposit.tenant_full_name} • Tiền cọc</span>
                 </DialogTitle>
                 <StatusBadge status={deposit.status} />
               </div>
               <p className="text-sm text-muted-foreground">
-                {deposit.tenant_phone || "Chưa có SĐT"}
+                {deposit.room_name} · {deposit.tenant_phone || "Chưa có SĐT"}
               </p>
             </div>
             <button
@@ -303,8 +304,8 @@ export function TienCocDetailModal({
           </div>
         </DialogHeader>
 
-        <div className="grid gap-5 pt-3 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-5">
+        <div className="grid gap-4 pt-3 sm:gap-5 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-4 sm:space-y-5">
             <SectionCard title="Thông tin cọc">
               <div>
                 <InfoRow label="Người thuê">
@@ -413,7 +414,7 @@ export function TienCocDetailModal({
             </SectionCard>
           </div>
 
-          <div className="space-y-5 lg:sticky lg:top-14 lg:self-start">
+          <div className="space-y-4 sm:space-y-5 lg:sticky lg:top-14 lg:self-start">
             <SectionCard title="Tác vụ tiền cọc">
               {deposit.status === "pending_settlement" ? (
                 <div className="space-y-4">
