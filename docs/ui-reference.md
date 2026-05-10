@@ -31,9 +31,27 @@ Especially for rental mobile work:
 
 ---
 
-## 2. Core design principles
+## 2. Quick reference map
 
-## 2.1 One app, one visual language
+Use this section first when implementing UI.
+
+| Need | Best existing reference | Why |
+|---|---|---|
+| App shell, responsive navigation, mobile drawer | `src/components/layout/AppShell.tsx`, `AppSidebar.tsx`, `TopHeader.tsx` | Shared navigation, sticky header, mobile drawer, FAB |
+| KPI row | `src/components/budget/BudgetBuilder.tsx`, `src/components/dashboard/KpiCard.tsx` | Premium summary cards with strong hierarchy |
+| Search + chips filter bar | `src/components/transactions/TransactionList.tsx` | Compact and mobile-friendly filter pattern |
+| Card grid / item cards | `src/components/goals/GoalsBoard.tsx` | Strong card-based entity presentation |
+| Simple settings / admin page | `src/routes/settings.tsx` | Clean, calm management UI |
+| Action cards above data | `src/components/reports/ReportsPanel.tsx` | Good “action first, data below” pattern |
+| Desktop table inside premium shell | `TransactionList.tsx`, `ReportsPanel.tsx` | Desktop-only table direction that still feels on-brand |
+| Empty states | `TransactionList.tsx` | Calm, centered, non-noisy empty state |
+| Mobile primary action | `AppShell.tsx`, `TopHeader.tsx` | FAB / primary CTA split by breakpoint |
+
+---
+
+## 3. Core design principles
+
+## 3.1 One app, one visual language
 
 All modules should feel like one product.
 
@@ -50,9 +68,15 @@ Use the same:
 
 Avoid creating a separate design language for rental.
 
+**Concrete references**
+- Shared shell and navigation: `src/components/layout/AppShell.tsx`, `AppSidebar.tsx`, `TopHeader.tsx`
+- Dashboard premium card language: `src/components/budget/BudgetBuilder.tsx`
+- Goal cards: `src/components/goals/GoalsBoard.tsx`
+- Settings cards: `src/routes/settings.tsx`
+
 ---
 
-## 2.2 Desktop and mobile are different layouts, not one squeezed table
+## 3.2 Desktop and mobile are different layouts, not one squeezed table
 
 The main app works well on mobile because it does **not** try to preserve dense desktop table layouts everywhere.
 
@@ -69,9 +93,18 @@ Important:
 - do not treat `overflow-x-auto` on large tables as a complete mobile solution
 - horizontal table scroll is acceptable only as a fallback, not the default mobile experience
 
+**Concrete interpretation for rental**
+- Desktop rental can keep tables for `Phòng`, `Chốt tháng`, `Tiền cọc`
+- Mobile rental should render separate list/card layouts instead of just shrinking those tables
+
+**Recommended implementation pattern**
+- `XxxTab.tsx` = container
+- `XxxDesktopTable.tsx` = existing desktop presentation
+- `XxxMobileCards.tsx` = new mobile presentation
+
 ---
 
-## 2.3 Visual hierarchy first
+## 3.3 Visual hierarchy first
 
 The current app consistently uses 3 layers:
 
@@ -81,11 +114,16 @@ The current app consistently uses 3 layers:
 
 New screens should keep this hierarchy obvious.
 
+**Concrete references**
+- Page shell + content rhythm: `src/routes/cash-flow.tsx`, `goals.tsx`, `reports.tsx`, `settings.tsx`
+- Hero panel + side panel: `src/components/budget/BudgetBuilder.tsx`
+- Card-only content page: `src/components/goals/GoalsBoard.tsx`
+
 ---
 
-## 3. App shell patterns
+## 4. App shell patterns
 
-## 3.1 Sidebar + mobile drawer
+## 4.1 Sidebar + mobile drawer
 
 Current shell direction:
 - desktop: persistent left sidebar
@@ -105,9 +143,18 @@ Avoid:
 - a second unrelated mobile nav taxonomy
 - multiple competing mobile nav systems in the same app
 
+**Concrete reference**
+- `src/components/layout/AppSidebar.tsx`
+
+**Patterns to copy**
+- shared nav items between desktop and mobile
+- overlay on mobile
+- explicit close action
+- active nav row with stronger visual emphasis
+
 ---
 
-## 3.2 Top header
+## 4.2 Top header
 
 Current strong patterns:
 - sticky header
@@ -126,9 +173,17 @@ Good reference behaviors:
 - larger search input is desktop-only
 - quick-add becomes FAB on mobile
 
+**Concrete reference**
+- `src/components/layout/TopHeader.tsx`
+
+**Patterns to copy**
+- sticky compact header
+- action density changes by breakpoint
+- mobile-only second row when needed
+
 ---
 
-## 3.3 Mobile FAB
+## 4.3 Mobile FAB
 
 The app already uses a floating action button for quick add on mobile.
 
@@ -145,11 +200,14 @@ Bad use cases:
 - destructive actions
 - ambiguous multi-action shortcuts
 
+**Concrete reference**
+- `src/components/layout/AppShell.tsx`
+
 ---
 
-## 4. Page shell patterns
+## 5. Page shell patterns
 
-## 4.1 Standard page width
+## 5.1 Standard page width
 
 The app generally uses centered constrained widths:
 - `max-w-6xl` for broader data pages
@@ -159,9 +217,13 @@ Guideline:
 - keep page width intentional
 - do not let content stretch edge-to-edge on desktop unless there is a strong reason
 
+**Concrete references**
+- broad page: `src/routes/cash-flow.tsx`, `goals.tsx`, `reports.tsx`
+- narrow page: `src/routes/settings.tsx`
+
 ---
 
-## 4.2 Page header pattern
+## 5.2 Page header pattern
 
 The existing app consistently uses:
 - page title
@@ -173,11 +235,17 @@ Rules:
 - subtitle should explain purpose, not repeat the title
 - do not overload page headers with too many buttons if those actions already exist inside the page body
 
+**Concrete references**
+- `src/routes/cash-flow.tsx`
+- `src/routes/goals.tsx`
+- `src/routes/reports.tsx`
+- `src/routes/settings.tsx`
+
 ---
 
-## 5. Card system
+## 6. Card system
 
-## 5.1 Card style
+## 6.1 Card style
 
 Current app direction:
 - rounded corners are generous
@@ -194,9 +262,15 @@ Avoid:
 - sharp rectangular utility blocks mixed into otherwise soft UI
 - inconsistent radii between adjacent cards in the same page
 
+**Concrete references**
+- `src/routes/settings.tsx`
+- `src/components/goals/GoalsBoard.tsx`
+- `src/components/reports/ReportsPanel.tsx`
+- `src/components/transactions/TransactionList.tsx`
+
 ---
 
-## 5.2 Card content density
+## 6.2 Card content density
 
 Cards in the good parts of the app follow a clear pattern:
 - title / micro-label
@@ -209,9 +283,14 @@ Avoid:
 - dumping too many unrelated controls into one card
 - combining summary + edit form + destructive actions in the same visual block when they should be separated
 
+**Good examples**
+- `ActionCard` in `ReportsPanel.tsx`
+- `GoalCard` in `GoalsBoard.tsx`
+- settings sections in `settings.tsx`
+
 ---
 
-## 6. KPI cards
+## 7. KPI cards
 
 Dashboard KPI cards are a strong reference.
 
@@ -229,11 +308,21 @@ Rules:
 
 If rental uses KPI cards, they should follow the same anatomy.
 
+**Concrete references**
+- `src/components/budget/BudgetBuilder.tsx`
+- `src/components/dashboard/KpiCard.tsx`
+
+**Copy this for rental**
+- top icon badge
+- large main number
+- muted support line
+- no more than one secondary line
+
 ---
 
-## 7. Filters and control bars
+## 8. Filters and control bars
 
-## 7.1 Search + chips pattern
+## 8.1 Search + chips pattern
 
 `TransactionList` is a strong reference for filter UI:
 - search field inside a rounded card
@@ -249,9 +338,18 @@ Avoid:
 - placing related filters in widely separated areas
 - using dropdowns for every filter when a few chips would scan faster
 
+**Concrete reference**
+- `src/components/transactions/TransactionList.tsx`
+
+**Copy this for rental mobile**
+- room status chips
+- bill status chips
+- deposit status chips
+- mobile search/filter grouped in one block
+
 ---
 
-## 7.2 Sticky controls on mobile
+## 8.2 Sticky controls on mobile
 
 For mobile-heavy workflows, sticky mini control bars are preferred over repeating controls throughout the list.
 
@@ -261,11 +359,19 @@ Good candidates:
 - month selector
 - section toggle
 
+**Concrete reference direction**
+- Sticky header behavior: `TopHeader.tsx`
+- Month selector split by breakpoint: `TopHeader.tsx`
+
+**Apply to rental**
+- sticky rental tab bar
+- sticky month/status filter row on mobile
+
 ---
 
-## 8. Data presentation patterns
+## 9. Data presentation patterns
 
-## 8.1 Desktop tables are acceptable
+## 9.1 Desktop tables are acceptable
 
 The main app still uses tables where appropriate:
 - transaction list
@@ -278,9 +384,13 @@ But they work because:
 - the table is contained inside a styled card
 - surrounding filters / summaries / actions are clean
 
+**Concrete references**
+- `src/components/transactions/TransactionList.tsx`
+- `src/components/reports/ReportsPanel.tsx`
+
 ---
 
-## 8.2 Mobile should prefer card lists over raw tables
+## 9.2 Mobile should prefer card lists over raw tables
 
 When the content is action-heavy or harder to scan on small screens, mobile should use card lists instead of preserving the desktop table.
 
@@ -290,9 +400,14 @@ Recommended mobile approach:
 - desktop: keep table if already good
 - mobile: render card list with the same data and actions in a more usable structure
 
+**Direct guidance for rental**
+- `Phòng` → room cards
+- `Chốt tháng` → billing workflow cards
+- `Tiền cọc` → deposit lifecycle cards
+
 ---
 
-## 8.3 Contained table pattern
+## 9.3 Contained table pattern
 
 If a table remains on desktop, keep these rules:
 - table sits inside a rounded bordered card
@@ -301,11 +416,15 @@ If a table remains on desktop, keep these rules:
 - actions do not dominate each row
 - empty state is centered and calm
 
+**Concrete references**
+- `TransactionList.tsx`
+- `ReportsPanel.tsx`
+
 ---
 
-## 9. Forms and field styling
+## 10. Forms and field styling
 
-## 9.1 Input style
+## 10.1 Input style
 
 Shared good patterns across the app:
 - rounded-xl inputs
@@ -319,9 +438,14 @@ Rules:
 - labels are small, uppercase or muted, but still readable
 - forms should not feel cramped on mobile
 
+**Concrete references**
+- `src/routes/settings.tsx`
+- `src/components/goals/GoalsBoard.tsx`
+- `src/components/transactions/TransactionList.tsx`
+
 ---
 
-## 9.2 Form grouping
+## 10.2 Form grouping
 
 Good forms in the app group fields by intent.
 
@@ -334,11 +458,15 @@ Avoid:
 - long uninterrupted sequences of fields without grouping
 - placing destructive actions next to primary save actions unless clearly separated
 
+**Concrete references**
+- edit and create states in `GoalsBoard.tsx`
+- account/data settings in `settings.tsx`
+
 ---
 
-## 10. Buttons and action hierarchy
+## 11. Buttons and action hierarchy
 
-## 10.1 Primary actions
+## 11.1 Primary actions
 
 Current app pattern:
 - filled dark button
@@ -351,7 +479,12 @@ Use for:
 - save
 - primary next step
 
-## 10.2 Secondary actions
+**Concrete references**
+- save button in `settings.tsx`
+- create/save actions in `GoalsBoard.tsx`
+- quick add button in `TopHeader.tsx`
+
+## 11.2 Secondary actions
 
 Current app pattern:
 - bordered or softer background button
@@ -362,7 +495,11 @@ Use for:
 - helper actions
 - non-destructive utilities
 
-## 10.3 Icon-only actions
+**Concrete references**
+- logout button in `settings.tsx`
+- action cards are secondary utilities in `ReportsPanel.tsx`
+
+## 11.3 Icon-only actions
 
 Use sparingly.
 
@@ -371,9 +508,13 @@ Rules:
 - should not be the only discoverable path for a core workflow
 - destructive icon-only actions need extra clarity
 
+**Concrete references**
+- row delete action in `TransactionList.tsx`
+- edit/close icons in `GoalsBoard.tsx`
+
 ---
 
-## 11. Motion and interaction feel
+## 12. Motion and interaction feel
 
 The app already uses motion tastefully in places like goals and transactions.
 
@@ -391,9 +532,13 @@ Avoid:
 - dramatic bouncy motion in serious finance workflows
 - inconsistent animation speeds between pages
 
+**Concrete references**
+- `GoalsBoard.tsx`
+- `TransactionList.tsx`
+
 ---
 
-## 12. Copy style
+## 13. Copy style
 
 The current app UI copy generally works best when it is:
 - concise
@@ -407,9 +552,14 @@ Rules:
 - empty states should sound calm and encouraging
 - destructive text should be direct and unambiguous
 
+**Concrete references**
+- page subtitles in route files
+- helper text in `settings.tsx`
+- empty state in `TransactionList.tsx`
+
 ---
 
-## 13. Empty states
+## 14. Empty states
 
 Current strong pattern:
 - centered content
@@ -422,9 +572,18 @@ Rules:
 - use them to guide next action
 - keep emotional tone light and optimistic
 
+**Concrete reference**
+- `TransactionList.tsx`
+
+**Use this style in rental**
+- no rooms yet
+- no bills for month
+- no deposits yet
+- no camera sources yet
+
 ---
 
-## 14. Settings page pattern
+## 15. Settings page pattern
 
 The settings screen is a strong reference for simple mobile-friendly management UI.
 
@@ -438,9 +597,12 @@ Rules:
 - settings-like screens should feel calm and dependable
 - do not mix too many high-risk actions into one visual area
 
+**Concrete reference**
+- `src/routes/settings.tsx`
+
 ---
 
-## 15. Reports page pattern
+## 16. Reports page pattern
 
 The reports page is a strong example of:
 - action cards at top
@@ -451,9 +613,17 @@ Rules:
 - action cards should be visually tappable and self-explanatory
 - export/print utilities should sit above or beside the data they affect
 
+**Concrete reference**
+- `src/components/reports/ReportsPanel.tsx`
+
+**Apply to rental**
+- invoice exports
+- camera quick actions
+- rental utilities should look like action cards, not raw admin buttons
+
 ---
 
-## 16. Goals page pattern
+## 17. Goals page pattern
 
 The goals page is a strong example of:
 - card grid as primary content model
@@ -466,9 +636,17 @@ Rules:
 - add-new states should feel like part of the same system
 - progress should be visually strong but not noisy
 
+**Concrete reference**
+- `src/components/goals/GoalsBoard.tsx`
+
+**Apply to rental where useful**
+- room card lists
+- deposit lifecycle cards
+- utility settings blocks
+
 ---
 
-## 17. Dashboard pattern
+## 18. Dashboard pattern
 
 The dashboard (`BudgetBuilder`) is the best reference for the app's premium visual direction.
 
@@ -484,11 +662,18 @@ Rules:
 - not every page needs a hero block
 - premium does not mean crowded
 
+**Concrete reference**
+- `src/components/budget/BudgetBuilder.tsx`
+
+**Apply to rental**
+- `Tổng quan` can borrow KPI strip and section rhythm
+- do not copy the dashboard hero block blindly into rental tabs that need operational clarity instead
+
 ---
 
-## 18. Mobile-specific UI rules
+## 19. Mobile-specific UI rules
 
-## 18.1 Mobile should be workflow-first
+## 19.1 Mobile should be workflow-first
 
 On mobile, prioritize:
 - one-column layouts
@@ -497,7 +682,10 @@ On mobile, prioritize:
 - sticky lightweight controls
 - bottom drawers / sheets when the workflow is focused
 
-## 18.2 Avoid desktop table thinking on mobile
+**Concrete reference direction**
+- shell and header already adapt cleanly to mobile: `AppShell.tsx`, `TopHeader.tsx`, `AppSidebar.tsx`
+
+## 19.2 Avoid desktop table thinking on mobile
 
 Do not assume that making the text smaller or wrapping the table in `overflow-x-auto` is enough.
 
@@ -506,7 +694,7 @@ For mobile-heavy workflows, prefer:
 - summary rows
 - primary action buttons visible in card footer or sheet footer
 
-## 18.3 Mobile modal direction
+## 19.3 Mobile modal direction
 
 Prefer:
 - bottom sheets
@@ -518,11 +706,11 @@ Avoid:
 
 ---
 
-## 19. How this applies to Rental module
+## 20. How this applies to Rental module
 
 Rental should borrow the **same UI language**, not invent a new one.
 
-### 19.1 What rental should reuse directly
+### 20.1 What rental should reuse directly
 
 Reuse from the core app:
 - shell/header/drawer behavior
@@ -534,7 +722,7 @@ Reuse from the core app:
 - mobile FAB logic where appropriate
 - page width discipline
 
-### 19.2 What rental should adapt for mobile
+### 20.2 What rental should adapt for mobile
 
 Rental has more operational workflows and more desktop tables.
 
@@ -545,7 +733,7 @@ Therefore:
   - Chốt tháng
   - Tiền cọc
 
-### 19.3 Rental mobile refactor rule
+### 20.3 Rental mobile refactor rule
 
 Use this pattern:
 - container keeps logic and state
@@ -554,9 +742,20 @@ Use this pattern:
 
 Do not deeply rewrite working desktop UI just to support mobile.
 
+### 20.4 Pattern mapping for rental
+
+| Rental screen | Reuse pattern from core app | Recommended mobile form |
+|---|---|---|
+| Tổng quan | `BudgetBuilder`, KPI cards, top-level section rhythm | KPI + action cards + short issue lists |
+| Phòng | `GoalsBoard` card entities + settings-style calm detail blocks | room cards + detail sheet |
+| Chốt tháng | `TransactionList` filters + card workflow | billing cards + input sheet |
+| Tiền cọc | `GoalsBoard` / lifecycle card thinking | deposit cards grouped by status |
+| Mẫu hoá đơn | `ReportsPanel` action card + settings-like form blocks | stacked form cards + preview section |
+| Chi phí khác | `settings.tsx` management blocks | grouped settings cards |
+
 ---
 
-## 20. Anti-patterns
+## 21. Anti-patterns
 
 Do not introduce these:
 
@@ -572,7 +771,7 @@ Do not introduce these:
 
 ---
 
-## 21. Practical checklist for future UI work
+## 22. Practical checklist for future UI work
 
 Before changing or adding a screen, check:
 
@@ -586,10 +785,11 @@ Before changing or adding a screen, check:
 8. Are empty states calm and useful?
 9. Does the interaction feel light and premium, not noisy?
 10. If this is rental, does it reuse the main app UI language rather than inventing a rental-only style?
+11. Is there already a better reference component in this file that should be copied before inventing a new pattern?
 
 ---
 
-## 22. Guidance for Codex / AI tasks
+## 23. Guidance for Codex / AI tasks
 
 When generating UI changes, prefer prompts that explicitly say:
 
@@ -599,10 +799,17 @@ When generating UI changes, prefer prompts that explicitly say:
 - use card-based mobile patterns instead of raw responsive tables
 - keep business logic unchanged unless explicitly requested
 - avoid broad refactors unrelated to the requested screen
+- cite which existing components should be used as visual references
+
+### Recommended prompt addon
+
+When asking Codex to build UI, include a line like:
+
+> Match the UI language documented in `docs/ui-reference.md`. Use concrete references from `TopHeader.tsx`, `AppSidebar.tsx`, `TransactionList.tsx`, `GoalsBoard.tsx`, `ReportsPanel.tsx`, `settings.tsx`, and `BudgetBuilder.tsx` instead of inventing a new design language.
 
 ---
 
-## 23. Recommended next use of this file
+## 24. Recommended next use of this file
 
 Use this file as a companion reference whenever working on:
 - rental mobile refactor
@@ -612,3 +819,15 @@ Use this file as a companion reference whenever working on:
 - card/list/detail layouts
 
 If the core app visual language evolves later, this file should be updated so future work stays consistent.
+
+---
+
+## 25. Future expansion ideas for this document
+
+This file can be extended later with:
+- a shared spacing scale
+- a preferred radius scale
+- a shared button taxonomy
+- bottom-sheet behavior rules
+- mobile-only do/don't screenshots
+- a component-by-component "copy this / do not copy this" matrix
