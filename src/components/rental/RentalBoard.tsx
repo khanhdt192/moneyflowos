@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TongQuan } from "./tabs/TongQuan";
 import { Phong } from "./tabs/Phong";
 import { ChotThang } from "./tabs/ChotThang";
@@ -9,13 +9,13 @@ import { TienCoc } from "./tabs/TienCoc";
 
 type Tab = "tongquan" | "phong" | "chotthang" | "tiencoc" | "chiphikhac" | "mauhoadon" | "baocao";
 
-const TABS: { id: Tab; label: string }[] = [
+const TABS: { id: Tab; label: string; mobileLabel?: string }[] = [
   { id: "tongquan",  label: "Tổng quan" },
   { id: "phong",     label: "Phòng" },
   { id: "chotthang", label: "Chốt tháng" },
   { id: "tiencoc", label: "Tiền cọc" },
   { id: "chiphikhac", label: "Chi phí khác" },
-  { id: "mauhoadon",  label: "Mẫu hóa đơn" },
+  { id: "mauhoadon",  label: "Mẫu hóa đơn", mobileLabel: "Mẫu HĐ" },
   { id: "baocao",    label: "Báo cáo" },
 ];
 
@@ -32,7 +32,9 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
         </div>
       </div>
 
-      <div className="flex gap-1 rounded-xl border border-border bg-muted/30 p-1 w-fit overflow-x-auto">
+      <RentalMobileTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <div className="hidden w-fit gap-1 overflow-x-auto rounded-xl border border-border bg-muted/30 p-1 lg:flex">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -69,6 +71,59 @@ export function RentalBoard({ initialTab }: { initialTab?: Tab }) {
         {activeTab === "chiphikhac" && <ChiPhiKhac />}
         {activeTab === "mauhoadon" && <MauHoaDon />}
         {activeTab === "baocao"    && <BaoCao />}
+      </div>
+    </div>
+  );
+}
+
+function RentalMobileTabBar({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
+}) {
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement>>>({});
+
+  useEffect(() => {
+    tabRefs.current[activeTab]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activeTab]);
+
+  return (
+    <div className="sticky top-[64px] z-10 -mx-4 border-y border-border bg-background/85 px-4 py-2 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:hidden">
+      <div
+        role="tablist"
+        className="flex gap-2 overflow-x-auto overscroll-x-contain scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="Điều hướng Cho thuê"
+      >
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              ref={(node) => {
+                if (node) tabRefs.current[tab.id] = node;
+              }}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => onTabChange(tab.id)}
+              className={`min-h-11 shrink-0 whitespace-nowrap rounded-full border px-4 text-sm font-semibold transition-colors ${
+                isActive
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border bg-card/80 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+              }`}
+            >
+              {tab.mobileLabel ?? tab.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
