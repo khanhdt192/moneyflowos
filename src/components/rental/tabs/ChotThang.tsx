@@ -8,6 +8,7 @@ import {
   X,
   RefreshCw,
   Droplets,
+  Wallet,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -761,16 +762,12 @@ export function ChotThang({
               ? Math.max(0, storeBill.totalAmount - storeBill.paidAmount)
               : 0;
             const kwh = Math.max((parseFloat(row.end) || 0) - (parseFloat(row.start) || 0), 0);
-            const hasAnyReading = ground
-              ? row.water !== ""
-              : row.start !== "" || row.end !== "" || row.water !== "";
-            const readingSummary = !occupied
-              ? "Chưa có người thuê"
+            const electricitySummary = !occupied
+              ? "Điện —"
               : ground
-                ? `Điện T1 cố định • Nước ${row.water || "0"} m³`
-                : hasAnyReading
-                  ? `Điện ${row.start || "0"} → ${row.end || "0"} (${kwh} kWh) • Nước ${row.water || "0"} m³`
-                  : "Chưa nhập điện nước";
+                ? "Điện T1 cố định"
+                : `Điện ${row.start || "0"} → ${row.end || "0"} (${kwh} kWh)`;
+            const waterSummary = !occupied ? "Nước —" : `Nước ${row.water || "0"} m³`;
             const financeSummary = storeBill
               ? remaining > 0
                 ? `Còn thiếu ${formatMoney(remaining)}`
@@ -857,10 +854,14 @@ export function ChotThang({
                 <div className="mt-4 grid gap-2 text-sm">
                   <div className="flex items-start gap-2 rounded-xl bg-muted/30 px-3 py-2">
                     <Zap className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <span className="text-muted-foreground">{readingSummary}</span>
+                    <span className="text-muted-foreground">{electricitySummary}</span>
                   </div>
                   <div className="flex items-start gap-2 rounded-xl bg-muted/30 px-3 py-2">
                     <Droplets className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                    <span className="text-muted-foreground">{waterSummary}</span>
+                  </div>
+                  <div className="flex items-start gap-2 rounded-xl bg-muted/30 px-3 py-2">
+                    <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                     <span className={`font-medium ${remaining > 0 ? "text-rose-600" : "text-foreground"}`}>
                       {financeSummary}
                     </span>
