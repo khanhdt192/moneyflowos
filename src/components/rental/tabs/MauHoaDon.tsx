@@ -169,7 +169,7 @@ function SaveBtn({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="mt-auto flex items-center gap-2 self-start rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90"
+      className="mt-auto flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90 sm:w-auto sm:self-start"
     >
       <Save className="h-3.5 w-3.5" />
       Lưu cấu hình
