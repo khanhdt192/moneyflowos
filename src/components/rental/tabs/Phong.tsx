@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, X, Check, ChevronRight, Home } from "lucide-react";
 import { toast } from "sonner";
 import { useFinance, useFinanceActions } from "@/lib/finance-store";
@@ -204,98 +204,19 @@ export function Phong({
         />
       )}
 
-      <div className="rounded-xl border border-border overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Phòng
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Khách thuê
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Giá thuê
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Công nợ
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Trạng thái
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {state.rental.rooms.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  Chưa có phòng nào — thêm phòng đầu tiên
-                </td>
-              </tr>
-            )}
-            {state.rental.rooms.map((room) => {
-              const debt = debtMap[room.id] ?? 0;
-              const status = getRoomStatus(room, debt > 0);
-              const cfg = STATUS_CONFIG[status];
-              const bill = currentBillByRoomId[room.id];
-              const occupied = isRoomOccupied(room);
-              return (
-                <tr
-                  key={room.id}
-                  onClick={() => setSelectedRoomId(room.id)}
-                  className="cursor-pointer bg-card transition-all hover:bg-muted/20 hover:shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.45)]"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground">
-                        <Home className="h-4 w-4" />
-                      </div>
-                      <span className="font-semibold text-foreground">{room.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {room.tenantInfo ? (
-                      <div className="leading-tight">
-                        <div className="font-medium text-foreground">
-                          {room.tenantInfo.fullName}
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {room.tenantInfo.phone || "—"}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="italic text-muted-foreground/50">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
-                    {formatMoney(room.rent)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {!occupied || !bill ? (
-                      <span className="text-muted-foreground/40">—</span>
-                    ) : debt > 0 ? (
-                      <span className="font-semibold text-rose-600">{formatMoney(debt)}</span>
-                    ) : (
-                      <span className="font-semibold text-emerald-600">Không nợ</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span
-                      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}
-                    >
-                      {cfg.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <ChevronRight className="h-4 w-4 text-muted-foreground mx-auto" />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <PhongMobileCards
+        rooms={state.rental.rooms}
+        debtMap={debtMap}
+        currentBillByRoomId={currentBillByRoomId}
+        onOpenRoom={setSelectedRoomId}
+      />
+
+      <PhongDesktopTable
+        rooms={state.rental.rooms}
+        debtMap={debtMap}
+        currentBillByRoomId={currentBillByRoomId}
+        onOpenRoom={setSelectedRoomId}
+      />
 
       <RoomModal
         roomId={selectedRoomId}
@@ -305,6 +226,217 @@ export function Phong({
         activeOccupancyByRoomId={activeOccupancyByRoomId}
         onOpenBillDetail={onOpenBillDetail}
       />
+    </div>
+  );
+}
+
+type RoomListProps = {
+  rooms: RentalRoom[];
+  debtMap: Record<string, number>;
+  currentBillByRoomId: Record<string, RentalRoomBill | null>;
+  onOpenRoom: (roomId: string) => void;
+};
+
+function PhongMobileCards({ rooms, debtMap, currentBillByRoomId, onOpenRoom }: RoomListProps) {
+  if (rooms.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-card px-6 py-12 text-center shadow-sm md:hidden">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-foreground/[0.04] text-muted-foreground">
+          <Home className="h-5 w-5" />
+        </div>
+        <p className="mt-3 text-sm font-semibold text-foreground">Chưa có phòng nào</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Thêm phòng đầu tiên để bắt đầu quản lý.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 md:hidden">
+      {rooms.map((room) => {
+        const debt = debtMap[room.id] ?? 0;
+        const status = getRoomStatus(room, debt > 0);
+        const cfg = STATUS_CONFIG[status];
+        const bill = currentBillByRoomId[room.id];
+        const occupied = isRoomOccupied(room);
+        const tenantLabel = room.tenantInfo?.fullName ?? "Phòng đang trống";
+        const tenantMeta =
+          room.tenantInfo?.phone || (occupied ? "Chưa có SĐT" : "Sẵn sàng thêm người thuê");
+        const operatingLabel = !occupied
+          ? "Chưa phát sinh công nợ"
+          : !bill
+            ? "Chưa có hóa đơn tháng này"
+            : debt > 0
+              ? `Còn thiếu ${formatMoney(debt)}`
+              : "Không nợ tháng này";
+
+        return (
+          <article
+            key={room.id}
+            className="rounded-2xl border border-border bg-card p-4 shadow-sm transition-all active:scale-[0.99]"
+          >
+            <button
+              type="button"
+              onClick={() => onOpenRoom(room.id)}
+              className="block w-full text-left"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-muted text-muted-foreground">
+                    <Home className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-base font-semibold text-foreground">
+                      {room.name}
+                    </h3>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{tenantMeta}</p>
+                  </div>
+                </div>
+                <span
+                  className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${cfg.className}`}
+                >
+                  {cfg.label}
+                </span>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-border/70 bg-background/60 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Khách thuê
+                    </p>
+                    <p
+                      className={`mt-1 truncate text-sm font-semibold ${occupied ? "text-foreground" : "text-muted-foreground"}`}
+                    >
+                      {tenantLabel}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Giá thuê
+                    </p>
+                    <p className="mt-1 text-sm font-bold tabular-nums text-foreground">
+                      {formatMoney(room.rent)}
+                    </p>
+                  </div>
+                </div>
+                <p
+                  className={`mt-3 text-xs font-medium ${debt > 0 ? "text-rose-600" : "text-muted-foreground"}`}
+                >
+                  {operatingLabel}
+                </p>
+              </div>
+            </button>
+
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => onOpenRoom(room.id)}
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background"
+              >
+                Chi tiết
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function PhongDesktopTable({ rooms, debtMap, currentBillByRoomId, onOpenRoom }: RoomListProps) {
+  return (
+    <div className="hidden overflow-hidden rounded-xl border border-border shadow-sm md:block">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-muted/30">
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Phòng
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Khách thuê
+            </th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Giá thuê
+            </th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Công nợ
+            </th>
+            <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Trạng thái
+            </th>
+            <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rooms.length === 0 && (
+            <tr>
+              <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                Chưa có phòng nào — thêm phòng đầu tiên
+              </td>
+            </tr>
+          )}
+          {rooms.map((room) => {
+            const debt = debtMap[room.id] ?? 0;
+            const status = getRoomStatus(room, debt > 0);
+            const cfg = STATUS_CONFIG[status];
+            const bill = currentBillByRoomId[room.id];
+            const occupied = isRoomOccupied(room);
+            return (
+              <tr
+                key={room.id}
+                onClick={() => onOpenRoom(room.id)}
+                className="cursor-pointer bg-card transition-all hover:bg-muted/20 hover:shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.45)]"
+              >
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-muted text-muted-foreground">
+                      <Home className="h-4 w-4" />
+                    </div>
+                    <span className="font-semibold text-foreground">{room.name}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {room.tenantInfo ? (
+                    <div className="leading-tight">
+                      <div className="font-medium text-foreground">{room.tenantInfo.fullName}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {room.tenantInfo.phone || "—"}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="italic text-muted-foreground/50">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">
+                  {formatMoney(room.rent)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {!occupied || !bill ? (
+                    <span className="text-muted-foreground/40">—</span>
+                  ) : debt > 0 ? (
+                    <span className="font-semibold text-rose-600">{formatMoney(debt)}</span>
+                  ) : (
+                    <span className="font-semibold text-emerald-600">Không nợ</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <span
+                    className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cfg.className}`}
+                  >
+                    {cfg.label}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <ChevronRight className="mx-auto h-4 w-4 text-muted-foreground" />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -480,14 +612,14 @@ function RoomModal({
       }}
     >
       <DialogContent
-        className="max-h-[90vh] w-[95vw] max-w-5xl overflow-y-auto [&>button]:hidden"
+        className="left-1/2 top-auto bottom-0 max-h-[92dvh] w-full max-w-none translate-y-0 overflow-y-auto rounded-t-3xl border-x-0 border-b-0 p-4 [&>button]:hidden sm:top-1/2 sm:bottom-auto sm:max-h-[90vh] sm:w-[95vw] sm:max-w-5xl sm:translate-y-[-50%] sm:rounded-lg sm:border sm:p-6"
         onOpenAutoFocus={() => {
           if (room) handleOpen(room);
         }}
       >
         {room && (
           <>
-            <DialogHeader className="-mx-6 -mt-6 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-6 py-2 backdrop-blur">
+            <DialogHeader className="sticky top-0 z-10 -mx-4 -mt-4 mb-1 border-b border-border bg-background/95 px-4 py-3 text-left backdrop-blur sm:-mx-6 sm:-mt-6 sm:mb-2 sm:px-6 sm:py-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 space-y-1">
                   <DialogTitle className="min-w-0 truncate text-base font-semibold text-foreground">
@@ -508,8 +640,8 @@ function RoomModal({
               </div>
             </DialogHeader>
 
-            <div className="grid gap-5 pt-3 lg:grid-cols-[1fr_320px]">
-              <div className="space-y-5">
+            <div className="grid gap-4 pt-3 sm:gap-5 lg:grid-cols-[1fr_320px]">
+              <div className="space-y-4 sm:space-y-5">
                 <ModalSectionCard title="Thông tin phòng">
                   {editing ? (
                     <>
