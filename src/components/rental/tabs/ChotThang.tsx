@@ -782,11 +782,9 @@ export function ChotThang({
                   ? "Chưa nhập điện nước tháng này"
                   : displayStatus === "has_reading"
                     ? "Đã có chỉ số, cần kiểm tra hóa đơn"
-                    : remaining > 0
-                      ? `Còn nợ ${formatMoney(remaining)}`
-                      : displayStatus === "paid"
-                        ? "Đã thu đủ tháng này"
-                        : "Mở chi tiết để xử lý hóa đơn";
+                    : remaining > 0 || displayStatus === "paid"
+                      ? null
+                      : "Mở chi tiết để xử lý hóa đơn";
             const primaryAction =
               !occupied
                 ? "Trống"
@@ -868,7 +866,9 @@ export function ChotThang({
                   </div>
                 </div>
 
-                <p className="mt-3 text-sm text-muted-foreground">{supportText}</p>
+                {supportText ? (
+                  <p className="mt-3 text-sm text-muted-foreground">{supportText}</p>
+                ) : null}
 
                 <div className="mt-4 flex gap-2">
                   <button
