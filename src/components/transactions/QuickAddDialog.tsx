@@ -105,7 +105,7 @@ export function QuickAddDialog({ open, onClose }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92vh] w-full max-w-lg overflow-hidden rounded-t-3xl border border-border bg-card shadow-elevated sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92vh] w-full max-w-lg overflow-hidden rounded-t-3xl border border-border bg-card pb-safe-bottom shadow-elevated sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:rounded-3xl"
           >
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>

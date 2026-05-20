@@ -5,6 +5,15 @@ import { getRouter } from "./router";
 import "./styles.css";
 
 const router = getRouter();
+const standaloneMedia = window.matchMedia("(display-mode: standalone)");
+const iosNavigator = window.navigator as Navigator & { standalone?: boolean };
+const isStandalone = standaloneMedia.matches || iosNavigator.standalone === true;
+const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+if (isStandalone) {
+  document.documentElement.classList.add("pwa-standalone");
+  if (isIos) document.documentElement.classList.add("ios-pwa");
+}
 
 declare module "@tanstack/react-router" {
   interface Register {

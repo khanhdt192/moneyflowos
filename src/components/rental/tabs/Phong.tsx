@@ -612,7 +612,7 @@ function RoomModal({
       }}
     >
       <DialogContent
-        className="left-1/2 top-auto bottom-0 max-h-[92dvh] w-full max-w-none translate-y-0 overflow-y-auto rounded-t-3xl border-x-0 border-b-0 p-4 [&>button]:hidden sm:top-1/2 sm:bottom-auto sm:max-h-[90vh] sm:w-[95vw] sm:max-w-5xl sm:translate-y-[-50%] sm:rounded-lg sm:border sm:p-6"
+        className="left-1/2 top-auto bottom-0 max-h-[92dvh] w-full max-w-none translate-y-0 overflow-y-auto rounded-t-3xl border-x-0 border-b-0 p-4 pb-safe-bottom [&>button]:hidden sm:top-1/2 sm:bottom-auto sm:max-h-[90vh] sm:w-[95vw] sm:max-w-5xl sm:translate-y-[-50%] sm:rounded-lg sm:border sm:p-6"
         onOpenAutoFocus={() => {
           if (room) handleOpen(room);
         }}

@@ -52,6 +52,8 @@
 
 :root {
   --radius: 1rem;
+  --safe-area-top: 0px;
+  --safe-area-bottom: 0px;
 
   /* Premium fintech: cool whites, charcoal ink */
   --background: oklch(0.985 0.003 250);
@@ -101,6 +103,13 @@
   --gradient-hero: radial-gradient(1200px 600px at 0% 0%, oklch(0.55 0.21 264 / 0.10), transparent 60%),
                    radial-gradient(900px 500px at 100% 0%, oklch(0.66 0.16 152 / 0.08), transparent 55%);
   --gradient-card: linear-gradient(180deg, oklch(1 0 0 / 0.7), oklch(1 0 0 / 0.4));
+}
+
+@supports (padding: env(safe-area-inset-top)) {
+  :root {
+    --safe-area-top: env(safe-area-inset-top);
+    --safe-area-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 .dark {
@@ -161,7 +170,10 @@
     font-family: var(--font-display);
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-tap-highlight-color: transparent;
   }
+
+  html { -webkit-overflow-scrolling: touch; }
 
   h1, h2, h3, h4 {
     font-family: var(--font-display);
@@ -207,5 +219,17 @@
     position: absolute; inset: 0;
     background: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.06), transparent);
     animation: shimmer 2.4s linear infinite;
+  }
+
+  .pt-safe-top { padding-top: var(--safe-area-top); }
+  .pb-safe-bottom { padding-bottom: var(--safe-area-bottom); }
+  .bottom-safe-offset { bottom: calc(1.25rem + var(--safe-area-bottom)); }
+
+  .pwa-standalone .app-shell-safe {
+    padding-top: var(--safe-area-top);
+  }
+
+  .pwa-standalone .header-safe-top {
+    padding-top: max(0.35rem, calc(var(--safe-area-top) * 0.4));
   }
 }
