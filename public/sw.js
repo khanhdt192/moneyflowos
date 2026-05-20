@@ -28,9 +28,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const acceptsHtml = request.headers.get("accept")?.includes("text/html");
-
-  if (request.mode === "navigate" || acceptsHtml) {
+  if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
