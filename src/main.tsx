@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./router";
 import "./styles.css";
 import { applyThemeMode, getPreferredThemeMode } from "@/lib/theme-mode";
+import { PwaDebugOverlay } from "@/components/debug/PwaDebugOverlay";
 
 const router = getRouter();
 const standaloneMedia = window.matchMedia("(display-mode: standalone)");
@@ -32,7 +33,10 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <>
+      <RouterProvider router={router} />
+      <PwaDebugOverlay />
+    </>
   </StrictMode>,
 );
 
