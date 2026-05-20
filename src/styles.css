@@ -229,7 +229,13 @@
     padding-top: 0;
   }
 
+  .pwa-standalone,
+  .pwa-standalone body {
+    background-color: var(--color-background);
+  }
+
   .pwa-standalone .header-safe-top {
     padding-top: calc(var(--safe-area-top) + 0.35rem);
+    background-color: var(--color-background);
   }
 }
