@@ -278,7 +278,7 @@ export function TienCocDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bottom-0 top-auto max-h-[92dvh] w-full max-w-none translate-y-0 overflow-y-auto rounded-t-3xl p-4 [&>button]:hidden sm:bottom-auto sm:top-[50%] sm:max-h-[90vh] sm:w-[95vw] sm:max-w-5xl sm:translate-y-[-50%] sm:rounded-xl sm:p-6">
+      <DialogContent className="bottom-0 top-auto max-h-[92dvh] w-full max-w-none translate-y-0 overflow-y-auto rounded-t-3xl p-4 pb-safe-bottom [&>button]:hidden sm:bottom-auto sm:top-[50%] sm:max-h-[90vh] sm:w-[95vw] sm:max-w-5xl sm:translate-y-[-50%] sm:rounded-xl sm:p-6">
         <DialogHeader className="-mx-4 -mt-4 mb-2 sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 text-left backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6 sm:py-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">

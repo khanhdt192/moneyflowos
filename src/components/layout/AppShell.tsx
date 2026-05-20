@@ -20,7 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <ShellContext.Provider
       value={{ openQuickAdd, openMobileSidebar, closeMobileSidebar, mobileSidebarOpen }}
     >
-      <div className="flex min-h-screen w-full bg-background bg-hero">
+      <div className="app-shell-safe flex min-h-screen w-full bg-background bg-hero">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <TopHeader />
@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           type="button"
           onClick={openQuickAdd}
           aria-label="Giao dịch mới"
-          className="fixed bottom-5 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-foreground text-background shadow-elevated transition-all hover:scale-105 active:scale-95 lg:hidden"
+          className="bottom-safe-offset fixed right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-foreground text-background shadow-elevated transition-all hover:scale-105 active:scale-95 lg:hidden"
         >
           <Plus className="h-6 w-6" strokeWidth={2.6} />
         </button>
