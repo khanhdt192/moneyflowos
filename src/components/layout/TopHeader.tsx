@@ -16,7 +16,7 @@ export function TopHeader() {
   };
 
   return (
-    <header className="header-safe-top sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/70 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8 lg:py-4">
+    <header className="app-top-header header-safe-top sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background/70 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8 lg:py-4">
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
