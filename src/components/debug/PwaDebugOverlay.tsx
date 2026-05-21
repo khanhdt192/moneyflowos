@@ -20,6 +20,7 @@ type Diagnostics = {
   visualViewportHeight: number | null;
   safeAreaTopVar: string;
   safeAreaBottomVar: string;
+  appSafeAreaTopVar: string;
   colorBackgroundVar: string;
   backgroundVar: string;
   htmlBackgroundColor: string;
@@ -63,6 +64,7 @@ function collectDiagnostics(): Diagnostics {
     visualViewportHeight: window.visualViewport?.height ?? null,
     safeAreaTopVar: rootStyle.getPropertyValue("--safe-area-top").trim(),
     safeAreaBottomVar: rootStyle.getPropertyValue("--safe-area-bottom").trim(),
+    appSafeAreaTopVar: rootStyle.getPropertyValue("--app-safe-area-top").trim(),
     colorBackgroundVar: rootStyle.getPropertyValue("--color-background").trim(),
     backgroundVar: rootStyle.getPropertyValue("--background").trim(),
     htmlBackgroundColor: rootStyle.backgroundColor,
