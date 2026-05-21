@@ -14,24 +14,8 @@ import {
 } from "lucide-react";
 import { useFinance } from "@/lib/finance-store";
 import { useShell } from "./shell-context";
+import { applyThemeMode, getPreferredThemeMode } from "@/lib/theme-mode";
 
-
-const LIGHT_THEME_COLOR = "#f8fafc";
-const DARK_THEME_COLOR = "#0f172a";
-
-function syncThemeColorMeta(isDark: boolean) {
-  const content = isDark ? DARK_THEME_COLOR : LIGHT_THEME_COLOR;
-  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"][data-runtime="app"]');
-
-  if (!meta) {
-    meta = document.createElement("meta");
-    meta.name = "theme-color";
-    meta.dataset.runtime = "app";
-    document.head.appendChild(meta);
-  }
-
-  meta.content = content;
-}
 
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -49,18 +33,17 @@ export function AppSidebar() {
   const { mobileSidebarOpen, closeMobileSidebar } = useShell();
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    const isDark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const isDark = document.documentElement.classList.contains("dark")
+      ? true
+      : getPreferredThemeMode();
     setDark(isDark);
-    document.documentElement.classList.toggle("dark", isDark);
-    syncThemeColorMeta(isDark);
+    applyThemeMode(isDark);
   }, []);
 
   const toggle = () => {
     const next = !dark;
     setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    syncThemeColorMeta(next);
+    applyThemeMode(next);
     localStorage.setItem("theme", next ? "dark" : "light");
   };
 
@@ -168,7 +151,7 @@ export function AppSidebar() {
             onClick={closeMobileSidebar}
             aria-hidden
           />
-          <aside className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-border bg-card px-4 py-6 lg:hidden">
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-border bg-card px-4 pb-[calc(var(--safe-area-bottom)+1.5rem)] pt-[calc(var(--app-safe-area-top)+1.5rem)] lg:hidden">
             {Inner}
           </aside>
         </>
