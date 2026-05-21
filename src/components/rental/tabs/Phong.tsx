@@ -650,7 +650,7 @@ function RoomModal({
                         <input
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                          className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm"
                         />
                       </div>
                       <div>
@@ -661,7 +661,7 @@ function RoomModal({
                           pattern="[0-9]*"
                           value={rent}
                           onChange={(e) => setRent(formatMoneyInput(e.target.value))}
-                          className="num mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                          className="num mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm"
                         />
                       </div>
                       <div className="flex gap-2">
@@ -743,7 +743,7 @@ function RoomModal({
                               value={tenantName}
                               onChange={(e) => setTenantName(e.target.value)}
                               placeholder="Họ tên"
-                              className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                              className="h-9 w-full rounded-lg border border-border px-3 text-base md:text-sm"
                             />
                           </div>
                           <div>
@@ -757,7 +757,7 @@ function RoomModal({
                               value={tenantPhone}
                               onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))}
                               placeholder="Số điện thoại"
-                              className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                              className="h-9 w-full rounded-lg border border-border px-3 text-base md:text-sm"
                             />
                           </div>
                           <div>
@@ -768,7 +768,7 @@ function RoomModal({
                               value={tenantAddress}
                               onChange={(e) => setTenantAddress(e.target.value)}
                               placeholder="Địa chỉ"
-                              className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                              className="h-9 w-full rounded-lg border border-border px-3 text-base md:text-sm"
                             />
                           </div>
                         </>
@@ -780,7 +780,7 @@ function RoomModal({
                           <select
                             value={selectedTenantId}
                             onChange={(e) => setSelectedTenantId(e.target.value)}
-                            className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                            className="h-9 w-full rounded-lg border border-border bg-background px-3 text-base md:text-sm"
                           >
                             <option value="">Chọn người thuê</option>
                             {[...existingTenants]
@@ -818,7 +818,7 @@ function RoomModal({
                               onChange={(e) =>
                                 setTenantDepositAmount(formatMoneyInput(e.target.value))
                               }
-                              className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                              className="h-9 w-full rounded-lg border border-border px-3 text-base md:text-sm"
                             />
                             <p className="mt-1 text-xs text-muted-foreground">
                               Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.
@@ -831,7 +831,7 @@ function RoomModal({
                             <input
                               value={tenantDepositNote}
                               onChange={(e) => setTenantDepositNote(e.target.value)}
-                              className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                              className="h-9 w-full rounded-lg border border-border px-3 text-base md:text-sm"
                             />
                           </div>
                         </div>
@@ -840,7 +840,7 @@ function RoomModal({
                         <button
                           type="button"
                           onClick={() => setTenantMode("none")}
-                          className="flex-1 rounded-lg border border-border py-2 text-sm"
+                          className="flex-1 rounded-lg border border-border py-2 text-base md:text-sm"
                         >
                           Huỷ
                         </button>
@@ -924,7 +924,7 @@ function RoomModal({
                       <select
                         value={selectedTenantId}
                         onChange={(e) => setSelectedTenantId(e.target.value)}
-                        className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                        className="h-9 w-full rounded-lg border border-border bg-background px-3 text-base md:text-sm"
                       >
                         <option value="">Chọn người thuê có sẵn</option>
                         {existingTenants
@@ -953,14 +953,14 @@ function RoomModal({
                           pattern="[0-9]*"
                           value={tenantDepositAmount}
                           onChange={(e) => setTenantDepositAmount(formatMoneyInput(e.target.value))}
-                          className="h-9 w-full rounded-lg border border-border px-3 text-sm"
+                          className="h-9 w-full rounded-lg border border-border px-3 text-base md:text-sm"
                         />
                       </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => setTenantMode("none")}
-                          className="flex-1 rounded-lg border border-border py-2 text-sm"
+                          className="flex-1 rounded-lg border border-border py-2 text-base md:text-sm"
                         >
                           Huỷ
                         </button>
@@ -1319,7 +1319,7 @@ function AddRoomForm({
             value={name}
             onChange={(e) => onRoomNameChange(e.target.value)}
             placeholder="VD: Phòng 302"
-            className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
         </div>
         <div>
@@ -1331,7 +1331,7 @@ function AddRoomForm({
             value={rent}
             onChange={(e) => setRent(formatMoneyInput(e.target.value))}
             placeholder="VD: 4000000"
-            className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            className="num mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
         </div>
         <div>
@@ -1345,7 +1345,7 @@ function AddRoomForm({
               setFloor(e.target.value);
             }}
             placeholder="Tự nhận diện từ tên phòng"
-            className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            className="num mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
         </div>
         <div>
@@ -1373,7 +1373,7 @@ function AddRoomForm({
                 value={tenantFullName}
                 onChange={(e) => setTenantFullName(e.target.value)}
                 placeholder="VD: Nguyễn Văn A"
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
               />
             </div>
             <div>
@@ -1385,7 +1385,7 @@ function AddRoomForm({
                 value={tenantPhone}
                 onChange={(e) => setTenantPhone(sanitizeDigitsInput(e.target.value))}
                 placeholder="VD: 090..."
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
               />
             </div>
             <div>
@@ -1394,7 +1394,7 @@ function AddRoomForm({
                 value={tenantAddress}
                 onChange={(e) => setTenantAddress(e.target.value)}
                 placeholder="Tuỳ chọn"
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
               />
             </div>
           </div>
@@ -1413,7 +1413,7 @@ function AddRoomForm({
                   setIsDepositManual(true);
                   setDepositAmount(formatMoneyInput(e.target.value));
                 }}
-                className="num mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                className="num mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Mặc định bằng 1 tháng tiền thuê, có thể chỉnh sửa.
@@ -1425,7 +1425,7 @@ function AddRoomForm({
                 value={depositNote}
                 onChange={(e) => setDepositNote(e.target.value)}
                 placeholder="Tuỳ chọn"
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                className="mt-1 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
               />
             </div>
           </div>

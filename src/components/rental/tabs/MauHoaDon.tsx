@@ -25,7 +25,7 @@ export function MauHoaDon() {
             value={values.bankNote}
             onChange={(e) => setters.setBankNote(e.target.value)}
             placeholder="Phong {room} T{month}/{year}"
-            className="mt-1.5 h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            className="mt-1.5 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
           <p className="mt-1 text-xs text-muted-foreground">
             Dùng{" "}
@@ -157,7 +157,7 @@ function CTextField({ label, value, onChange, placeholder, hint, mono }: {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40 ${mono ? "font-mono" : ""}`}
+        className={`mt-1.5 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm outline-none focus:ring-2 focus:ring-ring/40 ${mono ? "font-mono" : ""}`}
       />
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
