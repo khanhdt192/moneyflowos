@@ -87,12 +87,23 @@ function isEnabledByUrl(): boolean {
   return window.location.search.includes("pwaDebug=1") || window.location.hash.includes("pwaDebug");
 }
 
+function isDebugEnabled(): boolean {
+  return isEnabledByUrl() || window.localStorage.getItem("pwaDebug") === "1";
+}
+
 export function PwaDebugOverlay() {
-  const enabled = useMemo(() => isEnabledByUrl(), []);
+  const enabled = useMemo(() => {
+    const urlEnabled = isEnabledByUrl();
+    if (urlEnabled) {
+      window.localStorage.setItem("pwaDebug", "1");
+    }
+    return isDebugEnabled();
+  }, []);
+  const [visible, setVisible] = useState(enabled);
   const [diag, setDiag] = useState<Diagnostics | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!visible) return;
 
     const refresh = () => setDiag(collectDiagnostics());
     refresh();
@@ -105,9 +116,9 @@ export function PwaDebugOverlay() {
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
     };
-  }, [enabled]);
+  }, [visible]);
 
-  if (!enabled) return null;
+  if (!visible) return null;
 
   return (
     <aside
@@ -131,20 +142,39 @@ export function PwaDebugOverlay() {
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <strong>PWA Debug</strong>
-        <button
-          type="button"
-          onClick={() => setDiag(collectDiagnostics())}
-          style={{
-            border: "1px solid rgba(148, 163, 184, 0.55)",
-            background: "rgba(30, 41, 59, 0.9)",
-            color: "#f8fafc",
-            borderRadius: 6,
-            padding: "3px 8px",
-            cursor: "pointer",
-          }}
-        >
-          Refresh
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            type="button"
+            onClick={() => setDiag(collectDiagnostics())}
+            style={{
+              border: "1px solid rgba(148, 163, 184, 0.55)",
+              background: "rgba(30, 41, 59, 0.9)",
+              color: "#f8fafc",
+              borderRadius: 6,
+              padding: "3px 8px",
+              cursor: "pointer",
+            }}
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.localStorage.removeItem("pwaDebug");
+              setVisible(false);
+            }}
+            style={{
+              border: "1px solid rgba(148, 163, 184, 0.55)",
+              background: "rgba(51, 65, 85, 0.95)",
+              color: "#f8fafc",
+              borderRadius: 6,
+              padding: "3px 8px",
+              cursor: "pointer",
+            }}
+          >
+            Disable
+          </button>
+        </div>
       </div>
 
       <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
