@@ -151,7 +151,7 @@ export function AppSidebar() {
             onClick={closeMobileSidebar}
             aria-hidden
           />
-          <aside className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-border bg-card px-4 py-6 lg:hidden">
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col border-r border-border bg-card px-4 pb-[calc(var(--safe-area-bottom)+1.5rem)] pt-[calc(var(--app-safe-area-top)+1.5rem)] lg:hidden">
             {Inner}
           </aside>
         </>
