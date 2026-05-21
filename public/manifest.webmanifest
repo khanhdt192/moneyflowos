@@ -5,7 +5,7 @@
   "theme_color": "#0f172a",
   "background_color": "#f8fafc",
   "display": "standalone",
-  "start_url": "/",
+  "start_url": "/?pwaDebug=1",
   "scope": "/",
   "icons": [
     {
