@@ -28,7 +28,7 @@ export function ChiPhiKhac() {
               type="text"
               value={values.otherName}
               onChange={(e) => setters.setOtherName(e.target.value)}
-              className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-9 w-full rounded-lg border border-border bg-background px-3 text-base md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
             />
             <CField
               label="Số tiền (đ / phòng / tháng)"
@@ -96,7 +96,7 @@ export function ChiPhiKhac() {
               type="text"
               value={values.t1OtherName}
               onChange={(e) => setters.setT1OtherName(e.target.value)}
-              className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-9 w-full rounded-lg border border-border bg-background px-3 text-base md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
             />
             <CField label="Số tiền (đ / tháng)" value={values.t1Other} onChange={setters.setT1Other} />
           </div>
@@ -142,7 +142,7 @@ function CField({ label, value, onChange, hint }: {
         inputMode="numeric"
         value={value ? formatNumber(parseNumber(value)) : ""}
         onChange={(e) => onChange(String(parseNumber(e.target.value.replace(/[^\d,]/g, ""))))}
-        className="num mt-1.5 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-right outline-none focus:ring-2 focus:ring-ring/40"
+        className="num mt-1.5 h-11 w-full rounded-lg border border-border bg-background px-3 text-base md:h-9 md:text-sm text-right outline-none focus:ring-2 focus:ring-ring/40"
       />
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>

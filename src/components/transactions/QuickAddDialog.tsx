@@ -188,7 +188,7 @@ export function QuickAddDialog({ open, onClose }: Props) {
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   placeholder="VD: Ăn uống"
-                  className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3.5 text-base md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
                 />
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {SUGGESTIONS[type].map((s) => (
@@ -214,7 +214,7 @@ export function QuickAddDialog({ open, onClose }: Props) {
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                    className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-base md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
                   />
                 </div>
                 <div>
@@ -225,7 +225,7 @@ export function QuickAddDialog({ open, onClose }: Props) {
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Tuỳ chọn"
-                    className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                    className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-base md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
                   />
                 </div>
               </div>

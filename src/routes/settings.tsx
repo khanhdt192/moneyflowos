@@ -86,7 +86,7 @@ function SettingsPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Tên của bạn"
-              className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+              className="mt-1.5 h-11 w-full rounded-xl border border-border bg-background px-3 text-base md:text-sm outline-none focus:ring-2 focus:ring-ring/40"
             />
           </label>
           <label className="block">

@@ -41,14 +41,14 @@ export function MonthSelector() {
           type="button"
           aria-label="Tháng trước"
           onClick={() => actions.setActiveMonth(shiftMonth(state.activeMonth, -1))}
-          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground md:h-8 md:w-8"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex h-8 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/[0.04]"
+          className="flex h-10 items-center gap-2 rounded-lg px-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/[0.04] md:h-8"
         >
           <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="num">{formatMonthLabel(state.activeMonth)}</span>
@@ -57,7 +57,7 @@ export function MonthSelector() {
           type="button"
           aria-label="Tháng sau"
           onClick={() => actions.setActiveMonth(shiftMonth(state.activeMonth, 1))}
-          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground md:h-8 md:w-8"
         >
           <ChevronRight className="h-4 w-4" />
         </button>

@@ -1410,14 +1410,14 @@ function PaymentSection({
           onKeyDown={preventInvalidNumberKeyDown}
           onPaste={preventInvalidNumberPaste}
           onChange={(e) => setPayInput(formatMoneyInput(e.target.value))}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-base md:text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           placeholder="Số tiền thu"
           autoFocus
         />
         <select
           value={payMethod}
           onChange={(e) => setPayMethod(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-base md:text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="cash">Tiền mặt</option>
           <option value="transfer">Chuyển khoản</option>
